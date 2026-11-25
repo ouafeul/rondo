@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset.
+
 ## [1.0.0-rc.1] - First release candidate
 
 RONDO deploys components onto air-gapped infrastructure with three objects and three actions:

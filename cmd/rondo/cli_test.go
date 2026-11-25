@@ -23,7 +23,7 @@ import (
 
 // manifestList is the shipped example with two rke2 targets, alpha and beta.
 var manifestList = func() string {
-	s := strings.Replace(string(rondo.ExampleConfig), "./certs/artifactory-ca.pem", "./ca.pem", 1)
+	s := strings.Replace(string(rondo.ExampleConfig), "./certs/mirror-ca.pem", "./ca.pem", 1)
 	s = strings.Replace(s, "name: rke2-a", "name: alpha", 1)
 	beta := `    - name: beta
       rke2:
@@ -40,7 +40,7 @@ secrets:`
 }()
 
 var manifestNoDownstream = func() string {
-	s := strings.Replace(string(rondo.ExampleConfig), "./certs/artifactory-ca.pem", "./ca.pem", 1)
+	s := strings.Replace(string(rondo.ExampleConfig), "./certs/mirror-ca.pem", "./ca.pem", 1)
 	i, j := strings.Index(s, "  downstreams:"), strings.Index(s, "secrets:")
 	return s[:i] + "\n" + s[j:]
 }()
@@ -193,7 +193,7 @@ func TestResolveCA(t *testing.T) {
 	t.Chdir(dir)
 	flagConfig = "rondo.yaml"
 
-	c := &config.Config{Artifactory: config.Artifactory{CACertificateFile: "certs/ca.pem"}}
+	c := &config.Config{Artifacts: config.Artifacts{CACertificateFile: "certs/ca.pem"}}
 	got, err := resolveCA(c)
 	if err != nil {
 		t.Fatal(err)
@@ -203,7 +203,7 @@ func TestResolveCA(t *testing.T) {
 	}
 
 	abs := filepath.Join(dir, "abs.pem")
-	c2 := &config.Config{Artifactory: config.Artifactory{CACertificateFile: abs}}
+	c2 := &config.Config{Artifacts: config.Artifacts{CACertificateFile: abs}}
 	if got, _ := resolveCA(c2); got != abs {
 		t.Errorf("resolveCA absolute = %q", got)
 	}
@@ -332,9 +332,9 @@ func TestResolveWorkspaceStandaloneDryRun(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("RONDO_HOME", home)
 	flagDryRun = true
-	c := &config.Config{Artifactory: config.Artifactory{
-		URL: "https://arti.example.com/artifactory", GenericRepository: "rondo-generic-local", RondoReleaseChannel: "stable",
-	}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory, ReleaseChannel: "stable",
+		Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com/artifactory",
+			Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}}}
 	proj, bin, state, err := resolveWorkspace(context.Background(), c, "/ca.pem")
 	if err != nil {
 		t.Fatalf("resolveWorkspace standalone dry-run: %v", err)
@@ -352,7 +352,7 @@ func TestResolveWorkspaceStandaloneDryRun(t *testing.T) {
 
 func TestIacChannelFlagOverridesTheManifest(t *testing.T) {
 	resetFlags()
-	withChannel := &config.Config{Artifactory: config.Artifactory{RondoReleaseChannel: "stable"}}
+	withChannel := &config.Config{Artifacts: config.Artifacts{ReleaseChannel: "stable"}}
 	empty := &config.Config{}
 
 	if got := iacChannel(withChannel); got != "stable" {
@@ -378,9 +378,9 @@ func TestResolveWorkspaceStandaloneEdgeChannel(t *testing.T) {
 	t.Setenv("RONDO_HOME", home)
 	flagDryRun = true
 	flagIacChannel = "edge-feat-example"
-	c := &config.Config{Artifactory: config.Artifactory{
-		URL: "https://arti.example.com/artifactory", GenericRepository: "rondo-generic-local", RondoReleaseChannel: "stable",
-	}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory, ReleaseChannel: "stable",
+		Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com/artifactory",
+			Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}}}
 	proj, _, _, err := resolveWorkspace(context.Background(), c, "/ca.pem")
 	if err != nil {
 		t.Fatalf("resolveWorkspace edge channel: %v", err)
@@ -429,9 +429,9 @@ func TestResolveWorkspaceStandaloneSuccess(t *testing.T) {
 	}
 
 	flagDryRun = false
-	c := &config.Config{Artifactory: config.Artifactory{
-		URL: srv.URL + "/artifactory", GenericRepository: "rondo-generic-local", RondoReleaseChannel: "stable",
-	}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory, ReleaseChannel: "stable",
+		Artifactory: config.ArtifactoryMirror{URL: srv.URL + "/artifactory",
+			Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}}}
 	proj, bin, state, err := resolveWorkspace(context.Background(), c, caPath)
 	if err != nil {
 		t.Fatalf("resolveWorkspace standalone success: %v", err)
@@ -455,9 +455,9 @@ func TestResolveWorkspaceStandaloneBadCA(t *testing.T) {
 	work := t.TempDir()
 	t.Chdir(work)
 	flagDryRun = false
-	c := &config.Config{Artifactory: config.Artifactory{
-		URL: "https://arti.example.com/artifactory", GenericRepository: "rondo-generic-local",
-	}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory,
+		Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com/artifactory",
+			Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}}}
 	badCA := filepath.Join(work, "bad.pem")
 	if err := os.WriteFile(badCA, []byte("not a pem"), 0o600); err != nil {
 		t.Fatal(err)
@@ -553,6 +553,45 @@ func TestCmdInitWritesALoadableManifest(t *testing.T) {
 	if c.EnvironmentName != "recette" {
 		t.Errorf("environmentName = %q", c.EnvironmentName)
 	}
+	if c.Mirror().Preset != config.PresetGeneric {
+		t.Errorf("preset = %q, want generic by default", c.Mirror().Preset)
+	}
+}
+
+func TestCmdInitWritesTheArtifactoryPreset(t *testing.T) {
+	resetFlags()
+	t.Setenv("RONDO_HOME", t.TempDir())
+	flagEnv = "recette"
+	cmd := cmdInit()
+	cmd.SetArgs([]string{"--preset", "artifactory"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	c, err := config.Load(filepath.Join(paths.EnvDir("recette"), "rondo.yaml"))
+	if err != nil {
+		t.Fatalf("generated rondo.yaml invalid: %v", err)
+	}
+	m := c.Mirror()
+	if !m.IsArtifactory() || m.OCIRepository != "artifactory.example.local/rondo-docker-local" {
+		t.Errorf("mirror = %+v, want the preset artifactory", m)
+	}
+	if c.EnvironmentName != "recette" {
+		t.Errorf("environmentName = %q", c.EnvironmentName)
+	}
+}
+
+func TestCmdInitRefusesAnUnknownPreset(t *testing.T) {
+	resetFlags()
+	home := t.TempDir()
+	t.Setenv("RONDO_HOME", home)
+	cmd := cmdInit()
+	cmd.SetArgs([]string{"--preset", "nexus"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "nexus") {
+		t.Fatalf("unknown preset: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "rondo.yaml")); err == nil {
+		t.Error("a manifest was written for an unknown preset")
+	}
 }
 
 func TestClustersFollowTheRancherToken(t *testing.T) {
@@ -636,9 +675,9 @@ func TestSiteStateIsCreatedWithRestrictedMode(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("RONDO_HOME", t.TempDir())
 	flagDryRun = false
-	c := &config.Config{Artifactory: config.Artifactory{
-		URL: srv.URL + "/artifactory", GenericRepository: "rondo-generic-local", RondoReleaseChannel: "stable",
-	}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory, ReleaseChannel: "stable",
+		Artifactory: config.ArtifactoryMirror{URL: srv.URL + "/artifactory",
+			Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}}}
 	_, _, state, err := resolveWorkspace(context.Background(), c, caPath)
 	if err != nil {
 		t.Fatalf("resolveWorkspace: %v", err)

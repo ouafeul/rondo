@@ -9,6 +9,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"rondo"
 	"rondo/internal/config"
 	"rondo/internal/kobj"
 	"rondo/internal/runner"
@@ -84,8 +85,22 @@ func nested(t *testing.T, obj map[string]any, path ...string) map[string]any {
 	return cur
 }
 
+// siteCfg is the example manifest on an Artifactory, which mints the mirror tokens.
 func siteCfg() *config.Config {
-	c, err := config.Load(filepath.Join("..", "..", "rondo.yaml.example"))
+	raw, err := rondo.ExampleConfigFor(config.PresetArtifactory)
+	if err != nil {
+		panic(err)
+	}
+	return withSiteExtras(raw)
+}
+
+// genericCfg is the example manifest on a generic mirror.
+func genericCfg() *config.Config {
+	return withSiteExtras(rondo.ExampleConfig)
+}
+
+func withSiteExtras(raw []byte) *config.Config {
+	c, err := config.Parse(raw)
 	if err != nil {
 		panic(err)
 	}
@@ -351,7 +366,7 @@ func TestApplyMirrorTokenRotates(t *testing.T) {
 
 func TestApplyMirrorTokenOverrideIsNotPersisted(t *testing.T) {
 	cfg := siteCfg()
-	cfg.Secrets.ArtifactoryMirrorToken = "  tok-manual  "
+	cfg.Secrets.MirrorToken = "  tok-manual  "
 	p, got, _ := capture(t, cfg)
 	m := &recordingMinter{}
 	p.arti = m
@@ -376,6 +391,40 @@ func TestApplyMirrorTokenRefusesWithoutMinter(t *testing.T) {
 	p.arti = nil
 	if err := p.ApplyMirrorToken(t.Context()); err == nil {
 		t.Fatal("no minter and no override accepted")
+	}
+}
+
+func TestApplyMirrorTokenOnAGenericMirror(t *testing.T) {
+	for name, tc := range map[string]struct {
+		token string
+		want  string
+	}{
+		"anonymous":      {"", ""},
+		"declared token": {"tok-site", `credentials "files.example.local" {` + "\n" + `  token = "tok-site"`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := genericCfg()
+			cfg.Secrets.MirrorToken = tc.token
+			p, got, _ := capture(t, cfg)
+			p.arti = nil
+			if err := p.ApplyMirrorToken(t.Context()); err != nil {
+				t.Fatalf("ApplyMirrorToken: %v", err)
+			}
+			sd := nested(t, got.find(t, "Secret", "rondo-tofurc"), "stringData")
+			tofurc, _ := sd[".tofurc"].(string)
+			if !strings.Contains(tofurc, `url = "https://files.example.local/tofu-providers/"`) {
+				t.Errorf(".tofurc does not point at artifacts.tofu.providerMirror: %q", tofurc)
+			}
+			if tc.want == "" && strings.Contains(tofurc, "credentials") {
+				t.Errorf("anonymous mirror given credentials: %q", tofurc)
+			}
+			if !strings.Contains(tofurc, tc.want) {
+				t.Errorf(".tofurc = %q, want %q", tofurc, tc.want)
+			}
+			if _, persisted := sd["token"]; persisted {
+				t.Error("a token RONDO did not mint was persisted, the next deploy would revoke it")
+			}
+		})
 	}
 }
 

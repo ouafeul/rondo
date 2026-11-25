@@ -148,7 +148,8 @@ func (b *RancherBootstrap) EnsureRegcred(ctx context.Context) error {
 		log.Info("DRY-RUN create secret regcred (fleet-default)")
 		return nil
 	}
-	secret := kobj.Regcred(b.cfg.Artifactory.Username, b.cfg.Secrets.ArtifactoryPassword)
+	m := b.cfg.Mirror()
+	secret := kobj.Regcred(m.Username, m.Password)
 	raw, err := yaml.Marshal(secret)
 	if err != nil {
 		return err

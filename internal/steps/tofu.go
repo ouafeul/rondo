@@ -51,7 +51,8 @@ func (t *TofuStage) tofuOutput(ctx context.Context, dir string, extra map[string
 
 func (t *TofuStage) ConfigureRegistry(ctx context.Context) error {
 	log.Step("OpenTofu registry setup")
-	host := t.cfg.ArtifactoryHost()
+	m := t.cfg.Mirror()
+	host := m.ProviderMirrorHost()
 	if !t.dryRun {
 		if t.cachedToken == "" {
 			tok, err := t.token.Token(ctx)
@@ -60,11 +61,12 @@ func (t *TofuStage) ConfigureRegistry(ctx context.Context) error {
 			}
 			t.cachedToken = tok
 		}
-		suffix := strings.NewReplacer("-", "__", ".", "_").Replace(host)
-		t.regEnv["TF_TOKEN_"+suffix] = t.cachedToken
+		if t.cachedToken != "" {
+			suffix := strings.NewReplacer("-", "__", ".", "_").Replace(host)
+			t.regEnv["TF_TOKEN_"+suffix] = t.cachedToken
+		}
 	}
-	mirror := strings.TrimRight(t.cfg.Artifactory.URL, "/") + "/api/terraform/rondo-tofu-local/providers/"
-	tofurc := fmt.Sprintf("provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\n", mirror)
+	tofurc := fmt.Sprintf("provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\n", m.ProviderMirrorURL)
 	if !t.dryRun {
 		if err := os.WriteFile(t.ws.TofuRC(), []byte(tofurc), 0o600); err != nil {
 			return err
@@ -72,8 +74,8 @@ func (t *TofuStage) ConfigureRegistry(ctx context.Context) error {
 	}
 	t.regEnv["TF_CLI_CONFIG_FILE"] = t.ws.TofuRC()
 	t.regEnv["SSL_CERT_FILE"] = t.ws.CACert
-	t.regEnv["TF_HTTP_USERNAME"] = t.cfg.Artifactory.Username
-	t.regEnv["TF_HTTP_PASSWORD"] = t.cfg.Secrets.ArtifactoryPassword
+	t.regEnv["TF_HTTP_USERNAME"] = m.Username
+	t.regEnv["TF_HTTP_PASSWORD"] = m.Password
 	log.Info("OpenTofu registry configured", "host", host)
 	return nil
 }
@@ -102,7 +104,7 @@ func (t *TofuStage) ApplyManagement(ctx context.Context) error {
 	if err := t.setCAVar(); err != nil {
 		return err
 	}
-	return t.planAndApply(ctx, t.ws.Stack("k3s"), nil, t.cfg.StateAddress("k3s"), "management")
+	return t.planAndApply(ctx, t.ws.Stack("k3s"), nil, t.cfg.Mirror().StateURL("k3s"), "management")
 }
 
 func (t *TofuStage) DestroyManagement(ctx context.Context) error {
@@ -113,7 +115,7 @@ func (t *TofuStage) DestroyManagement(ctx context.Context) error {
 	if err := t.setCAVar(); err != nil {
 		return err
 	}
-	if err := t.destroy(ctx, t.ws.Stack("k3s"), nil, t.cfg.StateAddress("k3s")); err != nil {
+	if err := t.destroy(ctx, t.ws.Stack("k3s"), nil, t.cfg.Mirror().StateURL("k3s")); err != nil {
 		return err
 	}
 	if !t.dryRun {
@@ -131,7 +133,7 @@ func (t *TofuStage) ApplyRKE2(ctx context.Context, target *config.DownstreamTarg
 		return "", "", err
 	}
 	dir := t.ws.Stack("rke2")
-	if err := t.planAndApply(ctx, dir, env, t.cfg.StateAddress(target.Name), target.Name); err != nil {
+	if err := t.planAndApply(ctx, dir, env, t.cfg.Mirror().StateURL(target.Name), target.Name); err != nil {
 		return "", "", err
 	}
 	if t.dryRun {
@@ -152,7 +154,7 @@ func (t *TofuStage) DestroyRKE2(ctx context.Context, target *config.DownstreamTa
 	if err != nil {
 		return err
 	}
-	return t.destroy(ctx, t.ws.Stack("rke2"), env, t.cfg.StateAddress(target.Name))
+	return t.destroy(ctx, t.ws.Stack("rke2"), env, t.cfg.Mirror().StateURL(target.Name))
 }
 
 func (t *TofuStage) rke2Env(target *config.DownstreamTarget, rancherAccess, rancherSecret string) (map[string]string, error) {

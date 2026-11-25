@@ -63,7 +63,7 @@ export const commands: Command[] = [
       { name: 'Helm chart deployment', tool: 'helm', does: 'helmfile sync: MetalLB, cert-manager (then the PKI), Rancher (rancher.<base>).' },
       { name: 'operator install', tool: 'kubectl', does: 'CRDs (awaited Established), rondo-system namespace, RBAC, Deployments rondo-controller, rondo-probe, rondo-dashboard, Ingress rondo.<base>, NetworkPolicies. Images at the CLI version.' },
       { name: 'platform credentials', tool: 'kubectl', does: 'Artifactory account and its CA for the Jobs.', writes: ['Secret rondo-credentials', 'ConfigMap artifactory-ca'] },
-      { name: 'network_mirror token', tool: 'http', does: "Long-lived token for the Jobs' tofu providers: secrets.artifactoryMirrorToken, else a token issued and rotated on each deploy.", writes: ['Secret rondo-tofurc'] },
+      { name: 'network_mirror token', tool: 'http', does: "Long-lived token for the Jobs' tofu providers: secrets.mirrorToken, else a token issued and rotated on each deploy (preset artifactory) or none (preset generic).", writes: ['Secret rondo-tofurc'] },
       { name: 'internal DNS resolution', tool: 'kubectl', does: "Management CoreDNS: rancher|rondo.<base> → management ingress IP; *.<target or role>.<base> → each downstream's ingress IP.", writes: ['ConfigMap kube-system/coredns-custom'] },
       { name: 'Targets and site values', tool: 'kubectl', does: 'Target management, one Target per targets.vsphere entry, component Secrets, machine SSH key (generated once).', writes: ['Target management', 'Target <vsphere>', 'Secret/ConfigMap rondo-vsphere-<n>', 'Secret rondo-platform-values', 'Secret rondo-vm-ssh', 'Secret <secrets.components.x>'] },
       { name: 'operator startup wait', tool: 'kubectl', does: 'rollout status of the three Deployments, 10 min at most.' },
@@ -180,7 +180,7 @@ export const globalFlags: Flag[] = [
   { name: '--yes', def: 'false', help: 'asks for no confirmation' },
   { name: '--skip-download', def: 'false', help: 'reuses the tools already downloaded' },
   { name: '--iac-version', def: '""', help: 'pins the IaC bundle version' },
-  { name: '--iac-channel', def: '""', help: 'stable (default) or edge-<branch>; takes precedence over artifactory.rondoReleaseChannel' },
+  { name: '--iac-channel', def: '""', help: 'stable (default) or edge-<branch>; takes precedence over artifacts.releaseChannel' },
   { name: '--log-level', def: 'info', help: 'trace|debug|info|warn|error' },
   { name: '--debug', def: 'false', help: '= --log-level debug' },
 ];

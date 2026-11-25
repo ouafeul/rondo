@@ -9,18 +9,21 @@ package sandbox
 
 import "path/filepath"
 
-// The sandbox's fixed names: its Artifactory stand-in, its domain, its repositories.
+// The sandbox's fixed names: its artifact mirror (zot for OCI, nginx for the files, the RPM
+// repositories and the states, on one host), its domain, its repositories.
 const (
-	registryHost   = "artifactory.sandbox.test"
-	baseDomain     = "sandbox.test"
-	helmRepo       = "rondo-helm-local"
-	dockerRepo     = "rondo-docker-local"
-	genericRepo    = "rondo-generic-local"
-	rpmRepo        = "rondo-rpms-local"
-	artifactoryURL = "https://" + registryHost + "/artifactory"
-	clusterPrefix  = "rondo-sbx"
-	sandboxSecret  = "sandbox"
-	managementRole = "management"
+	registryHost      = "artifactory.sandbox.test"
+	baseDomain        = "sandbox.test"
+	helmRepo          = "rondo-helm-local"
+	dockerRepo        = "rondo-docker-local"
+	genericRepo       = "rondo-generic-local"
+	rpmRepo           = "rondo-rpms-local"
+	tofuStateRepo     = "rondo-tofu-state-local"
+	filesURL          = "https://" + registryHost + "/artifactory"
+	providerMirrorURL = filesURL + "/api/terraform/rondo-tofu-local/providers/"
+	clusterPrefix     = "rondo-sbx"
+	sandboxSecret     = "sandbox"
+	managementRole    = "management"
 )
 
 // Settings locate a sandbox's state and the rondo tree it deploys RONDO from.

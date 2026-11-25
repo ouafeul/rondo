@@ -11,8 +11,8 @@ const hostilePassword = `p@ss:w/o;rd?#&=+ é`
 
 func TestValuesCarryTheAuthenticatedArtifactoryURL(t *testing.T) {
 	cfg := siteCfg()
-	cfg.Artifactory.Username = "svc-acme"
-	cfg.Secrets.ArtifactoryPassword = hostilePassword
+	cfg.Artifacts.Username = "svc-acme"
+	cfg.Secrets.MirrorPassword = hostilePassword
 
 	p, objs, _ := capture(t, cfg)
 	if err := p.applyPlatformValues(t.Context()); err != nil {
@@ -38,9 +38,9 @@ func TestValuesCarryTheAuthenticatedArtifactoryURL(t *testing.T) {
 			"`@` moves the userinfo/host boundary and the plugin URL points at a "+
 			"host that does not exist", got)
 	}
-	want, err := cfg.ArtifactoryAuthURL()
+	want, err := cfg.Mirror().FilesAuthURL()
 	if err != nil {
-		t.Fatalf("ArtifactoryAuthURL: %v", err)
+		t.Fatalf("FilesAuthURL: %v", err)
 	}
 	if got != want {
 		t.Errorf("artifactoryAuthURL = %q, want %q", got, want)

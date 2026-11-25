@@ -57,7 +57,7 @@ func dryRunWithoutReachableCluster(t *testing.T) *config.Config {
 	write(filepath.Join("platform", "components", "probe.yaml"),
 		"apiVersion: rondo.ouafeul.github.io/v1alpha1\nkind: Component\nmetadata:\n  name: probe\n", 0o600)
 	write("ca.pem", "PEM\n", 0o600)
-	write("rondo.yaml", strings.Replace(string(rondo.ExampleConfig), "./certs/artifactory-ca.pem", "./ca.pem", 1), 0o600)
+	write("rondo.yaml", strings.Replace(string(rondo.ExampleConfig), "./certs/mirror-ca.pem", "./ca.pem", 1), 0o600)
 	write(filepath.Join(".local", "bin", "kubectl"),
 		"#!/bin/sh\nexec sleep "+strconv.Itoa(int(fakeKubectlSleep.Seconds()))+"\n", 0o755)
 

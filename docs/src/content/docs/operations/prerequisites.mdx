@@ -1,6 +1,6 @@
 ---
 title: Prerequisites
-description: Workstation, network, vCenter, DNS, Artifactory and vSphere capacity, before the first rondo deploy.
+description: Workstation, network, vCenter, DNS, artifact mirror and vSphere capacity, before the first rondo deploy.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -15,9 +15,9 @@ Linux x86_64 with, in the `PATH`:
 | `ssh-keygen` | `openssh-clients` | every command | key pair for access to component machines |
 | `bash` | `bash` | `rondo deploy` | runs `scripts/k3s-setup.sh` |
 | `ssh`, `scp` | `openssh-clients` | `rondo deploy` | forms the k3s cluster, fetches the kubeconfig |
-| `sshpass` | `sshpass` | `rondo deploy` | password SSH to fresh VMs; not in base RHEL: EPEL, or mirrored to Artifactory |
+| `sshpass` | `sshpass` | `rondo deploy` | password SSH to fresh VMs; not in base RHEL: EPEL, or mirrored to the artifact mirror |
 
-The `rondo` RPM pulls `bash` and `openssh-clients`, and recommends `sshpass`. The rest (`tofu`, `helm`, `helmfile`, `kubectl`, `yq`, `k9s`, `helm-diff` plugin) is downloaded from Artifactory into `~/.rondo/bin` at the bundle's versions.
+The `rondo` RPM pulls `bash` and `openssh-clients`, and recommends `sshpass`. The rest (`tofu`, `helm`, `helmfile`, `kubectl`, `yq`, `k9s`, `helm-diff` plugin) is downloaded from the artifact mirror into `~/.rondo/bin` at the bundle's versions.
 
 <Aside type="caution">A tool already in `~/.rondo/bin` is not downloaded again, even if the bundle asks for another version: delete the binary to force the update.</Aside>
 
@@ -25,7 +25,7 @@ The `rondo` RPM pulls `bash` and `openssh-clients`, and recommends `sshpass`. Th
 
 ```mermaid
 flowchart LR
-  P["Workstation"] -- "HTTPS" --> A["Artifactory"]
+  P["Workstation"] -- "HTTPS" --> A["Artifact mirror"]
   P -- "HTTPS" --> V["vCenter"]
   P -- "SSH 22, API 6443" --> M["Management VMs"]
   P -- "HTTPS 443" --> R["rancher.#lt;base#gt; · rondo.#lt;base#gt;"]
@@ -37,7 +37,7 @@ flowchart LR
   X -- "HTTPS (RPM, artifacts)" --> A
 ```
 
-The management cluster's Jobs reach vCenter (component machines), Artifactory (charts, modules, tofu states) and the rke2 cluster APIs; the nodes pull their images from Artifactory.
+The management cluster's Jobs reach vCenter (component machines), the artifact mirror (charts, modules, tofu states) and the rke2 cluster APIs; the nodes pull their images from the mirror.
 
 ## vCenter
 
@@ -54,22 +54,27 @@ The management cluster's Jobs reach vCenter (component machines), Artifactory (c
 
 The management cluster already resolves these names internally (CoreDNS); workstations and the site's other systems do not.
 
-## Artifactory
+## Artifact mirror
 
-The site has no Internet access, so an Artifactory inside the site serves everything RONDO installs. It holds these repositories, named in `rondo.yaml`:
+The site has no Internet access, so an artifact mirror inside the site serves everything RONDO installs, declared under `artifacts:` in `rondo.yaml`. Two presets:
 
-| Repository | Content |
-|---|---|
-| `rondo-generic-local` | RONDO release files (CLI, IaC bundle, `stable.json`, vm module, Ansible content), tools, published component trees |
-| `rondo-docker-local` | images: RONDO's own and those extracted from every chart |
-| `rondo-helm-local` | Helm charts (OCI) |
-| `rondo-rpms-local` | RPMs: `rondo`, OS repositories for component machines (optional) |
-| `rondo-tofu-local` | OpenTofu providers (network mirror) |
-| `rondo-tofu-state-local` | tofu states (`tofuStateRepository`) |
+- **`generic`** (default): any OCI registry (Harbor, Zot, Nexus, a Distribution registry…) and any HTTP file server (nginx, an object store behind HTTPS…). Each endpoint is declared: `oci.registry`, `files.url`, `rpm`, `tofu.providerMirror`, `tofu.stateURL`.
+- **`artifactory`**: a JFrog Artifactory; every endpoint derives from `artifactory.url` and the repository names.
+
+Every repository is a path segment under its root, `<root>/<repository>/<path>`. The mirror holds:
+
+| Content | `generic` | `artifactory` (default name) |
+|---|---|---|
+| RONDO release files (CLI, IaC bundle, `stable.json`, vm module, Ansible content), tools, published component trees | `<files.url>/<files.repository>` | `rondo-generic-local` |
+| images: RONDO's own and those extracted from every chart | `<oci.registry>/<oci.repository>` | `rondo-docker-local` |
+| Helm charts (OCI) | `oci://<oci.registry>/<oci.chartsRepository>` | `rondo-helm-local` |
+| RPMs: `rondo`, OS repositories for component machines (optional) | `<rpm.url>/<rpm.repository>` | `artifactory.repositories.rpm` |
+| OpenTofu providers (network mirror, a `tofu providers mirror` tree) | `tofu.providerMirror` | `rondo-tofu-local` |
+| tofu states (HTTP backend, written) | `tofu.stateURL` | `rondo-tofu-state-local` |
 
 They are fed from a connected network: RONDO releases come from [GitHub Releases](https://github.com/ouafeul/rondo/releases), images from `ghcr.io/ouafeul`, RONDO charts from `oci://ghcr.io/ouafeul/charts`, and third-party dependencies from `manifests/dependencies.yaml`. See [Air-gap mirror](/contributing/release/#air-gap-mirror).
 
-The service account reads these repositories and writes to `tofuStateRepository`. Without `secrets.artifactoryMirrorToken`, each `rondo deploy` issues a token for the Jobs' providers: without expiry (`mirrorTokenLifetimeSeconds` empty), it needs an admin account.
+The service account (`artifacts.username`, `secrets.mirrorPassword`) reads every endpoint and writes the tofu states. The Jobs' providers authenticate on the provider mirror with `secrets.mirrorToken`; when it is empty, an Artifactory issues a token on each `rondo deploy` (without expiry, `artifactory.mirrorTokenLifetimeSeconds` empty, it needs an admin account) and a generic mirror is read without a token.
 
 ## Capacity
 

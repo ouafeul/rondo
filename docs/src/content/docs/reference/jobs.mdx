@@ -47,7 +47,7 @@ The target's kubeconfig, the `valuesFrom` Secrets, the vSphere credentials, the 
     1. checks `spec.vm` and a vSphere Target; resolves `${target.*}`;
     2. downloads the module `tofu-modules/vm/<version>/vm.tar.gz`;
     3. variables: groups and IPs, template, settings of the ConfigMap `rondo-vsphere-<n>`, credentials of the Secret of the same name, public key `rondo-vm-ssh`;
-    4. HTTP backend `<tofuStateRepository>/<env>/vm/<enrollment>/terraform.tfstate`;
+    4. HTTP backend `<state base>/<env>/vm/<enrollment>/terraform.tfstate`;
     5. providers through the `network_mirror` of `rondo-tofurc` (401/403 → immediate failure);
     6. `tofu apply -auto-approve` (or `destroy`); after apply, `tofu output -json` → Secret `<enrollment>-machines` (key `ansible_inventory`) and `status.machinesSecretRef`.
   </TabItem>

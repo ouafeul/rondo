@@ -38,7 +38,7 @@ rondo env select default      # back to ~/.rondo/rondo.yaml
 
 | Per environment | Value |
 |---|---|
-| tofu states | `<tofuStateRepository>/<environmentName>/…` |
+| tofu states | `<state base>/<environmentName>/…` |
 | vSphere folder | `<vmFolder>/<environmentName>/…` |
 | kubectl context | `rondo` (default) or `rondo-<env>` |
 | cluster CA | `RONDO <env> CA` |
@@ -47,17 +47,17 @@ rondo env select default      # back to ~/.rondo/rondo.yaml
 
 In order: `--config`; else `--env` (or the selected environment) → `$RONDO_HOME/envs/<env>/rondo.yaml`; else `./rondo.yaml`; else `$RONDO_HOME/rondo.yaml`. If the file's `environmentName` does not match the targeted environment, the command stops.
 
-`artifactory.caCertificateFile` accepts `~`; a relative path starts from the folder of `rondo.yaml`.
+`artifacts.caCertificateFile` accepts `~`; a relative path starts from the folder of `rondo.yaml`.
 
 ## Bundle and channel
 
-Outside a clone of the repository, the CLI downloads its **IaC bundle** (tofu modules, `helmfile.yaml`, CRDs, platform tree, scripts) from the site's Artifactory into `~/.rondo/cache/<version>`, checked by SHA-256:
+Outside a clone of the repository, the CLI downloads its **IaC bundle** (tofu modules, `helmfile.yaml`, CRDs, platform tree, scripts) from the site's artifact mirror into `~/.rondo/cache/<version>`, checked by SHA-256:
 
 | Priority | Source of the version |
 |---|---|
 | 1 | `--iac-version` |
 | 2 | `--iac-channel` |
-| 3 | `artifactory.rondoReleaseChannel` |
+| 3 | `artifacts.releaseChannel` |
 | 4 | `edge-<branch>` for an edge CLI |
 | 5 | `stable` |
 

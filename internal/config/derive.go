@@ -10,15 +10,6 @@ import (
 
 var schemeRe = regexp.MustCompile(`^https?://`)
 
-func (c *Config) ArtifactoryAuthURL() (string, error) {
-	scheme, rest, ok := strings.Cut(c.Artifactory.URL, "://")
-	if !ok {
-		return "", fmt.Errorf("artifactory.url (%q) has no scheme", c.Artifactory.URL)
-	}
-	return scheme + "://" + escapeUserinfo(c.Artifactory.Username) + ":" +
-		escapeUserinfo(c.Secrets.ArtifactoryPassword) + "@" + rest, nil
-}
-
 func escapeUserinfo(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -35,14 +26,6 @@ func escapeUserinfo(s string) string {
 	return b.String()
 }
 
-func (c *Config) ArtifactoryHost() string {
-	h := schemeRe.ReplaceAllString(c.Artifactory.URL, "")
-	if i := strings.IndexByte(h, '/'); i >= 0 {
-		h = h[:i]
-	}
-	return h
-}
-
 func (c *Config) RancherHostname() string   { return "rancher." + c.IngressBaseDomain }
 func (c *Config) DashboardHostname() string { return "rondo." + c.IngressBaseDomain }
 
@@ -50,19 +33,12 @@ func (c *Config) ClusterCACommonName() string {
 	return strings.TrimSpace("RONDO " + c.EnvironmentName + " CA")
 }
 
-func (c *Config) ManagementImageRegistry() string {
-	return c.ArtifactoryHost() + "/" + c.Artifactory.DockerRepository
-}
-
+// RegistryHostFor is the registry authority of an rke2 target: its registryHost, else the mirror's.
 func (c *Config) RegistryHostFor(r *RKE2Target) string {
 	if r.RegistryHost != "" {
 		return r.RegistryHost
 	}
-	return c.Artifactory.DockerRepository + "." + c.ArtifactoryHost()
-}
-
-func (c *Config) StateBaseURL() string {
-	return c.Artifactory.URL + "/" + c.Scoped(c.Artifactory.TofuStateRepository)
+	return c.Mirror().RKE2SystemRegistry
 }
 
 func (c *Config) Scoped(p string) string {
@@ -70,10 +46,6 @@ func (c *Config) Scoped(p string) string {
 		return p
 	}
 	return p + "/" + c.EnvironmentName
-}
-
-func (c *Config) StateAddress(name string) string {
-	return c.StateBaseURL() + "/" + name + "/terraform.tfstate"
 }
 
 func vmFolder(c *Config, v *VSphereTarget) string {
@@ -144,25 +116,26 @@ func vmsVar(nodes []Node) string {
 func (c *Config) Env() map[string]string {
 	m := &c.Targets.Management
 	vs := c.VSphereNamed(m.VSphereTarget)
+	mr := c.Mirror()
 	e := map[string]string{
-		"ARTIFACTORY_URL":            c.Artifactory.URL,
-		"ARTIFACTORY_USER":           c.Artifactory.Username,
-		"ARTIFACTORY_PASSWORD":       c.Secrets.ArtifactoryPassword,
-		"ARTIFACTORY_GENERIC_REPO":   c.Artifactory.GenericRepository,
-		"ARTIFACTORY_RPM_REPO":       c.Artifactory.RPMRepository,
-		"ARTIFACTORY_DOCKER_REPO":    c.Artifactory.DockerRepository,
-		"ARTIFACTORY_HELM_REPO":      c.Artifactory.HelmRepository,
-		"REGISTRY_HOST":              c.ArtifactoryHost(),
+		"ARTIFACTORY_URL":            mr.FilesBase,
+		"ARTIFACTORY_USER":           mr.Username,
+		"ARTIFACTORY_PASSWORD":       mr.Password,
+		"ARTIFACTORY_GENERIC_REPO":   mr.FilesRepo,
+		"ARTIFACTORY_RPM_REPO":       mr.RPMRepo,
+		"ARTIFACTORY_DOCKER_REPO":    mr.ImagesRepo,
+		"ARTIFACTORY_HELM_REPO":      mr.ChartsRepo,
+		"REGISTRY_HOST":              mr.OCIRegistry,
 		"INGRESS_BASE_DOMAIN":        c.IngressBaseDomain,
 		"INGRESS_IP":                 m.IngressLoadBalancerIP,
 		"RANCHER_HOSTNAME":           c.RancherHostname(),
 		"RANCHER_BOOTSTRAP_PASSWORD": c.Secrets.RancherBootstrapPassword,
 
-		"TF_VAR_artifactory_url":          c.Artifactory.URL,
-		"TF_VAR_artifactory_user":         c.Artifactory.Username,
-		"TF_VAR_artifactory_pass":         c.Secrets.ArtifactoryPassword,
-		"TF_VAR_artifactory_generic_repo": c.Artifactory.GenericRepository,
-		"TF_VAR_artifactory_docker_repo":  c.Artifactory.DockerRepository,
+		"TF_VAR_artifactory_url":          mr.FilesBase,
+		"TF_VAR_artifactory_user":         mr.Username,
+		"TF_VAR_artifactory_pass":         mr.Password,
+		"TF_VAR_artifactory_generic_repo": mr.FilesRepo,
+		"TF_VAR_artifactory_docker_repo":  mr.ImagesRepo,
 		"TF_VAR_environment":              c.EnvironmentName,
 		"TF_VAR_vms":                      vmsVar(m.ServerNodes),
 		"TF_VAR_vm_specs": jsonOf(map[string]int{"cpu": m.ServerNodeSize.CPUCores,

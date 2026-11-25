@@ -26,8 +26,10 @@ func bundleSrv(t *testing.T, routes map[string][]byte) (*httptest.Server, *confi
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	c := &config.Config{
-		Artifactory: config.Artifactory{URL: srv.URL + "/artifactory", GenericRepository: "rondo-generic-local", Username: "u"},
-		Secrets:     config.Secrets{ArtifactoryPassword: "p"},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Username: "u",
+			Artifactory: config.ArtifactoryMirror{URL: srv.URL + "/artifactory",
+				Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}},
+		Secrets: config.Secrets{MirrorPassword: "p"},
 	}
 	return srv, c
 }
@@ -111,8 +113,10 @@ func recordingSrv(t *testing.T, routes map[string][]byte) (*httptest.Server, *co
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	c := &config.Config{
-		Artifactory: config.Artifactory{URL: srv.URL + "/artifactory", GenericRepository: "rondo-generic-local", Username: "u"},
-		Secrets:     config.Secrets{ArtifactoryPassword: "p"},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Username: "u",
+			Artifactory: config.ArtifactoryMirror{URL: srv.URL + "/artifactory",
+				Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}},
+		Secrets: config.Secrets{MirrorPassword: "p"},
 	}
 	return srv, c, &seen
 }
@@ -224,9 +228,9 @@ func TestResolveTarballMissing(t *testing.T) {
 }
 
 func TestDryResolve(t *testing.T) {
-	c := &config.Config{Artifactory: config.Artifactory{
-		URL: "https://arti.example.com/artifactory", GenericRepository: "rondo-generic-local",
-	}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory,
+		Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com/artifactory",
+			Repositories: config.ArtifactoryRepositories{Generic: "rondo-generic-local"}}}}
 	cache := "/cache"
 	if got := DryResolve(c, cache, "", ""); got != filepath.Join(cache, "stable") {
 		t.Errorf("DryResolve channel = %q", got)
@@ -237,7 +241,9 @@ func TestDryResolve(t *testing.T) {
 }
 
 func TestRepoBaseDefaultChannel(t *testing.T) {
-	c := &config.Config{Artifactory: config.Artifactory{URL: "https://x/artifactory/", GenericRepository: "g"}}
+	c := &config.Config{Artifacts: config.Artifacts{Preset: config.PresetArtifactory,
+		Artifactory: config.ArtifactoryMirror{URL: "https://x/artifactory/",
+			Repositories: config.ArtifactoryRepositories{Generic: "g"}}}}
 	base, ch := repoBase(c, "")
 	if base != "https://x/artifactory/g/rondo" || ch != "stable" {
 		t.Errorf("repoBase = %q %q", base, ch)

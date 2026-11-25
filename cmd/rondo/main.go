@@ -58,7 +58,7 @@ func run() error {
 	pf.BoolVar(&flagSkipDownload, "skip-download", false, "reuses the tools already downloaded")
 	pf.BoolVar(&flagYes, "yes", false, "asks for no confirmation")
 	pf.StringVar(&flagIacVersion, "iac-version", "", "pins the IaC bundle version (standalone); empty => the followed channel")
-	pf.StringVar(&flagIacChannel, "iac-channel", "", "IaC bundle channel (standalone): stable (default) or edge-<branch>; takes precedence over artifactory.rondoReleaseChannel")
+	pf.StringVar(&flagIacChannel, "iac-channel", "", "IaC bundle channel (standalone): stable (default) or edge-<branch>; takes precedence over artifacts.releaseChannel")
 
 	root.AddCommand(cmdVersion(), cmdInit(), cmdDeploy(), cmdDestroy(), cmdComponent(), cmdEnv(), cmdTUI())
 

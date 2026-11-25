@@ -100,7 +100,7 @@ rondo destroy                          # the management cluster
 | What | Where | If lost |
 |---|---|---|
 | `rondo.yaml`, `state/` | `~/.rondo` (or `envs/<env>/`) | **back it up** with the workstation |
-| tofu states | Artifactory, `tofuStateRepository` | backed up with Artifactory |
+| tofu states | artifact mirror, tofu state base | backed up with the mirror |
 | Targets, Secrets, Components, Enrollments | `rondo-system` | `rondo deploy`, `rondo deploy downstreams`, `rondo component install` rewrite them |
 | Rancher token | `state/rondo.state.json` | regenerated from `secrets.rancherBootstrapPassword` |
 | machine SSH key | Secret `rondo-vm-ssh` | **generated once**: back it up, a new key does not give access to existing machines |

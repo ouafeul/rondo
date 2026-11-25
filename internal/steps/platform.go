@@ -141,7 +141,8 @@ func (p *PlatformStage) ApplyCredentials(ctx context.Context) error {
 		log.Info("DRY-RUN Secret " + kobj.CredentialsSecret)
 		return nil
 	}
-	creds := kobj.ArtifactoryCredentials(p.cfg.Artifactory.Username, p.cfg.Secrets.ArtifactoryPassword)
+	m := p.cfg.Mirror()
+	creds := kobj.ArtifactoryCredentials(m.Username, m.Password)
 	if err := p.applyObject(ctx, creds); err != nil {
 		return fmt.Errorf("secret %s: %w", kobj.CredentialsSecret, err)
 	}
@@ -162,13 +163,16 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 		log.Info("DRY-RUN Secret " + kobj.TofurcSecret)
 		return nil
 	}
-	override := strings.TrimSpace(p.cfg.Secrets.ArtifactoryMirrorToken)
+	m := p.cfg.Mirror()
+	override := m.MirrorToken
 	prior := p.priorMirrorToken(ctx)
 	token := override
 	minted := false
-	if token == "" {
+	// Only an Artifactory mints tokens; another mirror takes secrets.mirrorToken, or serves the
+	// providers without one.
+	if token == "" && m.IsArtifactory() {
 		if p.arti == nil {
-			return fmt.Errorf("no token minter and artifactory.mirrorToken is empty")
+			return fmt.Errorf("no token minter and secrets.mirrorToken is empty")
 		}
 		t, err := p.arti.MintDurableToken(ctx)
 		if err != nil {
@@ -177,8 +181,7 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 		token, minted = t, true
 	}
 
-	mirror := strings.TrimRight(p.cfg.Artifactory.URL, "/") + "/api/terraform/rondo-tofu-local/providers/"
-	secret := kobj.TofuMirror(mirror, p.cfg.ArtifactoryHost(), token, override == "")
+	secret := kobj.TofuMirror(m.ProviderMirrorURL, m.ProviderMirrorHost(), token, minted)
 	if err := p.applyObject(ctx, secret); err != nil {
 		if minted {
 			if rerr := p.arti.RevokeToken(ctx, token); rerr != nil {
@@ -187,7 +190,7 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 		}
 		return fmt.Errorf("secret %s: %w", kobj.TofurcSecret, err)
 	}
-	if prior != "" && prior != token {
+	if prior != "" && prior != token && p.arti != nil {
 		if err := p.arti.RevokeToken(ctx, prior); err != nil {
 			log.Warn("revoking the previous mirror token failed (non-blocking)", "err", err)
 		}

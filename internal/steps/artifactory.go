@@ -18,6 +18,11 @@ type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
 
+// StaticToken is a token given in the manifest; empty is no token.
+type StaticToken string
+
+func (s StaticToken) Token(context.Context) (string, error) { return string(s), nil }
+
 type ArtifactoryClient struct {
 	URL, User, Password string
 	CACertPath          string
@@ -73,10 +78,10 @@ func (a *ArtifactoryClient) MintDurableToken(ctx context.Context) (string, error
 		return "", fmt.Errorf("%w\n"+
 			"A NON-EXPIRING token (expires_in=0) is reserved for Artifactory administrator "+
 			"accounts, and %q is not one.\nThree ways out:\n"+
-			"  - use an admin account for artifactory.user;\n"+
-			"  - set artifactory.durableTokenTtl (seconds, e.g. \"31536000\"); the token "+
+			"  - use an admin account for artifacts.username;\n"+
+			"  - set artifacts.artifactory.mirrorTokenLifetimeSeconds (e.g. \"31536000\"); the token "+
 			"WILL EXPIRE, so plan its rotation;\n"+
-			"  - pin a token by hand in artifactory.mirrorToken.", err, a.User)
+			"  - pin a token by hand in secrets.mirrorToken.", err, a.User)
 	}
 	return "", err
 }

@@ -93,8 +93,9 @@ func TestSetupK3sPassesTheSiteStatePathToTheScript(t *testing.T) {
 func TestHelmDeployArgvAndStdin(t *testing.T) {
 	fake := &runner.Fake{}
 	cfg := &config.Config{
-		Artifactory: config.Artifactory{URL: "https://arti.example.com/artifactory", Username: "u"},
-		Secrets:     config.Secrets{ArtifactoryPassword: "secret"},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Username: "u",
+			Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com/artifactory"}},
+		Secrets: config.Secrets{MirrorPassword: "secret"},
 	}
 	h := NewHelmStage(cfg, Workspace{ProjectDir: "/proj", StateDir: "/proj", BinDir: "/bin", CACert: "/ca.pem"}, fake)
 	if err := h.Deploy(context.Background()); err != nil {

@@ -94,8 +94,8 @@ flowchart LR
 | Where | What | Rebuilt? |
 |---|---|---|
 | workstation, `~/.rondo/` | `rondo.yaml`, `state/` (kubeconfig, `rondo.state.json`), `bin/`, `cache/` | **no**: back it up |
-| Artifactory, `tofuStateRepository` | tofu states of every stack | **no**: backed up with Artifactory |
-| Artifactory, generic repository | RONDO bundles, published trees | republished by CI and the mirror |
+| artifact mirror, tofu state base | tofu states of every stack | **no**: backed up with the mirror |
+| artifact mirror, files repository | RONDO bundles, published trees | republished by CI and the mirror |
 | management, `rondo-system` | RONDO objects, Secrets, ConfigMaps | yes: `rondo deploy` and `rondo component install` rewrite them |
 
 The `rondo-system` objects are detailed in the [reference](/reference/rondo-system/).

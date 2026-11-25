@@ -30,11 +30,16 @@ func cmdVersion() *cobra.Command {
 }
 
 func cmdInit() *cobra.Command {
+	var preset string
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Creates ~/.rondo and an rondo.yaml to fill in",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			template, err := rondo.ExampleConfigFor(preset)
+			if err != nil {
+				return err
+			}
 			home := paths.Home()
 			for _, d := range []string{filepath.Join(home, "bin"), filepath.Join(home, "certs"), filepath.Join(home, "cache")} {
 				if err := os.MkdirAll(d, 0o755); err != nil {
@@ -51,7 +56,7 @@ func cmdInit() *cobra.Command {
 			if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 				return err
 			}
-			content := strings.Replace(string(rondo.ExampleConfig),
+			content := strings.Replace(string(template),
 				"environmentName: prod", "environmentName: "+flagEnv, 1)
 			if flagEnv == "" {
 				content = strings.Replace(content, "environmentName: \n", "", 1)
@@ -64,6 +69,8 @@ func cmdInit() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&flagForce, "force", false, "overwrites an existing rondo.yaml")
+	cmd.Flags().StringVar(&preset, "preset", config.PresetGeneric,
+		"artifact mirror: generic (any OCI registry and HTTP file server) or artifactory (JFrog Artifactory)")
 	return cmd
 }
 

@@ -27,7 +27,7 @@ func (p *PlatformStage) ApplySite(ctx context.Context) error {
 		return err
 	}
 	values := kubernetesValues(p.cfg.Targets.Management.IngressLoadBalancerIP,
-		p.cfg.ManagementImageRegistry(), artiCA)
+		p.cfg.Mirror().OCIRepository, artiCA)
 	management := config.Placement{Name: config.ManagementRole, Roles: []string{config.ManagementRole}}
 	if err := p.applyTarget(ctx, management, kobj.InClusterBackend(), values); err != nil {
 		return err
@@ -109,7 +109,7 @@ func (p *PlatformStage) artifactoryCA() (string, error) {
 }
 
 func (p *PlatformStage) applyPlatformValues(ctx context.Context) error {
-	authURL, err := p.cfg.ArtifactoryAuthURL()
+	authURL, err := p.cfg.Mirror().FilesAuthURL()
 	if err != nil {
 		return err
 	}
@@ -123,8 +123,8 @@ func (p *PlatformStage) applyPlatformValues(ctx context.Context) error {
 
 func platformValues(c *config.Config, authURL string) map[string]string {
 	return map[string]string{
-		"artifactoryUser":     c.Artifactory.Username,
-		"artifactoryPassword": c.Secrets.ArtifactoryPassword,
+		"artifactoryUser":     c.Mirror().Username,
+		"artifactoryPassword": c.Mirror().Password,
 		"artifactoryAuthURL":  authURL,
 	}
 }

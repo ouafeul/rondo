@@ -224,7 +224,7 @@ func newHarness(t *testing.T) *harness {
 	if err := os.MkdirAll(filepath.Dir(prod), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ca := filepath.Join(filepath.Dir(prod), "certs", "artifactory-ca.pem")
+	ca := filepath.Join(filepath.Dir(prod), "certs", "mirror-ca.pem")
 	if err := os.MkdirAll(filepath.Dir(ca), 0o700); err != nil {
 		t.Fatal(err)
 	}
