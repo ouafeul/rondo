@@ -48,7 +48,7 @@ func installKubectl(t *testing.T, srv *httptest.Server, digests map[string]strin
 	return filepath.Join(binDir, "kubectl"), err
 }
 
-const kubectlPath = "/kubectl/v1.34.0/kubectl"
+const kubectlPath = "/kubectl/v1.34.13/kubectl"
 
 func TestToolMatchingItsDigestsIsInstalled(t *testing.T) {
 	bin := "#!kubectl"
