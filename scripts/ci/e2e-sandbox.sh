@@ -130,6 +130,8 @@ cmd_collect() {
         ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${m}" 2>/dev/null)"
         {
             docker inspect -f 'state={{.State.Status}} restarts={{.RestartCount}} exit={{.State.ExitCode}} err={{.State.Error}}' "${m}"
+            docker exec "${m}" sh -c 'grep -E "^Cap(Eff|Bnd)" /proc/1/status; ls -l /etc/shadow'
+            docker info --format 'security={{.SecurityOptions}} cgroup={{.CgroupVersion}}'
             docker exec "${m}" systemctl is-system-running
             docker exec "${m}" systemctl --no-pager --failed
             docker exec "${m}" systemctl --no-pager status sshd
