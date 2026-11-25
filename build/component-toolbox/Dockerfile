@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.26.11
+ARG GO_VERSION=1.27.4
 ARG HELM_VERSION=3.22.1
 
 FROM alpine/helm:${HELM_VERSION} AS helm
@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w -X rondo/internal/version.Version=${VERSION} -X rondo/internal/version.Commit=${COMMIT}" \
       -o /out/rondo ./cmd/rondo
 
-FROM debian:stable-slim
+FROM debian:13-slim
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates skopeo python3 python3-requests python3-yaml \

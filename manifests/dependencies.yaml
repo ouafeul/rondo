@@ -153,6 +153,6 @@ rpm_packages: []
 
 base_images:
   - name: ansible-core
-    version: "2.18.6"
-    source_url: "https://pypi.org/project/ansible-core/2.18.6/"
+    version: "2.22.0"
+    source_url: "https://pypi.org/project/ansible-core/2.22.0/"
     note: "installed by pip in build/toolbox/Dockerfile (ARG ANSIBLE_CORE_VERSION)"
