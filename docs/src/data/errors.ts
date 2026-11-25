@@ -13,8 +13,8 @@ export const errors: Entry[] = [
   { where: 'CLI', msg: 'cloud-init timeout on <ip> after 10m0s', cause: 'The VM has no IP, or the template has no cloud-init, or its interface is not ens32.', fix: 'VM console in vCenter; check vmNetwork, serverNodes[].ip, the template.' },
   { where: 'CLI', msg: 'The plan for <x> DESTROYS <resources>. Apply? (y/N)', cause: 'An rondo.yaml change recreates VMs (size, template, IP…).', fix: 'Read the plan; answer N if it is not intended. --yes accepts in advance.' },
   { where: 'CLI', msg: 'cancelled', cause: 'A confirmation received something other than y.', fix: 'Run again, or --yes.' },
-  { where: 'CLI', msg: '401 from Artifactory', cause: 'Expired password or token.', fix: 'secrets.artifactoryPassword, secrets.artifactoryMirrorToken, then rondo deploy.' },
-  { where: 'CLI', msg: 'unknown placeholders: ${<X>}; declare them in …', cause: 'The tree uses an unknown site token, or one whose value is empty in rondo.yaml (e.g. ${ARTIFACTORY_RPM_REPO} without rpmRepository).', fix: 'Fill in the rondo.yaml key, or pass the value through ${target.values.*}.' },
+  { where: 'CLI', msg: '401 from the artifact mirror', cause: 'Expired password or token.', fix: 'secrets.mirrorPassword, secrets.mirrorToken, then rondo deploy.' },
+  { where: 'CLI', msg: 'unknown placeholders: ${<X>}; declare them in …', cause: 'The tree uses an unknown site token, or one whose value is empty in rondo.yaml (e.g. ${ARTIFACTORY_RPM_REPO} without an RPM repository).', fix: 'Fill in the rondo.yaml key, or pass the value through ${target.values.*}.' },
   { where: 'CLI', msg: 'SHA-256 checksum mismatch: want <a>, got <b>', cause: 'Corrupt archive, or republished under the same version.', fix: 'Republish under a new version; empty the relevant ~/.rondo/cache/… directory.' },
   { where: 'CLI', msg: '… refused, a tree only carries Components and Enrollments', cause: 'The published tree contains another kind (a Target, a Secret…).', fix: 'Remove the object from the tree; Targets come from rondo.yaml, secrets from secrets.components.' },
   { where: 'CLI', msg: 'Rancher token in state is invalid (Rancher reprovisioned?), regenerating', cause: 'Warning: the token in rondo.state.json no longer works.', fix: 'Nothing, unless the admin login then fails: secrets.rancherBootstrapPassword must be the current admin password.' },
@@ -49,6 +49,6 @@ export const errors: Entry[] = [
 
   // Job
   { where: 'Job', msg: 'helm: timed out waiting for the condition / UPGRADE FAILED', cause: 'The chart does not become ready before policy.timeout − 30 s; --atomic rolled the release back.', fix: 'kubectl logs job/<job>, then the pods on the target; raise spec.policy.timeout if the install is slow.' },
-  { where: 'Job', msg: 'network_mirror: 401/403 … Regenerate it with `rondo deploy`', cause: 'The tofu providers token (Secret rondo-tofurc) is invalid.', fix: 'rondo deploy, or set secrets.artifactoryMirrorToken.' },
+  { where: 'Job', msg: 'network_mirror: 401/403 … Regenerate it with `rondo deploy`', cause: 'The tofu providers token (Secret rondo-tofurc) is invalid.', fix: 'rondo deploy, or set secrets.mirrorToken.' },
   { where: 'Job', msg: 'uninstall failed, the finalizer is released anyway, the helm release may remain', cause: "The helm-uninstall Job failed; the Enrollment disappears anyway (controller log).", fix: 'helm uninstall <release> -n <ns> by hand on the target.' },
 ];

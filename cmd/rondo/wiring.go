@@ -25,9 +25,9 @@ import (
 const downloadTimeout = 10 * time.Minute
 
 func resolveCA(c *config.Config) (string, error) {
-	p := paths.ExpandHome(c.Artifactory.CACertificateFile)
+	p := paths.ExpandHome(c.Artifacts.CACertificateFile)
 	if p == "" {
-		return "", fmt.Errorf("artifactory.caCertificateFile is empty")
+		return "", fmt.Errorf("artifacts.caCertificateFile is empty")
 	}
 	if filepath.IsAbs(p) {
 		return p, nil
@@ -53,7 +53,7 @@ func resolveWorkspace(ctx context.Context, c *config.Config, caCert string) (pro
 		}
 		return wd, filepath.Join(wd, ".local", "bin"), stateDir, err
 	}
-	log.Info("standalone mode: fetching the IaC bundle from Artifactory")
+	log.Info("standalone mode: fetching the IaC bundle from the artifact mirror")
 	if flagDryRun {
 		return bundle.DryResolve(c, paths.CacheDir(), iacChannel(c), flagIacVersion),
 			paths.BinDir(), stateDir, nil
@@ -76,8 +76,8 @@ func iacChannel(c *config.Config) string {
 	if flagIacChannel != "" {
 		return flagIacChannel
 	}
-	if c.Artifactory.RondoReleaseChannel != "" {
-		return c.Artifactory.RondoReleaseChannel
+	if c.Artifacts.ReleaseChannel != "" {
+		return c.Artifacts.ReleaseChannel
 	}
 	return edgeChannelOfBinary(version.Version)
 }
@@ -146,17 +146,13 @@ func newDeps(ctx context.Context, c *config.Config) (*deps, error) {
 		run = runner.DryRun{Real: run}
 	}
 	ws := steps.Workspace{ProjectDir: projectDir, StateDir: stateDir, BinDir: binDir, CACert: caCert}
-	arti := &steps.ArtifactoryClient{
-		URL: c.Artifactory.URL, User: c.Artifactory.Username,
-		Password: c.Secrets.ArtifactoryPassword, CACertPath: caCert,
-		DurableTokenTTL: c.Artifactory.MirrorTokenLifetimeSeconds,
-	}
-	tofu := steps.NewTofuStage(c, ws, run, arti, flagDryRun)
+	tokens, minter := mirrorTokens(c.Mirror(), caCert)
+	tofu := steps.NewTofuStage(c, ws, run, tokens, flagDryRun)
 	tofu.Confirm = confirm
 	kube := steps.NewKubeClient(ws, run)
 	rancher := steps.NewRancherClient(c.RancherHostname())
 	boot := steps.NewRancherBootstrap(c, ws, kube, rancher, flagDryRun)
-	platform := steps.NewPlatformStage(c, ws, kube, arti, version.Version, flagDryRun)
+	platform := steps.NewPlatformStage(c, ws, kube, minter, version.Version, flagDryRun)
 	mgmt := steps.NewMgmtStage(c, ws, run, flagDryRun)
 	mgmt.UseContext = c.EnvironmentName == currentEnv()
 	return &deps{
@@ -170,6 +166,19 @@ func newDeps(ctx context.Context, c *config.Config) (*deps, error) {
 		platform: platform,
 		env:      env,
 	}, nil
+}
+
+// mirrorTokens are the token OpenTofu presents to the provider mirror and the minter of the
+// Jobs' one: an Artifactory mints both, any other mirror takes secrets.mirrorToken, or none.
+func mirrorTokens(m config.Mirror, caCert string) (steps.TokenSource, steps.MirrorTokenMinter) {
+	if !m.IsArtifactory() {
+		return steps.StaticToken(m.MirrorToken), nil
+	}
+	arti := &steps.ArtifactoryClient{
+		URL: m.ArtifactoryURL, User: m.Username, Password: m.Password, CACertPath: caCert,
+		DurableTokenTTL: m.MirrorTokenLifetimeSeconds,
+	}
+	return arti, arti
 }
 
 func (d *deps) renderBootstrap(_ context.Context) error {
@@ -194,10 +203,11 @@ func (d *deps) ensureTools(ctx context.Context) error {
 		log.Info("--skip-download: tools assumed present")
 		return nil
 	}
+	mirror := d.cfg.Mirror()
 	inst := &tools.Installer{
-		BaseURL:   strings.TrimRight(d.cfg.Artifactory.URL, "/") + "/" + d.cfg.Artifactory.GenericRepository,
-		User:      d.cfg.Artifactory.Username,
-		Password:  d.cfg.Secrets.ArtifactoryPassword,
+		BaseURL:   mirror.FilesRepoURL(),
+		User:      mirror.Username,
+		Password:  mirror.Password,
 		BinDir:    d.ws.BinDir,
 		PluginDir: d.ws.HelmPluginsDir(),
 		Versions:  d.env,

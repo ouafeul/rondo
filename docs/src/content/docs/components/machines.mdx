@@ -96,7 +96,7 @@ targets:
         vmIPs.mft.db: 10.0.1.21
 ```
 
-The VMs are created in `<vmFolder>/<env>/<component>`, with RONDO's SSH key (Secret `rondo-vm-ssh`) for the `rondo` user. The tofu state is `<tofuStateRepository>/<env>/vm/<enrollment>`.
+The VMs are created in `<vmFolder>/<env>/<component>`, with RONDO's SSH key (Secret `rondo-vm-ssh`) for the `rondo` user. The tofu state is `<state base>/<env>/vm/<enrollment>` (the state base of the [artifact mirror](/reference/rondo-yaml/#artifact-mirror-presets)).
 
 ## Install
 

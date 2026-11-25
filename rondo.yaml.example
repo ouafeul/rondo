@@ -1,16 +1,36 @@
 environmentName: prod
 ingressBaseDomain: cluster.example.local
 
-artifactory:
-  url: https://artifactory.example.local/artifactory
+artifacts:
+  preset: generic
   username: svc-rondo
-  caCertificateFile: ./certs/artifactory-ca.pem
-  dockerRepository: rondo-docker-local
-  helmRepository: rondo-helm-local
-  genericRepository: rondo-generic-local
-  rpmRepository: ""
-  tofuStateRepository: rondo-tofu-state-local
-  rondoReleaseChannel: stable
+  caCertificateFile: ./certs/mirror-ca.pem
+  releaseChannel: stable
+  oci:
+    registry: registry.example.local
+    repository: rondo
+    chartsRepository: charts
+  files:
+    url: https://files.example.local
+    repository: rondo
+  rpm:
+    url: https://files.example.local
+    repository: ""
+  tofu:
+    providerMirror: https://files.example.local/tofu-providers/
+    stateURL: https://files.example.local/tofu-state
+  # A JFrog Artifactory derives every endpoint from its URL, in place of oci, files, rpm and tofu:
+  # preset: artifactory
+  # artifactory:
+  #   url: https://artifactory.example.local/artifactory
+  #   repositories:
+  #     docker: rondo-docker-local
+  #     helm: rondo-helm-local
+  #     generic: rondo-generic-local
+  #     rpm: ""
+  #     tofu: rondo-tofu-local
+  #     tofuState: rondo-tofu-state-local
+  #   mirrorTokenLifetimeSeconds: ""
 
 targets:
   vsphere:
@@ -56,7 +76,7 @@ targets:
         workerNodeSize: { cpuCores: 12, memoryMb: 24576, diskGb: 100 }
 
 secrets:
-  artifactoryPassword: CHANGEME
+  mirrorPassword: CHANGEME
   rancherBootstrapPassword: CHANGEME
   k3sClusterToken: CHANGEME
   vcenterPasswords:

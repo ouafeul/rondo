@@ -312,7 +312,7 @@ func machineKey(s Settings) (priv, pub string, err error) {
 // tokens are the platform placeholders a machine spec may name, as the sandbox's site resolves
 // them (internal/subst, siteConfig).
 var tokens = strings.NewReplacer(
-	"${ARTIFACTORY_URL}", artifactoryURL,
+	"${ARTIFACTORY_URL}", filesURL,
 	"${ARTIFACTORY_GENERIC_REPO}", genericRepo,
 	"${ARTIFACTORY_RPM_REPO}", rpmRepo,
 )

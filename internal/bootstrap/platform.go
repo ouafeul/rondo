@@ -2,23 +2,20 @@ package bootstrap
 
 import (
 	"fmt"
-	"strings"
 
 	"rondo/internal/config"
 	"rondo/internal/kobj"
 )
 
 func PlatformInstallFor(c *config.Config, version string) kobj.PlatformInstall {
-	prefix := c.ArtifactoryHost() + "/" + c.Artifactory.DockerRepository
+	m := c.Mirror()
 	return kobj.PlatformInstall{
-		ControllerImage:   fmt.Sprintf("%s/rondo-controller:%s", prefix, version),
-		ToolboxImage:      fmt.Sprintf("%s/rondo-toolbox:%s", prefix, version),
-		TofuStateBaseURL:  c.StateBaseURL(),
+		ControllerImage:   fmt.Sprintf("%s/rondo-controller:%s", m.OCIRepository, version),
+		ToolboxImage:      fmt.Sprintf("%s/rondo-toolbox:%s", m.OCIRepository, version),
+		TofuStateBaseURL:  m.StateBaseURL(),
 		DashboardHostname: c.DashboardHostname(),
-		ArtifactoryURL:    strings.TrimRight(c.Artifactory.URL, "/"),
-		VMModuleURL: fmt.Sprintf("%s/%s/tofu-modules/vm/%s/vm.tar.gz",
-			strings.TrimRight(c.Artifactory.URL, "/"), c.Artifactory.GenericRepository, version),
-		AnsibleContentURL: fmt.Sprintf("%s/%s/ansible/rondo/%s/rondo-ansible.tar.gz",
-			strings.TrimRight(c.Artifactory.URL, "/"), c.Artifactory.GenericRepository, version),
+		ArtifactoryURL:    m.FilesBase,
+		VMModuleURL:       fmt.Sprintf("%s/tofu-modules/vm/%s/vm.tar.gz", m.FilesRepoURL(), version),
+		AnsibleContentURL: fmt.Sprintf("%s/ansible/rondo/%s/rondo-ansible.tar.gz", m.FilesRepoURL(), version),
 	}
 }

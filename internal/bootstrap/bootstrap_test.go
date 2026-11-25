@@ -19,13 +19,26 @@ func TestLesConstructsDeBootstrapSontRendus(t *testing.T) {
 func TestPlatformInstallForTakesImagesAndDashboard(t *testing.T) {
 	c := &config.Config{
 		IngressBaseDomain: "example.local",
-		Artifactory: config.Artifactory{
-			URL:               "https://arti.invalid/artifactory",
-			DockerRepository:  "rondo-docker-local",
-			GenericRepository: "rondo-generic-local",
-		},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Artifactory: config.ArtifactoryMirror{
+			URL: "https://arti.invalid/artifactory",
+			Repositories: config.ArtifactoryRepositories{
+				Docker: "rondo-docker-local", Generic: "rondo-generic-local", TofuState: "rondo-tofu-state-local",
+			},
+		}},
 	}
 	inst := PlatformInstallFor(c, "v1.2.3")
+	for got, want := range map[string]string{
+		inst.ControllerImage:   "arti.invalid/rondo-docker-local/rondo-controller:v1.2.3",
+		inst.ToolboxImage:      "arti.invalid/rondo-docker-local/rondo-toolbox:v1.2.3",
+		inst.TofuStateBaseURL:  "https://arti.invalid/artifactory/rondo-tofu-state-local",
+		inst.ArtifactoryURL:    "https://arti.invalid/artifactory",
+		inst.VMModuleURL:       "https://arti.invalid/artifactory/rondo-generic-local/tofu-modules/vm/v1.2.3/vm.tar.gz",
+		inst.AnsibleContentURL: "https://arti.invalid/artifactory/rondo-generic-local/ansible/rondo/v1.2.3/rondo-ansible.tar.gz",
+	} {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
 	if !strings.HasSuffix(inst.ControllerImage, ":v1.2.3") {
 		t.Errorf("ControllerImage = %q, must end with the version", inst.ControllerImage)
 	}

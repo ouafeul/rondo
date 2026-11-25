@@ -13,25 +13,83 @@ import (
 )
 
 type Config struct {
-	EnvironmentName   string      `json:"environmentName,omitempty" validate:"omitempty,max=32,ne=default,excludes=.,lowercase,hostname_rfc1123"`
-	IngressBaseDomain string      `json:"ingressBaseDomain" validate:"required,fqdn"`
-	Artifactory       Artifactory `json:"artifactory" validate:"required"`
-	Targets           Targets     `json:"targets" validate:"required"`
-	Secrets           Secrets     `json:"secrets" validate:"required"`
+	EnvironmentName   string    `json:"environmentName,omitempty" validate:"omitempty,max=32,ne=default,excludes=.,lowercase,hostname_rfc1123"`
+	IngressBaseDomain string    `json:"ingressBaseDomain" validate:"required,fqdn"`
+	Artifacts         Artifacts `json:"artifacts" validate:"required"`
+	Targets           Targets   `json:"targets" validate:"required"`
+	Secrets           Secrets   `json:"secrets" validate:"required"`
 }
 
-type Artifactory struct {
-	URL                 string `json:"url" validate:"required,url"`
-	Username            string `json:"username" validate:"required"`
-	CACertificateFile   string `json:"caCertificateFile" validate:"required"`
-	DockerRepository    string `json:"dockerRepository" validate:"required"`
-	HelmRepository      string `json:"helmRepository" validate:"required"`
-	GenericRepository   string `json:"genericRepository" validate:"required"`
-	RPMRepository       string `json:"rpmRepository,omitempty"`
-	TofuStateRepository string `json:"tofuStateRepository" validate:"required"`
-	RondoReleaseChannel string `json:"rondoReleaseChannel,omitempty"`
+// The artifact mirror presets: generic declares each endpoint, artifactory derives them all from
+// the URL of a JFrog Artifactory.
+const (
+	PresetGeneric     = "generic"
+	PresetArtifactory = "artifactory"
+)
+
+// Artifacts is the mirror every artifact comes from: images and Helm charts (OCI), files, RPM
+// packages, OpenTofu providers and states. Every repository is a path segment under its root, as
+// in <root>/<repository>/<path>. Mirror resolves the endpoints.
+type Artifacts struct {
+	// Preset is generic when empty.
+	Preset string `json:"preset,omitempty" validate:"omitempty,oneof=generic artifactory"`
+	// Username and secrets.mirrorPassword authenticate against every endpoint.
+	Username string `json:"username" validate:"required"`
+	// CACertificateFile is the PEM bundle trusted for every endpoint.
+	CACertificateFile string `json:"caCertificateFile" validate:"required"`
+	ReleaseChannel    string `json:"releaseChannel,omitempty"`
+
+	OCI   OCIEndpoint   `json:"oci,omitempty"`
+	Files FilesEndpoint `json:"files,omitempty"`
+	RPM   RPMEndpoint   `json:"rpm,omitempty"`
+	Tofu  TofuEndpoints `json:"tofu,omitempty"`
+
+	Artifactory ArtifactoryMirror `json:"artifactory,omitempty"`
+}
+
+// OCIEndpoint is the registry of the images (<registry>/<repository>/<image>) and of the Helm
+// charts (oci://<registry>/<chartsRepository>/<chart>).
+type OCIEndpoint struct {
+	// Registry is host[:port], without a scheme.
+	Registry         string `json:"registry,omitempty"`
+	Repository       string `json:"repository,omitempty"`
+	ChartsRepository string `json:"chartsRepository,omitempty"`
+}
+
+// FilesEndpoint is the HTTP file server: RONDO's own files live under <url>/<repository>/.
+type FilesEndpoint struct {
+	URL        string `json:"url,omitempty" validate:"omitempty,url"`
+	Repository string `json:"repository,omitempty"`
+}
+
+// RPMEndpoint is the root of the dnf repositories, <url>/<repository>/<path>.
+type RPMEndpoint struct {
+	URL        string `json:"url,omitempty" validate:"omitempty,url"`
+	Repository string `json:"repository,omitempty"`
+}
+
+// TofuEndpoints are the OpenTofu provider network mirror and the base of the http state backend.
+type TofuEndpoints struct {
+	ProviderMirror string `json:"providerMirror,omitempty" validate:"omitempty,url"`
+	StateURL       string `json:"stateURL,omitempty" validate:"omitempty,url"`
+}
+
+// ArtifactoryMirror is the preset artifactory: every endpoint derives from URL.
+type ArtifactoryMirror struct {
+	URL          string                  `json:"url,omitempty" validate:"omitempty,url"`
+	Repositories ArtifactoryRepositories `json:"repositories,omitempty"`
 	// empty never expires, which Artifactory grants to admin accounts only
 	MirrorTokenLifetimeSeconds string `json:"mirrorTokenLifetimeSeconds,omitempty" validate:"omitempty,number"`
+}
+
+// ArtifactoryRepositories name the Artifactory repositories; Mirror fills in the defaults.
+type ArtifactoryRepositories struct {
+	Docker    string `json:"docker,omitempty"`
+	Helm      string `json:"helm,omitempty"`
+	Generic   string `json:"generic,omitempty"`
+	RPM       string `json:"rpm,omitempty"`
+	Tofu      string `json:"tofu,omitempty"`
+	TofuState string `json:"tofuState,omitempty"`
 }
 
 // Targets is where components are installed: the vSphere environments that host the machines, the
@@ -91,7 +149,7 @@ type K3sTarget struct {
 }
 
 // RKE2Target is the cluster itself. RegistryHost overrides the registry authority, which defaults to
-// the Artifactory docker repository's; RegistryIP is its address for /etc/hosts on the nodes, for
+// the mirror's (Mirror.RKE2SystemRegistry); RegistryIP is its address for /etc/hosts on the nodes, for
 // sites where DNS does not resolve it.
 type RKE2Target struct {
 	VSphereTarget         string   `json:"vsphereTarget" validate:"required"`
@@ -118,8 +176,8 @@ type NodeSize struct {
 }
 
 type Secrets struct {
-	ArtifactoryPassword      string                       `json:"artifactoryPassword" validate:"required"`
-	ArtifactoryMirrorToken   string                       `json:"artifactoryMirrorToken,omitempty"`
+	MirrorPassword           string                       `json:"mirrorPassword" validate:"required"`
+	MirrorToken              string                       `json:"mirrorToken,omitempty"`
 	RancherBootstrapPassword string                       `json:"rancherBootstrapPassword" validate:"required"`
 	K3sClusterToken          string                       `json:"k3sClusterToken" validate:"required"`
 	VCenterPasswords         map[string]string            `json:"vcenterPasswords" validate:"required"`
@@ -140,9 +198,11 @@ func Parse(raw []byte) (*Config, error) { return parse(raw, "rondo.yaml") }
 func parse(raw []byte, name string) (*Config, error) {
 	var c Config
 	if err := yaml.UnmarshalStrict(raw, &c); err != nil {
+		if hint := unknownKeyHint(raw); hint != "" {
+			return nil, fmt.Errorf("parsing %s: %s", name, hint)
+		}
 		return nil, fmt.Errorf("parsing %s: %w", name, err)
 	}
-	c.Artifactory.URL = strings.TrimRight(c.Artifactory.URL, "/")
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
@@ -152,6 +212,9 @@ func parse(raw []byte, name string) (*Config, error) {
 func (c *Config) Validate() error {
 	if err := validator.New(validator.WithRequiredStructEnabled()).Struct(c); err != nil {
 		return fmt.Errorf("invalid manifest: %w", err)
+	}
+	if err := c.validateArtifacts(); err != nil {
+		return err
 	}
 	if err := c.validateTargets(); err != nil {
 		return err

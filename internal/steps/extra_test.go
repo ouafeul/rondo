@@ -238,8 +238,9 @@ func TestHelmDeployLoginError(t *testing.T) {
 		"/bin/helm registry login arti.example.com --username u --password-stdin --ca-file /ca.pem": errors.New("nope"),
 	}}
 	cfg := &config.Config{
-		Artifactory: config.Artifactory{URL: "https://arti.example.com/artifactory", Username: "u"},
-		Secrets:     config.Secrets{ArtifactoryPassword: "secret"},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Username: "u",
+			Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com/artifactory"}},
+		Secrets: config.Secrets{MirrorPassword: "secret"},
 	}
 	h := NewHelmStage(cfg, Workspace{ProjectDir: "/proj", StateDir: "/proj", BinDir: "/bin", CACert: "/ca.pem"}, fake)
 	if err := h.Deploy(context.Background()); err == nil || !strings.Contains(err.Error(), "Helm OCI login") {

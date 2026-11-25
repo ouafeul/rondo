@@ -158,22 +158,23 @@ func (sb *sandbox) planSecrets() []map[string]map[string]string {
 
 // siteConfig is the rondo.yaml of the sandbox: the management cluster, each downstream deployed,
 // the vSphere Targets of rondo-sandbox.yaml with the machine IPs of the installed components, the
-// stand-in as Artifactory. Images come from the stand-in's root on every target, where a site
-// uses <host>/<repo> on the management and <repo>.<host> elsewhere.
+// stand-in as a generic mirror. Images come from the stand-in's root on every target, where a site
+// uses <registry>/<repository> on the management and its rke2 system registry elsewhere.
 func siteConfig(st *site, plans []*plan) *config.Config {
 	cfg := &config.Config{
 		IngressBaseDomain: baseDomain,
-		Artifactory: config.Artifactory{
-			URL:                 artifactoryURL,
-			Username:            sandboxSecret,
-			DockerRepository:    dockerRepo,
-			HelmRepository:      helmRepo,
-			GenericRepository:   genericRepo,
-			RPMRepository:       rpmRepo,
-			TofuStateRepository: "rondo-tofu-state-local",
+		Artifacts: config.Artifacts{
+			Preset:   config.PresetGeneric,
+			Username: sandboxSecret,
+			OCI:      config.OCIEndpoint{Registry: registryHost, Repository: dockerRepo, ChartsRepository: helmRepo},
+			Files:    config.FilesEndpoint{URL: filesURL, Repository: genericRepo},
+			RPM:      config.RPMEndpoint{URL: filesURL, Repository: rpmRepo},
+			Tofu: config.TofuEndpoints{ProviderMirror: providerMirrorURL,
+				StateURL: filesURL + "/" + tofuStateRepo},
 		},
 		Secrets: config.Secrets{
-			ArtifactoryPassword:      sandboxSecret,
+			MirrorPassword:           sandboxSecret,
+			MirrorToken:              sandboxSecret,
 			RancherBootstrapPassword: sandboxSecret,
 			K3sClusterToken:          sandboxSecret,
 			VCenterPasswords:         map[string]string{},
@@ -532,15 +533,16 @@ func (sb *sandbox) applySite(ctx context.Context) error {
 		values[k] = v
 	}
 	roles := sb.site.management().Roles
-	authURL, err := sb.cfg.ArtifactoryAuthURL()
+	mirror := sb.cfg.Mirror()
+	authURL, err := mirror.FilesAuthURL()
 	if err != nil {
 		return err
 	}
 	objs := []kobj.Object{
 		kobj.Target(config.ManagementRole, roles, kobj.InClusterBackend(), values),
 		kobj.OpaqueSecret(kobj.PlatformValuesSecret, map[string]string{
-			"artifactoryUser":     sb.cfg.Artifactory.Username,
-			"artifactoryPassword": sb.cfg.Secrets.ArtifactoryPassword,
+			"artifactoryUser":     mirror.Username,
+			"artifactoryPassword": mirror.Password,
 			"artifactoryAuthURL":  authURL,
 		}),
 	}
@@ -607,12 +609,13 @@ func (sb *sandbox) apply(ctx context.Context, objs []kobj.Object) error {
 // vsphereObjects are what `rondo deploy` applies for each vSphere Target of rondo-sandbox.yaml
 // (internal/steps, applyVSphereTarget), plus the machines' key, which the sandbox made before
 // starting them, and tofu's provider mirror, with the fixed token of a site that sets
-// artifactory.mirrorToken: the sandbox's machine module needs no provider. None without a
+// secrets.mirrorToken: the sandbox's machine module needs no provider. None without a
 // vSphere Target.
 func (sb *sandbox) vsphereObjects(ca string) ([]kobj.Object, error) {
 	if len(sb.site.VSphere) == 0 {
 		return nil, nil
 	}
+	mirror := sb.cfg.Mirror()
 	var objs []kobj.Object
 	for _, declared := range sb.site.VSphere {
 		t := sb.cfg.VSphereNamed(declared.Name)
@@ -635,7 +638,7 @@ func (sb *sandbox) vsphereObjects(ca string) ([]kobj.Object, error) {
 		return nil, err
 	}
 	return append(objs, kobj.VMSSHKey(priv, pub),
-		kobj.TofuMirror(artifactoryURL+"/api/terraform/rondo-tofu-local/providers/", registryHost, sandboxSecret, false)), nil
+		kobj.TofuMirror(mirror.ProviderMirrorURL, mirror.ProviderMirrorHost(), mirror.MirrorToken, false)), nil
 }
 
 // install is `rondo component install <name> --from <tree>`. A redeploy also clears the

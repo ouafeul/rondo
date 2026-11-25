@@ -40,9 +40,9 @@ func TestIacChannelPrecedence(t *testing.T) {
 
 	flagIacChannel = ""
 	cfg := &config.Config{}
-	cfg.Artifactory.RondoReleaseChannel = "edge-other"
+	cfg.Artifacts.ReleaseChannel = "edge-other"
 	if got := iacChannel(cfg); got != "edge-other" {
-		t.Errorf("artifactory.rondoReleaseChannel does not take precedence over the derivation: %q", got)
+		t.Errorf("artifacts.releaseChannel does not take precedence over the derivation: %q", got)
 	}
 }
 

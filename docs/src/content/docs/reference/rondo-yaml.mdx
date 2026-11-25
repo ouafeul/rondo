@@ -20,16 +20,39 @@ import RondoYamlExplorer from '../../../components/RondoYamlExplorer.astro';
 | one vCenter password per vSphere Target, no other | `secrets.vcenterPasswords.<n> is required` / `no vsphere target has this name` |
 | odd number of rke2 control planes | `must hold an odd number of nodes (etcd quorum)` |
 | exactly 3 `serverNodes` | |
+| `preset: generic` declares `oci.registry`, `files.url`, `tofu.providerMirror`, `tofu.stateURL` | `artifacts.<key> is required with artifacts.preset: generic` |
+| `oci.registry` is `host[:port]` | `artifacts.oci.registry (…) must be host[:port], without a scheme or a path` |
+| `rpm.url` is empty or `files.url` | `artifacts.rpm.url (…) must be artifacts.files.url (…) or empty` |
+| `preset: artifactory` declares `artifactory.url` and nothing under `oci`, `files`, `rpm`, `tofu` | `artifacts.artifactory.url is required…` / `artifacts.<key> is not read with artifacts.preset: artifactory` |
+| `preset: generic` has no `artifactory` block | `artifacts.artifactory is only read with artifacts.preset: artifactory` |
+
+## Artifact mirror presets
+
+Every repository is a path segment under its root, `<root>/<repository>/<path>`, as in the
+`repo` fields of the Components.
+
+| Endpoint | `preset: generic` | `preset: artifactory` |
+|---|---|---|
+| images | `<oci.registry>/<oci.repository>/<image>` | `<host>/<docker>/<image>` |
+| Helm charts | `oci://<oci.registry>/<oci.chartsRepository>/<chart>` | `oci://<host>/<helm>/<chart>` |
+| RONDO files | `<files.url>/<files.repository>/…` | `<url>/<generic>/…` |
+| RPM repositories | `<rpm.url>/<rpm.repository>/…` | `<url>/<rpm>/…` |
+| tofu providers | `<tofu.providerMirror>` | `<url>/api/terraform/<tofu>/providers/` |
+| tofu states | `<tofu.stateURL>/<environmentName>/…` | `<url>/<tofuState>/<environmentName>/…` |
+| rke2 system registry | `<oci.registry>` | `<docker>.<host>` |
+| provider mirror token | `secrets.mirrorToken`, else none | `secrets.mirrorToken`, else issued on each deploy |
+
+`<host>` is the host of `artifactory.url`; `<docker>`, `<helm>`… are `artifactory.repositories.*`.
 
 ## What the CLI derives from it
 
 | Derived | Value |
 |---|---|
 | hosts | `rancher.<ingressBaseDomain>`, `rondo.<ingressBaseDomain>` |
-| tofu states | `<url>/<tofuStateRepository>/<environmentName>/{k3s, <target>, vm/<enrollment>}/terraform.tfstate` |
+| tofu states | `<state base>/<environmentName>/{k3s, <target>, vm/<enrollment>}/terraform.tfstate` |
 | vSphere folders | `<vmFolder>/<env>/MANAGEMENT`, `<vmFolder>/<env>/<rke2 target>`, `<vmFolder>/<env>/<component>` |
-| registry (management) | `<Artifactory host>/<dockerRepository>` |
-| registry (rke2) | `rke2.registryHost`, else `<dockerRepository>.<Artifactory host>` |
+| registry (management) | the images prefix of the mirror, e.g. `<oci.registry>/<oci.repository>` |
+| registry (rke2) | `rke2.registryHost`, else the rke2 system registry of the mirror |
 | internal CA | `RONDO <environmentName> CA` |
 
 <Aside type="tip">After a change: `rondo deploy` for the management cluster, the vSphere Targets, the secrets and the DNS; `rondo deploy downstreams <t>` for an rke2 cluster and its Target.</Aside>

@@ -16,15 +16,51 @@ import (
 
 func testCfg() *config.Config {
 	return &config.Config{
-		Artifactory: config.Artifactory{URL: "https://arti.exa-mple.com/artifactory", Username: "u",
-			TofuStateRepository: "rondo-tofu-state-local"},
-		Secrets: config.Secrets{ArtifactoryPassword: "p"},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Username: "u",
+			Artifactory: config.ArtifactoryMirror{URL: "https://arti.exa-mple.com/artifactory",
+				Repositories: config.ArtifactoryRepositories{TofuState: "rondo-tofu-state-local"}}},
+		Secrets: config.Secrets{MirrorPassword: "p"},
 	}
 }
 
 type fixedToken string
 
 func (f fixedToken) Token(context.Context) (string, error) { return string(f), nil }
+
+func TestConfigureRegistryOnAGenericMirror(t *testing.T) {
+	for name, token := range map[string]string{"anonymous": "", "declared token": "tok-site"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := &config.Config{Artifacts: config.Artifacts{Username: "u",
+				OCI:   config.OCIEndpoint{Registry: "registry.example.local"},
+				Files: config.FilesEndpoint{URL: "https://files.example.local"},
+				Tofu: config.TofuEndpoints{ProviderMirror: "https://tofu-mirror.example.local/providers/",
+					StateURL: "https://files.example.local/state"}},
+				Secrets: config.Secrets{MirrorPassword: "p", MirrorToken: token}}
+			st := NewTofuStage(cfg, Workspace{ProjectDir: dir, StateDir: dir, CACert: "/ca.pem"},
+				&runner.Fake{}, StaticToken(cfg.Mirror().MirrorToken), false)
+			if err := st.ConfigureRegistry(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(dir, ".tofurc"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(raw), `url = "https://tofu-mirror.example.local/providers/"`) {
+				t.Errorf(".tofurc does not point at artifacts.tofu.providerMirror: %s", raw)
+			}
+			if got := st.regEnv["TF_TOKEN_tofu__mirror_example_local"]; got != token {
+				t.Errorf("TF_TOKEN = %q, want %q (env %v)", got, token, st.regEnv)
+			}
+			if _, set := st.regEnv["TF_TOKEN_tofu__mirror_example_local"]; set && token == "" {
+				t.Error("an empty token is presented to the mirror")
+			}
+			if st.regEnv["TF_HTTP_USERNAME"] != "u" || st.regEnv["TF_HTTP_PASSWORD"] != "p" {
+				t.Errorf("state backend credentials: %v", st.regEnv)
+			}
+		})
+	}
+}
 
 func TestConfigureRegistryWritesTofuRCAndEnv(t *testing.T) {
 	dir := t.TempDir()

@@ -31,11 +31,11 @@ func (h *HelmStage) env() map[string]string {
 }
 
 func (h *HelmStage) login(ctx context.Context, env map[string]string) error {
-	host := h.cfg.ArtifactoryHost()
+	m := h.cfg.Mirror()
 	if err := h.run.Run(ctx, runner.Cmd{
 		Name: h.ws.Tool("helm"),
-		Args: []string{"registry", "login", host, "--username", h.cfg.Artifactory.Username, "--password-stdin", "--ca-file", h.ws.CACert},
-		Dir:  h.ws.ProjectDir, Env: env, Stdin: h.cfg.Secrets.ArtifactoryPassword,
+		Args: []string{"registry", "login", m.OCIRegistry, "--username", m.Username, "--password-stdin", "--ca-file", h.ws.CACert},
+		Dir:  h.ws.ProjectDir, Env: env, Stdin: m.Password,
 	}); err != nil {
 		return fmt.Errorf("Helm OCI login: %w", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"rondo/internal/config"
 	"rondo/internal/httpx"
@@ -13,8 +12,7 @@ import (
 )
 
 func componentBase(c *config.Config, name string) string {
-	return strings.TrimRight(c.Artifactory.URL, "/") + "/" +
-		c.Artifactory.GenericRepository + "/" + name + "/platform"
+	return c.Mirror().FilesRepoURL() + "/" + name + "/platform"
 }
 
 const ComponentChannel = "latest"
@@ -25,7 +23,8 @@ func ResolveComponent(ctx context.Context, client httpx.Doer, c *config.Config,
 		return "", "", err
 	}
 	base := componentBase(c, name)
-	user, pass := c.Artifactory.Username, c.Secrets.ArtifactoryPassword
+	m := c.Mirror()
+	user, pass := m.Username, m.Password
 
 	if version == "" {
 		if channel == "" {

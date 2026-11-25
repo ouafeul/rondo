@@ -75,8 +75,8 @@ func TestMintDurableTokenExplainsTheAdminOnlyRefusal(t *testing.T) {
 	for _, want := range []string{
 		"Non-admin user cannot create token with no expiry",
 		"rondo-pipeline",
-		"durableTokenTtl",
-		"mirrorToken",
+		"artifacts.artifactory.mirrorTokenLifetimeSeconds",
+		"secrets.mirrorToken",
 		"administrator",
 	} {
 		if !strings.Contains(err.Error(), want) {

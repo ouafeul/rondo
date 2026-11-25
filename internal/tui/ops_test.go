@@ -23,9 +23,10 @@ func TestFormArgsAndGlobalFlags(t *testing.T) {
 
 	m.config = "/etc/rondo.yaml"
 	init := newForm(m, opInit, "")
-	init.fields[1].on = true
+	init.fields[1].input.SetValue("artifactory")
+	init.fields[2].on = true
 	args, _ = init.args(false)
-	if got := strings.Join(m.commandArgs(opInit, args), " "); got != "init --env default --force --config /etc/rondo.yaml --iac-channel edge-main" {
+	if got := strings.Join(m.commandArgs(opInit, args), " "); got != "init --env default --preset artifactory --force --config /etc/rondo.yaml --iac-channel edge-main" {
 		t.Errorf("init = %q: neither --dry-run nor the current environment", got)
 	}
 }

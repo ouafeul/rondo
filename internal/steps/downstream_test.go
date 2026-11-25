@@ -49,8 +49,10 @@ func rancherSrv(t *testing.T, validToken string) *httptest.Server {
 func dsCfg() *config.Config {
 	return &config.Config{
 		IngressBaseDomain: "example.com",
-		Artifactory:       config.Artifactory{URL: "https://arti.example.com", DockerRepository: "docker", Username: "au"},
-		Secrets:           config.Secrets{ArtifactoryPassword: "ap", RancherBootstrapPassword: "boot"},
+		Artifacts: config.Artifacts{Preset: config.PresetArtifactory, Username: "au",
+			Artifactory: config.ArtifactoryMirror{URL: "https://arti.example.com",
+				Repositories: config.ArtifactoryRepositories{Docker: "docker"}}},
+		Secrets: config.Secrets{MirrorPassword: "ap", RancherBootstrapPassword: "boot"},
 	}
 }
 

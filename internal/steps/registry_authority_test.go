@@ -22,8 +22,18 @@ func TestClusterRegistryIsAnAuthorityAndHonoursTheOverride(t *testing.T) {
 	if got := cfg.RegistryHostFor(r); got != "registry.site.local" {
 		t.Errorf("override ignored: %q", got)
 	}
-	if got := cfg.ManagementImageRegistry(); got != "artifactory.example.local/rondo-docker-local" {
+	if got := cfg.Mirror().OCIRepository; got != "artifactory.example.local/rondo-docker-local" {
 		t.Errorf("management registry = %q, want the path mode", got)
+	}
+}
+
+func TestGenericMirrorServesRKE2FromItsRegistry(t *testing.T) {
+	cfg := genericCfg()
+	if got := cfg.RegistryHostFor(&config.RKE2Target{}); got != "registry.example.local" {
+		t.Errorf("default registry = %q, want artifacts.oci.registry", got)
+	}
+	if got := cfg.Mirror().OCIRepository; got != "registry.example.local/rondo" {
+		t.Errorf("management registry = %q, want <registry>/<repository>", got)
 	}
 }
 

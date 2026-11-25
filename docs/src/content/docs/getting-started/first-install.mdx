@@ -6,7 +6,7 @@ description: From a blank workstation to an installed component, in four command
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 import CommandExplorer from '../../../components/CommandExplorer.astro';
 
-From a blank workstation to an installed component. Before starting, check the [prerequisites](/operations/prerequisites/): workstation, network, vCenter, DNS, and an Artifactory that mirrors RONDO.
+From a blank workstation to an installed component. Before starting, check the [prerequisites](/operations/prerequisites/): workstation, network, vCenter, DNS, and an artifact mirror that serves RONDO.
 
 ```mermaid
 flowchart LR
@@ -21,7 +21,7 @@ flowchart LR
 
 1. **Install the CLI.**
 
-   Every RONDO release is published on [GitHub Releases](https://github.com/ouafeul/rondo/releases): the `rondo-linux-amd64` binary, the `rondo` RPM, `install.sh` and `rondo.yaml.example`. On an air-gap site, the same files come from the site's Artifactory once they are [mirrored](/contributing/release/#air-gap-mirror).
+   Every RONDO release is published on [GitHub Releases](https://github.com/ouafeul/rondo/releases): the `rondo-linux-amd64` binary, the `rondo` RPM, `install.sh` and `rondo.yaml.example`. On an air-gap site, the same files come from the site's artifact mirror once they are [mirrored](/contributing/release/#air-gap-mirror).
 
    <Tabs>
      <TabItem label="From GitHub">
@@ -33,14 +33,14 @@ flowchart LR
        chmod +x ~/.local/bin/rondo
        ```
      </TabItem>
-     <TabItem label="From the site's Artifactory">
+     <TabItem label="From the site's mirror">
        ```bash
-       sudo dnf install -y rondo      # from the site's RPM repository (rondo-rpms-local)
-       # or, without RPM:
-       curl -fsSL <artifactory>/rondo-generic-local/rondo/install.sh | sh
+       sudo dnf install -y rondo      # from the site's RPM repository
+       # or, without RPM (<files>: the URL of RONDO's files on the mirror):
+       curl -fsSL <files>/rondo/install.sh | RONDO_MIRROR_URL=<files> sh
        ```
 
-       `install.sh` resolves the `stable` channel (`ARTIFACTORY_URL`, `CHANNEL`, `RONDO_VERSION` override it), puts the binary in `~/.rondo/bin` (linked from `~/.local/bin`) and runs `rondo init`.
+       `install.sh` resolves the `stable` channel (`RONDO_MIRROR_URL`, `RONDO_CHANNEL`, `RONDO_VERSION` override it), puts the binary in `~/.rondo/bin` (linked from `~/.local/bin`) and runs `rondo init`.
      </TabItem>
    </Tabs>
 
@@ -51,7 +51,7 @@ flowchart LR
    rondo init --env staging            # or a named environment
    ```
 
-   Fill in Artifactory, the vSphere Target(s), the management cluster, the downstreams and the secrets. Each key is explained in the [rondo.yaml reference](/reference/rondo-yaml/). Put Artifactory's CA at the path `artifactory.caCertificateFile`.
+   Fill in the artifact mirror, the vSphere Target(s), the management cluster, the downstreams and the secrets. Each key is explained in the [rondo.yaml reference](/reference/rondo-yaml/). The template declares a `generic` mirror (any OCI registry and HTTP file server: `artifacts.oci`, `artifacts.files`, `artifacts.rpm`, `artifacts.tofu`); `rondo init --preset artifactory` writes one for a JFrog Artifactory instead, every endpoint derived from `artifacts.artifactory.url`. Put the mirror's CA at the path `artifacts.caCertificateFile`.
 
 3. **Check the plan, then deploy the management cluster.**
 

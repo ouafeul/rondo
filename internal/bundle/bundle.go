@@ -37,7 +37,7 @@ func repoBase(c *config.Config, channel string) (base, effChannel string) {
 	if channel == "" {
 		channel = "stable"
 	}
-	return strings.TrimRight(c.Artifactory.URL, "/") + "/" + c.Artifactory.GenericRepository + "/rondo", channel
+	return c.Mirror().FilesRepoURL() + "/rondo", channel
 }
 
 func DryResolve(c *config.Config, cacheDir, channel, pinned string) string {
@@ -52,7 +52,8 @@ func DryResolve(c *config.Config, cacheDir, channel, pinned string) string {
 
 func Resolve(ctx context.Context, client httpx.Doer, c *config.Config, cacheDir, channel, pinned string) (string, error) {
 	base, channel := repoBase(c, channel)
-	user, pass := c.Artifactory.Username, c.Secrets.ArtifactoryPassword
+	m := c.Mirror()
+	user, pass := m.Username, m.Password
 
 	ver := pinned
 	if ver == "" {

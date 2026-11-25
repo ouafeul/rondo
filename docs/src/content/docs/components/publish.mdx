@@ -6,10 +6,10 @@ description: What a component's CI uploads to Artifactory, and what the CLI does
 import { Aside, FileTree } from '@astrojs/starlight/components';
 import CommandExplorer from '../../../components/CommandExplorer.astro';
 
-The component's CI publishes the tree to the generic repository, under `<name>/platform/`:
+The component's CI publishes the tree to the files repository of the artifact mirror, under `<name>/platform/`:
 
 <FileTree>
-- \<genericRepository\>/
+- \<files repository\>/
   - hello/
     - platform/
       - platform-1.2.0.tar.gz tree content (components/, enrollments/)

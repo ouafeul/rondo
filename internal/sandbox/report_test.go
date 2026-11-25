@@ -130,7 +130,7 @@ func TestSiteConfigServesImagesFromTheStandIn(t *testing.T) {
 	s, p := planned(t)
 	st, _ := loadSite(s)
 	cfg := siteConfig(st, []*plan{p})
-	if cfg.ArtifactoryHost() != registryHost || cfg.Targets.Management.IngressLoadBalancerIP != "172.28.0.100" {
+	if cfg.Mirror().OCIRegistry != registryHost || cfg.Targets.Management.IngressLoadBalancerIP != "172.28.0.100" {
 		t.Errorf("site = %+v", cfg.Targets.Management)
 	}
 	if len(cfg.Targets.Downstreams) != 1 || cfg.RegistryHostFor(&cfg.Targets.Downstreams[0].RKE2) != registryHost ||

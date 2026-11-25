@@ -40,12 +40,14 @@ func ArtifactoryCA(pem string) Object {
 	return configMap(ArtifactoryCACM, PlatformNamespace, map[string]string{ArtifactoryCAKey: pem})
 }
 
-// TofuMirror holds the .tofurc that points OpenTofu at the Artifactory network mirror.
-// storeToken also keeps the bare token, so a later run can revoke what it minted.
+// TofuMirror holds the .tofurc that points OpenTofu at the provider network mirror, with the
+// token of host when there is one. storeToken also keeps the bare token, so a later run can
+// revoke what it minted.
 func TofuMirror(mirrorURL, host, token string, storeToken bool) Object {
-	tofurc := fmt.Sprintf(
-		"provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\ncredentials %q {\n  token = %q\n}\n",
-		mirrorURL, host, token)
+	tofurc := fmt.Sprintf("provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\n", mirrorURL)
+	if token != "" {
+		tofurc += fmt.Sprintf("credentials %q {\n  token = %q\n}\n", host, token)
+	}
 	data := map[string]string{TofurcKey: tofurc}
 	if storeToken {
 		data[TofurcTokenKey] = token

@@ -122,7 +122,7 @@ func TestRKE2VarsDescribeTheCluster(t *testing.T) {
 		"rke2_cluster_name":  "rke2-a",
 		"rke2_master_ips":    `["10.0.0.31","10.0.0.32","10.0.0.33"]`,
 		"rke2_worker_cpu":    "12",
-		"rke2_registry_host": "rondo-docker-local.artifactory.example.local",
+		"rke2_registry_host": "registry.example.local",
 		"rancher_ingress_ip": "10.0.0.100",
 		"vsphere_datastore":  "datastore1",
 		"vsphere_folder":     "rondo/prod",
@@ -131,7 +131,7 @@ func TestRKE2VarsDescribeTheCluster(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, v[k], want)
 		}
 	}
-	if got := c.StateAddress(r.Name); got != "https://artifactory.example.local/artifactory/rondo-tofu-state-local/prod/rke2-a/terraform.tfstate" {
+	if got := c.Mirror().StateURL(r.Name); got != "https://files.example.local/tofu-state/prod/rke2-a/terraform.tfstate" {
 		t.Errorf("state = %q", got)
 	}
 }
@@ -154,7 +154,7 @@ func TestRegistryIPAloneKeepsTheDefaultAuthority(t *testing.T) {
 	if v["rke2_registry_ip"] != "10.0.0.60" {
 		t.Errorf("rke2_registry_ip = %q, want the declared IP", v["rke2_registry_ip"])
 	}
-	if v["rke2_registry_host"] != "rondo-docker-local.artifactory.example.local" {
+	if v["rke2_registry_host"] != "registry.example.local" {
 		t.Errorf("rke2_registry_host = %q, want the default authority", v["rke2_registry_host"])
 	}
 }
@@ -171,7 +171,7 @@ func TestParseChecksAsLoadDoes(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "parsing rondo.yaml") || !strings.Contains(err.Error(), "ingresBaseDomain") {
 		t.Errorf("unknown field: %v", err)
 	}
-	_, err = Parse([]byte(strings.Replace(string(raw), "url: https://artifactory.example.local/artifactory", "url: not-a-url", 1)))
+	_, err = Parse([]byte(strings.Replace(string(raw), "url: https://files.example.local\n    repository: rondo", "url: not-a-url\n    repository: rondo", 1)))
 	if err == nil || !strings.Contains(err.Error(), "invalid manifest") {
 		t.Errorf("invalid url: %v", err)
 	}

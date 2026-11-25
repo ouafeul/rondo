@@ -11,13 +11,14 @@ const hostilePassword = `p@ss:w/o;rd?#&=+ é`
 func TestAuthenticatedArtifactoryURLSurvivesParsing(t *testing.T) {
 	const user = `svc acme@example`
 	c := &Config{
-		Artifactory: Artifactory{URL: "https://arti.example.com/artifactory", Username: user},
-		Secrets:     Secrets{ArtifactoryPassword: hostilePassword},
+		Artifacts: Artifacts{Preset: PresetArtifactory, Username: user,
+			Artifactory: ArtifactoryMirror{URL: "https://arti.example.com/artifactory"}},
+		Secrets: Secrets{MirrorPassword: hostilePassword},
 	}
 
-	got, err := c.ArtifactoryAuthURL()
+	got, err := c.Mirror().FilesAuthURL()
 	if err != nil {
-		t.Fatalf("ArtifactoryAuthURL: %v", err)
+		t.Fatalf("FilesAuthURL: %v", err)
 	}
 
 	t.Run("round trip through url.Parse", func(t *testing.T) {
@@ -82,10 +83,11 @@ func TestAuthenticatedArtifactoryURLSurvivesParsing(t *testing.T) {
 
 func TestArtifactoryURLWithoutSchemeFailsClosed(t *testing.T) {
 	c := &Config{
-		Artifactory: Artifactory{URL: "arti.example.com/artifactory", Username: "u"},
-		Secrets:     Secrets{ArtifactoryPassword: hostilePassword},
+		Artifacts: Artifacts{Preset: PresetArtifactory, Username: "u",
+			Artifactory: ArtifactoryMirror{URL: "arti.example.com/artifactory"}},
+		Secrets: Secrets{MirrorPassword: hostilePassword},
 	}
-	got, err := c.ArtifactoryAuthURL()
+	got, err := c.Mirror().FilesAuthURL()
 	if err == nil {
 		t.Fatalf("URL without a scheme accepted, rendered %q: pods would go out anonymously "+
 			"and Artifactory would answer \"401 Authentication is required\"", got)

@@ -75,7 +75,7 @@ func TestExplainPointsAtTheLine(t *testing.T) {
 func TestExplainCountsTheOtherRules(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join("..", "..", "rondo.yaml.example"))
 	bad := strings.Replace(string(raw), "gatewayIp: 10.0.0.1", "gatewayIp: x", 1)
-	bad = strings.Replace(bad, "url: https://artifactory.example.local/artifactory", "url: y", 1)
+	bad = strings.Replace(bad, "stateURL: https://files.example.local/tofu-state", "stateURL: y", 1)
 	_, err := Parse([]byte(bad))
 	if p := Explain([]byte(bad), err); p.More != 1 {
 		t.Errorf("%+v: want one more rule", p)

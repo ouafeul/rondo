@@ -156,7 +156,11 @@ func uninstallFields(m *Model, preset string) []field {
 func initFields(_ *Model, preset string) []field {
 	env := textField("Environment", "--env", "empty => default ($RONDO_HOME/rondo.yaml)", preset)
 	env.def = defaultEnv
-	return []field{env, {kind: fieldToggle, label: "Overwrite", flag: "--force", help: "replaces an existing rondo.yaml"}}
+	return []field{
+		env,
+		textField("Artifact mirror", "--preset", "generic (default) or artifactory", ""),
+		{kind: fieldToggle, label: "Overwrite", flag: "--force", help: "replaces an existing rondo.yaml"},
+	}
 }
 
 type form struct {

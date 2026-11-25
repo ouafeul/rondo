@@ -866,8 +866,9 @@ func (m *Model) siteSummary(env string) string {
 	c := s.cfg
 	b.WriteString(kv("environmentName", dash(c.EnvironmentName)))
 	b.WriteString(kv("ingressBaseDomain", c.IngressBaseDomain))
-	b.WriteString(kv("Artifactory", c.Artifactory.URL+" "+stDim.Render("("+c.Artifactory.Username+")")))
-	b.WriteString(kv("RONDO channel", dash(c.Artifactory.RondoReleaseChannel)))
+	mr := c.Mirror()
+	b.WriteString(kv("Artifacts", mr.Preset+": "+mr.OCIRegistry+", "+mr.FilesBase+" "+stDim.Render("("+mr.Username+")")))
+	b.WriteString(kv("RONDO channel", dash(c.Artifacts.ReleaseChannel)))
 	mg := c.Targets.Management
 	b.WriteString(kv("Management", fmt.Sprintf("k3s %s on %s, %d nodes, ingress %s",
 		mg.K3sVersion, mg.VSphereTarget, len(mg.ServerNodes), mg.IngressLoadBalancerIP)))
