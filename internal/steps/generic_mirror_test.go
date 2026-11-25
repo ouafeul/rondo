@@ -114,7 +114,7 @@ func TestHelmDeployOnAnAnonymousMirror(t *testing.T) {
 	if err := h.Deploy(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(fake.Calls) != 1 || fake.Calls[0].String() != "/bin/helmfile --file /proj/helmfile.yaml sync" {
+	if len(fake.Calls) != 1 || fake.Calls[0].String() != "/bin/helmfile --file /proj/helmfile.yaml.gotmpl sync" {
 		t.Fatalf("calls = %v, want helmfile sync alone", fake.Calls)
 	}
 	for _, k := range []string{"SSL_CERT_FILE", "MIRROR_CA_CERT_PATH"} {

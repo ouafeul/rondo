@@ -24,7 +24,7 @@ platform/                 base Components and Enrollments
 apps/                     first-party Helm charts
 terraform/                k3s (management), rke2 (downstreams), vm (component machines)
 ansible/                  component machine installation
-helmfile.yaml             management cluster charts
+helmfile.yaml.gotmpl      management cluster charts
 manifests/                generated CRDs, third-party dependencies to mirror
 scripts/ci/               CI helpers
 docs/                     documentation site (Astro Starlight)
@@ -89,7 +89,7 @@ hand: `scripts/ci/extract-helm-images.py` extracts them from the rendered charts
 To add a Helm chart:
 
 1. add it under `helm_charts` in `manifests/dependencies.yaml`;
-2. add its release to `helmfile.yaml` or a Component under `platform/`;
+2. add its release to `helmfile.yaml.gotmpl` or a Component under `platform/`;
 3. CI renders it, extracts its images and checks the health model covers its kinds.
 
 ## Releases

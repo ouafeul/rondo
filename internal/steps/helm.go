@@ -56,7 +56,7 @@ func (h *HelmStage) login(ctx context.Context, env map[string]string) error {
 func (h *HelmStage) helmfile(ctx context.Context, env map[string]string, subcmd string) error {
 	return h.run.Run(ctx, runner.Cmd{
 		Name: h.ws.Tool("helmfile"),
-		Args: []string{"--file", filepath.Join(h.ws.ProjectDir, "helmfile.yaml"), subcmd},
+		Args: []string{"--file", filepath.Join(h.ws.ProjectDir, "helmfile.yaml.gotmpl"), subcmd},
 		Dir:  h.ws.ProjectDir, Env: env,
 	})
 }

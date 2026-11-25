@@ -112,7 +112,7 @@ func TestHelmDeployArgvAndStdin(t *testing.T) {
 		t.Error("password missing from stdin")
 	}
 	sync := fake.Calls[1]
-	if sync.String() != "/bin/helmfile --file /proj/helmfile.yaml sync" {
+	if sync.String() != "/bin/helmfile --file /proj/helmfile.yaml.gotmpl sync" {
 		t.Errorf("sync: %q", sync.String())
 	}
 	for _, k := range []string{"KUBECONFIG", "PROJECT_DIR", "SSL_CERT_FILE", "MIRROR_CA_CERT_PATH"} {

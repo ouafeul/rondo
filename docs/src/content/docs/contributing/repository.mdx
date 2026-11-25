@@ -36,7 +36,7 @@ The code lives at [github.com/ouafeul/rondo](https://github.com/ouafeul/rondo).
 - manifests/
   - crds/ generated, do not edit
   - dependencies.yaml everything that is mirrored
-- helmfile.yaml management charts
+- helmfile.yaml.gotmpl management charts
 - docs/ this site
 - .github/workflows/ CI workflows
 - scripts/ci/ scripts the workflows run
@@ -97,7 +97,7 @@ Everything installed on a site is declared in `manifests/dependencies.yaml` and 
 
 | To add | Where |
 |---|---|
-| a management chart | `helm_charts` + `helmfile.yaml` |
+| a management chart | `helm_charts` + `helmfile.yaml.gotmpl` |
 | a base-layer chart | `helm_charts` + `platform/components/` + `platform/enrollments/` |
 | a CLI tool | `binaries` + `internal/tools` |
 | a tofu provider | `tofu_providers` |

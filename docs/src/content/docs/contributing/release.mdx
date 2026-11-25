@@ -87,7 +87,7 @@ The channel file is written **last**, so that a site never resolves a version wh
 | `file`, `grafana_plugin` | `--files-url` | `download-deps.py` |
 | `provider` | `--provider-mirror` | `download-deps.py`: `<host>/<namespace>/<type>/index.json`, `<version>.json` and the archives |
 | `chart` | `<registry>/charts` | `download-deps.py` (`helm push`) |
-| `image` (extracted from the charts of `helmfile.yaml`, `platform/` and `apps/`) | `<registry>` | `mirror-images.py` (`skopeo`) |
+| `image` (extracted from the charts of `helmfile.yaml.gotmpl`, `platform/` and `apps/`) | `<registry>` | `mirror-images.py` (`skopeo`) |
 | `rpm` | `--rpm-url` | `mirror-rpms.py`, with `repodata/` built by `createrepo_c` |
 
 The run also copies the upstream Rancher and rke2 image lists (`rancher-images.txt`, `rke2-images.linux-amd64.txt` of the pinned versions), registry to registry.

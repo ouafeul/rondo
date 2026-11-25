@@ -73,7 +73,7 @@ jobs:
               - '.github/workflows/**'
             deps:
               - 'manifests/**'
-              - helmfile.yaml
+              - helmfile.yaml.gotmpl
               - 'platform/**'
               - 'apps/**'
               - 'internal/probe/**'
@@ -245,7 +245,7 @@ jobs:
       - name: Render charts and resolve dependencies
         run: |
           pip install --quiet pyyaml==6.0.2 requests==2.34.2
-          python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml \
+          python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml.gotmpl \
             --platform platform --apps apps --update-manifest --emit-gvks rendered-gvks.txt
           python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
       - name: Rendered kinds are all modelled

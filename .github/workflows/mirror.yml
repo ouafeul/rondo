@@ -69,7 +69,7 @@ jobs:
         run: pip install --quiet boto3
       - name: Resolve
         run: |
-          python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml \
+          python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml.gotmpl \
             --platform platform --apps apps --update-manifest
           python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
       - name: Download
