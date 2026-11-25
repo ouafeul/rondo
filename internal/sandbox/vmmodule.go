@@ -14,19 +14,25 @@ import (
 	"time"
 )
 
-// vmModule is the tarball the vm-apply Job downloads in place of terraform/vm. Its variables
-// and outputs are terraform/vm's own, read from RONDO's tree, and so are the locals the outputs
-// derive from; what goes is vSphere: the machines are the sandbox's containers, already running
-// at the IPs the Target gives. tofu still plans, applies and keeps its state on the stand-in.
+// vmModule is the tarball the vm-apply Job downloads in place of terraform/vm. Its terraform block
+// (backend, required providers), variables and outputs are terraform/vm's own, read from RONDO's
+// tree, and so are the locals the outputs derive from and the cloud-init each machine gets; what
+// goes is vSphere: the machines are the sandbox's containers, already running at the IPs the
+// Target gives. tofu still installs the providers from the mirror, renders cloud-init with the
+// cloudinit provider, plans, applies and keeps its state on the stand-in.
 func vmModule(rondoDir string) ([]byte, error) {
 	dir := filepath.Join(rondoDir, "terraform", "vm")
 	files := map[string][]byte{}
-	for _, name := range []string{"variables.tf", "outputs.tf"} {
-		raw, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // RONDO's module
+	for _, name := range []string{"variables.tf", "outputs.tf", "templates/cloud-init.yaml.tpl"} {
+		raw, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name))) //nolint:gosec // RONDO's module
 		if err != nil {
 			return nil, fmt.Errorf("RONDO machine module: %w", err)
 		}
 		files[name] = raw
+	}
+	block, err := terraformBlock(rondoDir)
+	if err != nil {
+		return nil, err
 	}
 	real, err := os.ReadFile(filepath.Join(dir, "main.tf")) //nolint:gosec // RONDO's module
 	if err != nil {
@@ -36,16 +42,21 @@ func vmModule(rondoDir string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	cloudInit := cloudInitData.FindString(string(real))
+	if cloudInit == "" {
+		return nil, fmt.Errorf(`terraform/vm/main.tf: data "cloudinit_config" "vm" not found, ` +
+			"the sandbox machine module reuses it (internal/sandbox/vmmodule.go)")
+	}
 	files["main.tf"] = []byte(`# rondo-sandbox: terraform/vm without vSphere. The machines are the sandbox containers, already
-# started at the IPs the Target gives; variables, outputs and locals are those of terraform/vm.
-terraform {
-  required_version = ">= 1.10.0"
-  backend "http" {}
-}
+# started at the IPs the Target gives; terraform block, variables, outputs, locals and cloud-init
+# are those of terraform/vm.
+` + block + `
 
 locals {
 ` + locals + `
 }
+
+` + cloudInit + `
 
 resource "terraform_data" "machine" {
   for_each = local.machines
@@ -55,9 +66,26 @@ resource "terraform_data" "machine" {
 	return tarGz(files)
 }
 
+// terraformBlock is the terraform block of terraform/vm (versions.tf): its backend and the
+// providers `tofu init` installs from the mirror.
+func terraformBlock(rondoDir string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(rondoDir, "terraform", "vm", "versions.tf")) //nolint:gosec // RONDO's module
+	if err != nil {
+		return "", fmt.Errorf("RONDO machine module: %w", err)
+	}
+	block := terraformBlockRe.FindString(string(raw))
+	if block == "" {
+		return "", fmt.Errorf("terraform/vm/versions.tf: no terraform block, the sandbox machine module " +
+			"reuses it (internal/sandbox/vmmodule.go)")
+	}
+	return block, nil
+}
+
 var (
-	fqdnSuffixLocal = regexp.MustCompile(`(?m)^  fqdn_suffix = .*$`)
-	machinesLocal   = regexp.MustCompile(`(?ms)^  machines = merge\(\[$.*?^  \]\.\.\.\)$`)
+	terraformBlockRe = regexp.MustCompile(`(?ms)^terraform \{$.*?^\}$`)
+	cloudInitData    = regexp.MustCompile(`(?ms)^data "cloudinit_config" "vm" \{$.*?^\}$`)
+	fqdnSuffixLocal  = regexp.MustCompile(`(?m)^  fqdn_suffix = .*$`)
+	machinesLocal    = regexp.MustCompile(`(?ms)^  machines = merge\(\[$.*?^  \]\.\.\.\)$`)
 )
 
 // machineLocals are the locals of terraform/vm's main.tf that its outputs read.

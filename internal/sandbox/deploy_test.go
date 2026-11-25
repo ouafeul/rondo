@@ -90,6 +90,11 @@ func TestApplyComponentSitePutsItsSecretsAndMachineIPs(t *testing.T) {
 			t.Fatal(err)
 		}
 		applied = append(applied, obj.Kind+"/"+obj.Metadata.Name)
+		// The machine Jobs install the providers from the sandbox's OCI mirror, as a generic site's.
+		if obj.Metadata.Name == "rondo-tofurc" && (!strings.Contains(c.Stdin, "oci_mirror") ||
+			!strings.Contains(c.Stdin, `mirror.sandbox.test/rondo-tofu-local/${namespace}/${type}`)) {
+			t.Errorf("tofurc without the OCI provider mirror:\n%s", c.Stdin)
+		}
 		if obj.Kind == "Target" && !strings.Contains(c.Stdin, "172.28.0.10") {
 			t.Errorf("Target dc1 without the machine IP:\n%s", c.Stdin)
 		}
