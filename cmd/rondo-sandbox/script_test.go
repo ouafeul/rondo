@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -33,8 +34,13 @@ func runScriptFunctions(t *testing.T, stubs map[string]string, snippet string) (
 		}
 	}
 	cmd := exec.Command("bash", "-c", `source "$1"; `+snippet, "bash", filepath.Join(dir, "lib.sh"))
+	engine := "/bin/true"
+	if _, ok := stubs["engine"]; ok {
+		engine = filepath.Join(bin, "engine")
+	}
 	cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"RONDO_SANDBOX_BIN=/bin/true", "RONDO_SANDBOX_HOME="+filepath.Join(dir, "home"), "STUB_LOG="+filepath.Join(dir, "calls"))
+		"RONDO_SANDBOX_BIN="+engine, "RONDO_SANDBOX_HOME="+filepath.Join(dir, "home"),
+		"RONDO_SANDBOX_RONDO_DIR=../..", "STUB_LOG="+filepath.Join(dir, "calls"))
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if exit, ok := err.(*exec.ExitError); ok {
@@ -73,5 +79,44 @@ reconcile_machines; cat "$STUB_LOG"`
 	out, code := runScriptFunctions(t, map[string]string{"docker": docker}, snippet)
 	if code != 0 || !strings.Contains(out, "--cpus 2 --memory 512m") {
 		t.Errorf("machine of 4 CPUs on a 2-CPU engine: exit %d, calls:\n%s", code, out)
+	}
+}
+
+// component install without options hands the engine no empty argument, and runs under the
+// bash of macOS (3.2), where an empty array is unbound under set -u.
+func TestComponentInstallWithoutOptions(t *testing.T) {
+	stubs := map[string]string{
+		"engine": `echo "engine $*" >> "$STUB_LOG"
+[ "$6" = plan ] && echo acme > "$3/installing"
+exit 0`,
+		"docker": `case "$1" in info) echo 2 ;; inspect) exit 1 ;; esac`,
+	}
+	for _, tool := range []string{"k3d", "kubectl", "helm", "openssl", "curl"} {
+		stubs[tool] = "exit 0"
+	}
+	snippet := `mkdir -p "$STATE/pki" component && : > "$STATE/site.json" && : > "$STATE/machines.txt"
+cmd_component_install component; cat "$STUB_LOG"`
+	out, code := runScriptFunctions(t, stubs, snippet)
+	if code != 0 {
+		t.Fatalf("component install: exit %d\n%s", code, out)
+	}
+	for _, want := range []string{"publish acme --registry 127.0.0.1:5100\n",
+		"install acme --timeout 30m --max-failures 2\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("engine call %q missing:\n%s", want, out)
+		}
+	}
+}
+
+// Every array the script starts empty is expanded with ${a[@]+"${a[@]}"}: bash before 4.4
+// (macOS) takes "${a[@]}" of an empty array for an unbound variable under set -u.
+func TestScriptExpandsEmptyArraysSafely(t *testing.T) {
+	empty := regexp.MustCompile(`\b([a-z_]+)=\(\)`)
+	for _, m := range empty.FindAllSubmatch(script, -1) {
+		bare := `"${` + string(m[1]) + `[@]}"`
+		guarded := `${` + string(m[1]) + `[@]+` + bare + `}`
+		if n := bytes.Count(script, []byte(bare)) - bytes.Count(script, []byte(guarded)); n > 0 {
+			t.Errorf("array %s, empty at first, expanded %d time(s) as %s: use %s", m[1], n, bare, guarded)
+		}
 	}
 }

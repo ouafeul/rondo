@@ -254,7 +254,7 @@ EOF
 # sandbox network (engine plan writes its configuration). Docker does not change a container's
 # ports: another list, or another configuration, recreates it.
 ensure_ports() {
-    local dir="${STATE}/ports" wanted signature current p args=()
+    local dir="${STATE}/ports" wanted signature current p publish=()
     wanted="$(cat "${dir}/ports.txt" 2>/dev/null || true)"
     if [[ -z "${wanted}" ]]; then
         docker rm -f "${PORTS}" >/dev/null 2>&1 || true
@@ -268,10 +268,10 @@ ensure_ports() {
     fi
     docker rm -f "${PORTS}" >/dev/null 2>&1 || true
     for p in ${wanted}; do
-        args+=(-p "${BIND}:${p%/*}:${p}")
+        publish+=(-p "${BIND}:${p%/*}:${p}")
     done
     docker run -d --name "${PORTS}" --restart unless-stopped --network "${NETWORK}" \
-        --label "rondo-sandbox.ports=${signature}" "${args[@]}" \
+        --label "rondo-sandbox.ports=${signature}" ${publish[@]+"${publish[@]}"} \
         -v "${dir}/nginx.conf:/etc/nginx/nginx.conf:ro" "${FRONT_IMAGE}" >/dev/null \
         || die "workstation ports ($(echo "${wanted}" | xargs)): is one already taken? (ss -ltnu)"
     log_ok "workstation ports published on ${BIND}: $(echo "${wanted}" | xargs)"
@@ -560,9 +560,11 @@ cmd_component_install() {
     ensure_registry
     ensure_ports
     reconcile_machines "${fresh:+${name}}"
-    engine publish "${name}" --registry "127.0.0.1:${REGISTRY_PORT}" "${publish_opts[@]}"
+    # ${a[@]+"${a[@]}"}: an empty array is unbound under set -u before bash 4.4 (macOS's bash 3.2).
+    engine publish "${name}" --registry "127.0.0.1:${REGISTRY_PORT}" ${publish_opts[@]+"${publish_opts[@]}"}
     drop_pushed_images
-    engine install "${name}" --timeout "${timeout}" --max-failures "${max_failures}" "${install_opts[@]}"
+    engine install "${name}" --timeout "${timeout}" --max-failures "${max_failures}" \
+        ${install_opts[@]+"${install_opts[@]}"}
 }
 
 cmd_component_uninstall() {
