@@ -634,7 +634,7 @@ func TestSelectingAnEnvironmentReconnects(t *testing.T) {
 	h.keys("8")
 	h.see("Environments", "●  default", "prod", "rondo-prod", "Manifest", "read manifest")
 	h.keys("down")
-	h.see("environmentName", "cluster.example.local", "k3s v1.31.4+k3s1 on dc1, 3 nodes", "rke2 rke2-a")
+	h.see("environmentName", "cluster.example.local", "k3s v1.36.6+k3s1 on dc1, 3 nodes", "rke2 rke2-a")
 	h.dontSee("CHANGEME")
 	h.keys("enter")
 	if h.m.cur().id != vEnvs {

@@ -29,13 +29,13 @@
 
 binaries:
   - name: k3s
-    version: "v1.31.4+k3s1"
+    version: "v1.36.6+k3s1"
     source_url: "https://github.com/k3s-io/k3s/releases/download/{version}/k3s"
     kind: file
     path: "k3s/{version}/k3s"
 
   - name: k3s-airgap-images
-    version: "v1.31.4+k3s1"
+    version: "v1.36.6+k3s1"
     source_url: "https://github.com/k3s-io/k3s/releases/download/{version}/k3s-airgap-images-amd64.tar.zst"
     kind: file
     path: "k3s/{version}/k3s-airgap-images-amd64.tar.zst"
@@ -91,13 +91,13 @@ binaries:
     path: "helm-diff/{version}/helm-diff-linux-amd64.tgz"
 
   - name: rke2
-    version: "v1.34.5+rke2r1"
+    version: "v1.36.5+rke2r1"
     source_url: "https://github.com/rancher/rke2/releases/download/{version}/rke2.linux-amd64"
     kind: file
     path: "rke2/{version}/rke2.linux-amd64"
 
   - name: rke2-sha256sum
-    version: "v1.34.5+rke2r1"
+    version: "v1.36.5+rke2r1"
     source_url: "https://github.com/rancher/rke2/releases/download/{version}/sha256sum-amd64.txt"
     kind: file
     path: "rke2/{version}/sha256sum-amd64.txt"
@@ -116,7 +116,7 @@ tofu_providers:
     path: "hashicorp/cloudinit/terraform-provider-cloudinit_{version}_linux_amd64.zip"
 
   - name: rancher/rancher2
-    version: "14.1.1"
+    version: "15.3.0"
     source_url: "https://github.com/rancher/terraform-provider-rancher2/releases/download/v{version}/terraform-provider-rancher2_{version}_linux_amd64.zip"
     kind: provider
     path: "rancher/rancher2/terraform-provider-rancher2_{version}_linux_amd64.zip"
@@ -131,7 +131,7 @@ helm_charts:
     path: metallb
 
   - name: rancher
-    version: "2.14.0"
+    version: "2.15.3"
     source_repo: "https://releases.rancher.com/server-charts/latest"
     kind: chart
     path: rancher

@@ -94,7 +94,7 @@ releases:
   - name: rancher
     namespace: cattle-system
     chart: {{ $chartsOCI }}/rancher
-    version: {{ env "RANCHER_VERSION" | default "2.14.0" }}
+    version: {{ env "RANCHER_VERSION" | default "2.15.3" }}
     needs:
       - metallb-system/metallb
       - cert-manager/cert-manager

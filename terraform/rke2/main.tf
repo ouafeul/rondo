@@ -133,7 +133,9 @@ resource "rancher2_cluster_v2" "rke2_downstream" {
     machine_global_config = yamlencode({
       "system-default-registry" = var.rke2_registry_host
       "cni"                     = var.rke2_cni
-      "write-kubeconfig-mode"   = "0644"
+      # The platform's traefik Component is the ingress controller (IngressClass traefik).
+      "ingress-controller"    = "none"
+      "write-kubeconfig-mode" = "0644"
     })
 
     dynamic "registries" {
