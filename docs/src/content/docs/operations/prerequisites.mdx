@@ -61,6 +61,8 @@ The site has no Internet access, so an artifact mirror inside the site serves ev
 - **`generic`** (default): any OCI registry (Harbor, Zot, Nexus, a Distribution registry…) and any HTTP file server (nginx, an object store behind HTTPS…). Each endpoint is declared: `oci.registry`, `files.url`, `rpm`, `tofu.providerMirror` or `tofu.providerOCI`, `tofu.state.http` or `tofu.state.s3`.
 - **`artifactory`**: a JFrog Artifactory; every endpoint derives from `artifactory.url` and the repository names.
 
+[Artifact mirrors](/operations/artifact-mirrors/) gives worked configurations (Zot or Harbor with nginx, MinIO for the state, Artifactory), how to fill the mirror and how to check it.
+
 Every repository is a path segment under its root, `<root>/<repository>/<path>`. The mirror holds:
 
 | Content | `generic` | `artifactory` (default name) |
