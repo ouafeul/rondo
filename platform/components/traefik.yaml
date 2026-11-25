@@ -5,7 +5,7 @@ metadata:
 spec:
   chart:
     oci: ${CHARTS_OCI}/traefik
-    version: 41.0.2
+    version: 42.4.3
   dependsOn:
   - name: metallb
   - name: downstream-bootstrap
@@ -19,4 +19,5 @@ spec:
         # Lets another LoadBalancer Service (the `acme` component's fluent-bit) take ports on the same IP.
         metallb.universe.tf/allow-shared-ip: ingress
         metallb.universe.tf/loadBalancerIPs: ${target.values.ingressIP}
-      type: LoadBalancer
+      spec:
+        type: LoadBalancer

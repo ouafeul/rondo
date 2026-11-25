@@ -1,6 +1,6 @@
 apiVersion: v2
 name: local-path-provisioner
-version: 0.1.3
+version: 0.1.4
 description: >-
   local-path volume provisioner for downstream RKE2 clusters, which have NO
   default provisioner, unlike k3s, which ships one on the management cluster.

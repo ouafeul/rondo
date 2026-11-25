@@ -125,7 +125,7 @@ tofu_providers:
 
 helm_charts:
   - name: metallb
-    version: "0.14.9"
+    version: "0.16.2"
     source_repo: "https://metallb.github.io/metallb"
     kind: chart
     path: metallb
@@ -137,13 +137,13 @@ helm_charts:
     path: rancher
 
   - name: cert-manager
-    version: "v1.16.2"
+    version: "v1.21.3"
     source_repo: "https://charts.jetstack.io"
     kind: chart
     path: cert-manager
 
   - name: traefik
-    version: "41.0.2"
+    version: "42.4.3"
     source_repo: "https://traefik.github.io/charts"
     kind: chart
     path: traefik

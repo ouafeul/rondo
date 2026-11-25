@@ -29,6 +29,7 @@ spec:
     name: selfsigned-bootstrap
   privateKey:
     algorithm: RSA
+    rotationPolicy: Never
     size: 4096
   secretName: cluster-ca-keypair
 ---

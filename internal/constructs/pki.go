@@ -32,7 +32,7 @@ func (p *PKIStack) Manifests() ([]Object, error) {
 			"commonName": p.CommonName,
 			"secretName": "cluster-ca-keypair",
 			"duration":   dur,
-			"privateKey": Object{"algorithm": "RSA", "size": 4096},
+			"privateKey": Object{"algorithm": "RSA", "size": 4096, "rotationPolicy": "Never"},
 			"issuerRef":  Object{"name": "selfsigned-bootstrap", "kind": "ClusterIssuer"},
 		},
 	}

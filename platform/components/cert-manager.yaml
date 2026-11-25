@@ -5,17 +5,19 @@ metadata:
 spec:
   chart:
     oci: ${CHARTS_OCI}/cert-manager
-    version: v1.16.2
+    version: v1.21.3
   namespace: cert-manager
   values:
     cainjector:
       image:
         repository: ${target.values.imageRegistry}/jetstack/cert-manager-cainjector
+    crds:
+      enabled: true
+      keep: true
     global:
       priorityClassName: system-cluster-critical
     image:
       repository: ${target.values.imageRegistry}/jetstack/cert-manager-controller
-    installCRDs: true
     resources:
       limits:
         cpu: 200m
