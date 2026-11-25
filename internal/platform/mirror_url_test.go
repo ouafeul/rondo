@@ -75,13 +75,13 @@ func walkStrings(node any, path []string, visit func(path []string, s string)) {
 	}
 }
 
-func TestArtifactoryDownloadInAChartIsAuthenticated(t *testing.T) {
+func TestMirrorDownloadInAChartIsAuthenticated(t *testing.T) {
 	const (
-		authURL   = "${secrets.artifactoryAuthURL}"
-		baseURL   = "${ARTIFACTORY_URL}"
-		user      = "${secrets.artifactoryUser}"
-		password  = "${secrets.artifactoryPassword}"
-		hardcoded = "https://${REGISTRY_HOST}"
+		authURL   = "${secrets.mirrorAuthURL}"
+		baseURL   = "${FILES_URL}"
+		user      = "${secrets.mirrorUser}"
+		password  = "${secrets.mirrorPassword}"
+		hardcoded = "https://${OCI_REGISTRY}"
 	)
 
 	downloads := 0
@@ -124,7 +124,7 @@ func TestArtifactoryDownloadInAChartIsAuthenticated(t *testing.T) {
 
 		if len(bare) > 0 && !(hasUser && hasPassword) {
 			t.Errorf("%s: %s is a base URL WITHOUT credentials (%s) and the component "+
-				"carries none outside the URL. Artifactory does not allow anonymous reads, "+
+				"carries none outside the URL. A mirror with credentials refuses anonymous reads, "+
 				"the pod would get \"401 Authentication is required\", and neither the CA nor "+
 				"`regcred` changes that. Write %s and %s in its `envRenderSecret` "+
 				"(or the chart's equivalent), or use %s",

@@ -127,7 +127,7 @@ func Enrollments(s Settings) []string {
 }
 
 // Values every Kubernetes Target of the sandbox provides, as `rondo deploy` does on a site.
-var standardTargetValues = []string{"ingressIP", "imageRegistry", "artifactoryCA", "storageClass"}
+var standardTargetValues = []string{"ingressIP", "imageRegistry", "mirrorCA", "storageClass"}
 
 var targetValueToken = regexp.MustCompile(`\$\{target\.values\.([A-Za-z0-9_.-]+)\}`)
 

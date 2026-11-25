@@ -4,7 +4,7 @@ metadata:
   name: cert-manager
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/cert-manager
+    oci: ${CHARTS_OCI}/cert-manager
     version: v1.16.2
   namespace: cert-manager
   values:

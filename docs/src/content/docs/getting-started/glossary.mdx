@@ -5,7 +5,7 @@ description: RONDO terms, one line each.
 
 | Term | Meaning |
 |---|---|
-| **Air-gap** | The site has no Internet access: everything RONDO installs comes from the site's Artifactory, mirrored by CI. |
+| **Air-gap** | The site has no Internet access: everything RONDO installs comes from the site's artifact mirror, fed by CI. |
 | **Archetype** | `chart` (a Helm chart) or `vm` (vSphere machines). A Component is one or the other. |
 | **Base layer** | What every downstream receives before any component: MetalLB, cert-manager, local-path-provisioner, downstream-bootstrap, Traefik. |
 | **Channel** | A JSON pointer to a version: `stable` or `edge-<branch>` for RONDO, `latest` for a component. |

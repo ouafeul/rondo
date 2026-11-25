@@ -17,11 +17,11 @@ import (
 
 func testConfig() Config {
 	return Config{
-		Namespace:              "rondo-system",
-		Image:                  "arti.local/rondo-docker-local/rondo-toolbox:0.1.0",
-		ServiceAccount:         "rondo-exec",
-		ArtifactoryCAConfigMap: "artifactory-ca",
-		ArtifactoryCredsSecret: "rondo-credentials",
+		Namespace:         "rondo-system",
+		Image:             "arti.local/rondo-docker-local/rondo-toolbox:0.1.0",
+		ServiceAccount:    "rondo-exec",
+		MirrorCAConfigMap: "mirror-ca",
+		MirrorCredsSecret: "rondo-credentials",
 	}
 }
 
@@ -200,7 +200,7 @@ func TestBuildMountsTheAirgapTrust(t *testing.T) {
 	ctr := job.Spec.Template.Spec.Containers[0]
 	var caMounted bool
 	for _, m := range ctr.VolumeMounts {
-		if m.Name == "artifactory-ca" {
+		if m.Name == "mirror-ca" {
 			caMounted = true
 			if !m.ReadOnly {
 				t.Error("the CA must be mounted read-only")
@@ -208,7 +208,7 @@ func TestBuildMountsTheAirgapTrust(t *testing.T) {
 		}
 	}
 	if !caMounted {
-		t.Error("Artifactory CA not mounted")
+		t.Error("mirror CA not mounted")
 	}
 	var sslCertFile string
 	for _, e := range ctr.Env {
@@ -226,7 +226,7 @@ func TestBuildMountsTheAirgapTrust(t *testing.T) {
 		}
 	}
 	if !credsFrom {
-		t.Error("Artifactory credentials not exposed")
+		t.Error("mirror credentials not exposed")
 	}
 	for _, e := range ctr.Env {
 		if e.Value != "" && (strings.Contains(strings.ToLower(e.Name), "password") ||

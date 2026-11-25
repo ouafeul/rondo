@@ -96,7 +96,7 @@ func (sc *tofuWorkdir) checkMirror(ctx context.Context) error {
 }
 
 func probeMirror(ctx context.Context, mirror, token string) error {
-	client, err := artifactoryHTTPClient(mirrorProbeTimeout)
+	client, err := mirrorHTTPClient(mirrorProbeTimeout)
 	if err != nil {
 		log.Warn("network_mirror probe NOT POSSIBLE (HTTPS client), `tofu init` will decide",
 			"err", err)
@@ -147,7 +147,7 @@ func parseTofurcOCI(rc string) string {
 // distribution API. It never fails: the credentials are the mirror's own, not a token that
 // expires, and an anonymous /v2/ answers 401 on most registries anyway.
 func probeOCIMirror(ctx context.Context, registry string) {
-	client, err := artifactoryHTTPClient(mirrorProbeTimeout)
+	client, err := mirrorHTTPClient(mirrorProbeTimeout)
 	if err != nil {
 		log.Warn("oci_mirror probe NOT POSSIBLE (HTTPS client), `tofu init` will decide", "err", err)
 		return

@@ -1,10 +1,10 @@
 ---
 rondo_component: ""
 
-rondo_artifactory_url: ""
-rondo_artifactory_user: ""
-rondo_artifactory_password: ""
-rondo_artifactory_ca_path: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+rondo_mirror_files_url: ""
+rondo_mirror_user: ""
+rondo_mirror_password: ""
+rondo_mirror_ca_path: /etc/pki/ca-trust/source/anchors/mirror-ca.pem
 
 rondo_workdir: "/opt/rondo/{{ rondo_component }}"
 

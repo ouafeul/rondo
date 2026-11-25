@@ -1,5 +1,5 @@
 ---
-- name: "Artifactory credentials for dnf"
+- name: "Mirror RPM repositories for dnf"
   ansible.builtin.yum_repository:
     name: "{{ item.name }}"
     description: "{{ item.description | default(item.name) }}"
@@ -7,9 +7,9 @@
     enabled: true
     gpgcheck: "{{ item.gpgcheck | default(true) | bool }}"
     gpgkey: "{{ item.gpgkey | default(omit) }}"
-    username: "{{ rondo_artifactory_user | default(omit, true) }}"
-    password: "{{ rondo_artifactory_password | default(omit, true) }}"
-    sslcacert: "{{ rondo_artifactory_ca_path | default(omit, true) }}"
+    username: "{{ rondo_mirror_user | default(omit, true) }}"
+    password: "{{ rondo_mirror_password | default(omit, true) }}"
+    sslcacert: "{{ rondo_mirror_ca_path | default(omit, true) }}"
     module_hotfixes: "{{ item.module_hotfixes | default(false) | bool }}"
     priority: "{{ item.priority | default(omit) }}"
     file: "{{ item.name }}"
@@ -36,7 +36,7 @@
     msg: >-
       `dnf makecache` failed on the component repositories
       ({{ rondo_rpm_repos | map(attribute='name') | join(', ') }}).
-      Usual causes: the repository does not exist yet on the offline Artifactory
+      Usual causes: the repository does not exist yet on the offline mirror
       (has replication run?), the registry credentials are stale, or the CA is
       not in the machine's trust store.
       Output: {{ rondo_makecache.stderr | default(rondo_makecache.stdout) | truncate(800) }}

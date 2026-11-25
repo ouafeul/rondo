@@ -42,7 +42,7 @@ func TestVMStateInS3(t *testing.T) {
 	bucket := tofustate.S3Bucket{Bucket: "states", Endpoint: "https://s3.example.local",
 		Region: "eu-west-3", KeyPrefix: "sites/prod", UsePathStyle: true}
 	env := vmEnvOn(t, map[string]string{
-		EnvArtifactoryUser: "", EnvArtifactoryPassword: "",
+		EnvMirrorUser: "", EnvMirrorPassword: "",
 		EnvStateBaseURL: "", EnvStateS3: bucket.Encode(),
 	})
 	args := env["TF_CLI_ARGS_init"]
@@ -72,7 +72,7 @@ func TestVMStateInS3(t *testing.T) {
 
 func TestVMHTTPStateOfAnAnonymousMirror(t *testing.T) {
 	env := vmEnvOn(t, map[string]string{
-		EnvArtifactoryUser: "", EnvArtifactoryPassword: "",
+		EnvMirrorUser: "", EnvMirrorPassword: "",
 		EnvStateBaseURL: "https://files/state", EnvStateS3: "",
 	})
 	if env["TF_HTTP_ADDRESS"] != "https://files/state/vm/mft-dmz/terraform.tfstate" {
@@ -113,11 +113,11 @@ func TestMachineCAPathFollowsTheJob(t *testing.T) {
 		t.Error("the role's CA path is overridden although the Job has a CA")
 	}
 	t.Setenv(EnvCAFile, "")
-	raw, err := json.Marshal(AnsibleVars{ArtifactoryCAPath: machineCAPath()})
+	raw, err := json.Marshal(AnsibleVars{MirrorCAPath: machineCAPath()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), `"rondo_artifactory_ca_path":""`) {
+	if !strings.Contains(string(raw), `"rondo_mirror_ca_path":""`) {
 		t.Errorf("vars = %s, want an empty CA path so dnf is not pointed at a missing file", raw)
 	}
 }

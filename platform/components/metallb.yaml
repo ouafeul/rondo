@@ -4,7 +4,7 @@ metadata:
   name: metallb
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/metallb
+    oci: ${CHARTS_OCI}/metallb
     version: 0.14.9
   namespace: metallb-system
   values:

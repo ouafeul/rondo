@@ -31,7 +31,7 @@ func TestPlatformInstallForTakesImagesAndDashboard(t *testing.T) {
 		inst.ControllerImage:   "arti.invalid/rondo-docker-local/rondo-controller:v1.2.3",
 		inst.ToolboxImage:      "arti.invalid/rondo-docker-local/rondo-toolbox:v1.2.3",
 		inst.TofuStateBaseURL:  "https://arti.invalid/artifactory/rondo-tofu-state-local",
-		inst.ArtifactoryURL:    "https://arti.invalid/artifactory",
+		inst.MirrorFilesURL:    "https://arti.invalid/artifactory",
 		inst.VMModuleURL:       "https://arti.invalid/artifactory/rondo-generic-local/tofu-modules/vm/v1.2.3/vm.tar.gz",
 		inst.AnsibleContentURL: "https://arti.invalid/artifactory/rondo-generic-local/ansible/rondo/v1.2.3/rondo-ansible.tar.gz",
 	} {

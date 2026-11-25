@@ -27,7 +27,7 @@ A `hello` component: one chart, installed on the target that carries the `apps` 
    metadata: {name: hello}
    spec:
      chart:
-       oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/hello   # ① site tokens
+       oci: ${CHARTS_OCI}/hello   # ① site tokens
        version: 1.2.0                                               # exact, never a range
      namespace: hello
      dependsOn: [{name: traefik}]                                   # awaited Ready on the same target
@@ -101,8 +101,8 @@ A `hello` component: one chart, installed on the target that carries the `apps` 
 
 </Steps>
 
-<Aside type="tip" title="The chart must be on Artifactory">
-The OCI URL points to the site's helm repository: the chart and its images must be mirrored there. `rondo component lint --deps <dependencies.yaml>` checks it.
+<Aside type="tip" title="The chart must be on the mirror">
+The OCI URL points to the charts repository of the site's mirror: the chart and its images must be mirrored there. `rondo component lint --deps <dependencies.yaml>` checks it.
 </Aside>
 
 ## Next

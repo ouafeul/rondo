@@ -68,14 +68,14 @@ const (
 const maxNameLen = 52
 
 type Config struct {
-	Namespace              string
-	Image                  string
-	ServiceAccount         string
-	ArtifactoryCAConfigMap string
-	ArtifactoryCredsSecret string
-	TTL                    time.Duration
-	DefaultTimeout         time.Duration
-	Resources              corev1.ResourceRequirements
+	Namespace         string
+	Image             string
+	ServiceAccount    string
+	MirrorCAConfigMap string
+	MirrorCredsSecret string
+	TTL               time.Duration
+	DefaultTimeout    time.Duration
+	Resources         corev1.ResourceRequirements
 
 	TofuStateBaseURL    string
 	TofuStateS3         string
@@ -85,7 +85,7 @@ type Config struct {
 	VMModuleURL       string
 	AnsibleContentURL string
 	VMSSHSecret       string
-	ArtifactoryURL    string
+	MirrorFilesURL    string
 }
 
 func (c Config) withDefaults() Config {
@@ -235,16 +235,16 @@ func (c Config) Build(req Request) (*batchv1.Job, error) {
 		if c.VMSSHSecret != "" {
 			env = append(env, corev1.EnvVar{Name: "RONDO_VM_SSH_SECRET", Value: c.VMSSHSecret})
 		}
-		if c.ArtifactoryURL != "" {
-			env = append(env, corev1.EnvVar{Name: "ARTIFACTORY_URL", Value: c.ArtifactoryURL})
+		if c.MirrorFilesURL != "" {
+			env = append(env, corev1.EnvVar{Name: kobj.EnvMirrorFilesURL, Value: c.MirrorFilesURL})
 		}
 	}
 
 	envFrom := req.ExtraEnvFrom
-	if c.ArtifactoryCredsSecret != "" {
+	if c.MirrorCredsSecret != "" {
 		envFrom = append(envFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: c.ArtifactoryCredsSecret},
+				LocalObjectReference: corev1.LocalObjectReference{Name: c.MirrorCredsSecret},
 			},
 		})
 	}
@@ -262,19 +262,19 @@ func (c Config) Build(req Request) (*batchv1.Job, error) {
 		{Name: "tmp", MountPath: "/tmp"},
 	}
 
-	if c.ArtifactoryCAConfigMap != "" {
+	if c.MirrorCAConfigMap != "" {
 		volumes = append(volumes, corev1.Volume{
-			Name: "artifactory-ca",
+			Name: "mirror-ca",
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: c.ArtifactoryCAConfigMap},
+					LocalObjectReference: corev1.LocalObjectReference{Name: c.MirrorCAConfigMap},
 				},
 			},
 		})
 		mounts = append(mounts, corev1.VolumeMount{
-			Name: "artifactory-ca", MountPath: "/etc/rondo/ca", ReadOnly: true,
+			Name: "mirror-ca", MountPath: "/etc/rondo/ca", ReadOnly: true,
 		})
-		env = append(env, corev1.EnvVar{Name: "SSL_CERT_FILE", Value: "/etc/rondo/ca/" + kobj.ArtifactoryCAKey})
+		env = append(env, corev1.EnvVar{Name: "SSL_CERT_FILE", Value: "/etc/rondo/ca/" + kobj.MirrorCAKey})
 	}
 
 	yes, no := true, false

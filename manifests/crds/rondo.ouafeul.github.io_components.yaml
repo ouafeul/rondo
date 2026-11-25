@@ -176,7 +176,8 @@ spec:
                         default: site.yml
                         type: string
                       repo:
-                        description: Repo and Path locate the content tarball on Artifactory
+                        description: Repo and Path locate the content tarball on the
+                          mirror
                         minLength: 1
                         type: string
                       version:
@@ -486,10 +487,10 @@ spec:
                       rule: '!has(self.phases) || (!has(self.args) && !has(self.steps)
                         && !has(self.skipSteps))'
                   rpmRepos:
-                    description: Artifactory YUM repos
+                    description: YUM repositories of the artifact mirror
                     items:
-                      description: RPMRepo is an Artifactory YUM repo configured on
-                        the machines.
+                      description: RPMRepo is a YUM repository of the artifact mirror
+                        configured on the machines.
                       properties:
                         description:
                           description: empty => Name
@@ -516,7 +517,7 @@ spec:
                           description: lower = preferred
                           type: integer
                         repo:
-                          description: Artifactory repo name
+                          description: repository on the mirror, e.g. ${RPM_REPOSITORY}
                           minLength: 1
                           type: string
                       required:

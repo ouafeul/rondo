@@ -121,7 +121,7 @@ fails in CI.
 
 ```
 Docker network rondo-sandbox (172.28.0.0/24)
-  artifactory.sandbox.test   nginx: /v2/ → zot, /artifactory/ → generic files
+  mirror.sandbox.test        nginx: /v2/ → zot, /files/ → files, RPMs, tofu states
   zot                        pushed charts and images; the rest pulled from the Internet on
                              demand (docker.io, quay.io, registry.k8s.io, ghcr.io) and kept
   k3d rondo-sbx               management (.100): rondo-controller, rondo-probe, dashboard;
@@ -133,7 +133,7 @@ Docker network rondo-sandbox (172.28.0.0/24)
 
 | On a site | In the sandbox |
 |---|---|
-| Artifactory | zot + nginx, a single host: `artifactory.sandbox.test` |
+| artifact mirror (`artifacts`) | zot + nginx, a single host: `mirror.sandbox.test` |
 | `rondo deploy` (k3s on vSphere) | k3d `rondo-sbx`, Target `management` (`inCluster`); it also carries `targets.management.roles`, which a site does not |
 | `rondo deploy downstreams` (rke2) | k3d `rondo-sbx-<target>`, Target `<target>` (kubeconfig), one per `targets.downstreams` |
 | rke2 base layer | the same, on each downstream; on the management cluster only if it carries other roles |
@@ -152,7 +152,7 @@ rewriting it: the component is tested with the site's controller, Jobs, token re
 ## The site: rondo-sandbox.yaml
 
 At the root of the component, `rondo-sandbox.yaml` describes the sandbox's site with rondo.yaml's
-keys, without what the workstation provides (Artifactory, vCenter, nodes, versions):
+keys, without what the workstation provides (artifact mirror, vCenter, nodes, versions):
 
 ```yaml
 targets:
@@ -187,7 +187,7 @@ its role), the `componentValues` each one reads (`CHANGEME`, to fill in) and the
 
 A role carried by two Targets (management included), a name used twice, a downstream or a
 vSphere Target without a role are refused. The standard Target values (`ingressIP`,
-`imageRegistry`, `artifactoryCA`, `storageClass`) and `rondo-platform-values` are provided.
+`imageRegistry`, `mirrorCA`, `storageClass`) and `rondo-platform-values` are provided.
 
 As on a site, `deploy` sets the management and vSphere Targets and the Secrets, and
 `deploy downstreams` the rke2 Targets: changing a `componentValues` or a role means running
@@ -245,9 +245,9 @@ install does not count, nor a failure from before the command.
 What the sandbox does not check:
 
 - air-gap mirroring: images come from the Internet, not only from `dependencies.yaml`;
-- the registry form: the sandbox serves images at the root of `artifactory.sandbox.test` on
-  every Target, while a site serves them as `<host>/<repository>` on the management cluster
-  and `<repository>.<host>` on downstreams;
+- the registry form: the sandbox serves images at the root of `mirror.sandbox.test` on
+  every Target, while a site serves them as `<registry>/<repository>` on the management cluster
+  and through the rke2 system registry on downstreams (`<repository>.<host>` with preset artifactory);
 - that the component **works**: `Ready` says its objects are applied and healthy as the probe
   sees them, not that logs arrive or that the dashboard responds; the workstation ports are
   there to check that;
@@ -334,13 +334,13 @@ follows a site's path, controller Jobs included; only vSphere and the VM are rep
 | Site step | In the sandbox |
 |---|---|
 | vSphere Target of `rondo.yaml`, machine IPs (`vmIPs.<component>.<group>`) | the `targets.vsphere` Target that carries the Enrollment's role; `component install` sets one IP per machine on it, from `.10` to `.99` of the sandbox network, kept from one install to the next |
-| `vm-apply`: `tofu apply` of `terraform/vm`, template clone | the same Job, the same `tofu`, the state on the sandbox's Artifactory; its module (`vm.tar.gz`) keeps the variables, outputs and inventory of `terraform/vm`, without vSphere: the machines are already there |
+| `vm-apply`: `tofu apply` of `terraform/vm`, template clone | the same Job, the same `tofu`, the state on the sandbox's mirror; its module (`vm.tar.gz`) keeps the variables, outputs and inventory of `terraform/vm`, without vSphere: the machines are already there |
 | the VM, after cloud-init | an `rondo-sbx-machine-<name>` container, named and addressed like the VM (`<component>-<group>-<n>`), with `--cpus` and `--memory` from its size |
 | `vm-install`: RONDO's (or the component's) playbook, repositories, artifacts, configuration, secrets, phases | the same Job, the same playbook, over SSH |
 
 The machine is an RONDO image, `rondo-sandbox-machine`: Rocky Linux 9.6, pinned like a site's
 template (base image and packages from the frozen 9.6 repository), systemd as PID 1, sshd, the
-`rondo` account with RONDO's key and `sudo`, Artifactory's CA, the cloud-init completion marker
+`rondo` account with RONDO's key and `sudo`, the mirror's CA, the cloud-init completion marker
 the playbook waits for, and no Internet RPM repository enabled: only the component's, as on an
 air-gap site. It is pulled from the registry like the controller, or built from the clone with
 `--rondo-from`, by `deploy` as soon as `rondo-sandbox.yaml` declares a vSphere Target. It is not
@@ -359,10 +359,10 @@ spec:
     groups:
       - {name: web, replicas: 2}
     rpmRepos:
-      - {name: baseos, repo: "${ARTIFACTORY_RPM_REPO}", path: el9/9.9/baseos,
+      - {name: baseos, repo: "${RPM_REPOSITORY}", path: el9/9.9/baseos,
          gpgKey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9}
     artifacts:
-      - {repo: "${ARTIFACTORY_GENERIC_REPO}", provenance: component,
+      - {repo: "${FILES_REPOSITORY}", provenance: component,
          path: components/hello-vm/1.0.0/hello.tar.gz, extract: true}
     config:
       MESSAGE: {value: "${target.values.helloMessage}"}
@@ -415,8 +415,8 @@ What the component's CI publishes, and what the site mirrors, come from `rondo-s
   modes kept) or a file (`file`, after the `build` command, run in the component's
   directory). An `upstream` artifact comes from the `binaries` of `dependencies.yaml`;
 - `rpmRepos`: the upstream URL of each RPM repository, under the Component's `<repo>/<path>`
-  key (tokens resolved: `${ARTIFACTORY_RPM_REPO}` is `rondo-rpms-local`). The sandbox's
-  Artifactory relays it where the site mirrors it; `gpgKey` must be readable from the machine
+  key (tokens resolved: `${RPM_REPOSITORY}` is `rondo-rpms-local`). The sandbox's
+  mirror relays it where the site mirrors it; `gpgKey` must be readable from the machine
   (`file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9` is there);
 - `ports`: `machine: <name>` and `port` lead a workstation port to a machine; `protocol: http`
   makes it an `http://` link in `status`.

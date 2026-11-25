@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTofu providers from an OCI registry: `artifacts.tofu.providerOCI` (`oci_mirror`), as an alternative to the network mirror `artifacts.tofu.providerMirror`.
 - S3 state backend: `artifacts.tofu.state.s3` (MinIO, Ceph, AWS; lock file next to the state), or `artifacts.tofu.state.http`; keys in `secrets.mirrorStateAccessKey` and `secrets.mirrorStateSecretKey`.
 - Nodes pull public and rke2 system images through registry mirrors that rewrite them under `<oci.registry>/<oci.repository>`; k3s nodes check the file server by downloading k3s.
+- Component contract uses neutral names: site tokens `${OCI_REGISTRY}`, `${IMAGES_REPOSITORY}`, `${CHARTS_REPOSITORY}`, `${CHARTS_OCI}` (a chart is `${CHARTS_OCI}/<chart>`), `${FILES_URL}`, `${FILES_REPOSITORY}`, `${RPM_REPOSITORY}`; Target value `mirrorCA`; `rondo-platform-values` keys `mirrorUser`, `mirrorPassword`, `mirrorAuthURL`; ConfigMap `mirror-ca`; Job environment `MIRROR_USER`, `MIRROR_PASSWORD`, `MIRROR_FILES_URL`; Ansible variables `rondo_mirror_*`.
 
 ### Security
 - Images and tools on current patch releases: Go 1.26.11, Helm 3.22.1, kubectl 1.34.13, OpenTofu 1.11.14, Rocky Linux 9.9 for the sandbox machine, OS packages upgraded at build.

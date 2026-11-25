@@ -180,8 +180,8 @@ func TestLoadVMRefusesChartComponent(t *testing.T) {
 }
 
 func TestVMTofuEnvTranslatesEverything(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "svc")
-	t.Setenv(EnvArtifactoryPassword, "pw")
+	t.Setenv(EnvMirrorUser, "svc")
+	t.Setenv(EnvMirrorPassword, "pw")
 	t.Setenv(EnvStateBaseURL, "https://arti/state")
 	t.Setenv(EnvSSHKeySecret, "rondo-vm-ssh")
 
@@ -239,8 +239,8 @@ func TestVMTofuEnvTranslatesEverything(t *testing.T) {
 }
 
 func TestVMTofuEnvRefusesWithoutTemplate(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "u")
-	t.Setenv(EnvArtifactoryPassword, "p")
+	t.Setenv(EnvMirrorUser, "u")
+	t.Setenv(EnvMirrorPassword, "p")
 	t.Setenv(EnvStateBaseURL, "https://arti/state")
 	t.Setenv(EnvSSHKeySecret, "rondo-vm-ssh")
 	rt, _ := newRuntime(t, "Enrollment", "mft-dmz",
@@ -349,7 +349,7 @@ func TestMachineInventoryWritesFile(t *testing.T) {
 func TestWriteVarsFileIsPrivate(t *testing.T) {
 	rt, _ := newRuntime(t, "Enrollment", "r")
 	path, err := rt.writeVarsFile("app", &AnsibleVars{
-		Component: "mft", ArtifactoryPassword: "s3cr3t",
+		Component: "mft", MirrorPassword: "s3cr3t",
 		Secrets: map[string]string{"DB": "x"},
 	})
 	if err != nil {

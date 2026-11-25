@@ -105,7 +105,7 @@ func (rc *releaseContext) login(ctx context.Context, rt *Runtime) error {
 	if err != nil {
 		return err
 	}
-	user, password, err := artifactoryCreds()
+	user, password, err := mirrorCreds()
 	if err != nil {
 		return err
 	}

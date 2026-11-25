@@ -96,7 +96,7 @@ func fixture() []client.Object {
 				Kubernetes: &v1alpha1.KubernetesCluster{InCluster: true},
 				Values: map[string]string{
 					"clusterDomain": "cluster.example.local",
-					"artifactoryCA": strings.Repeat("A", 400),
+					"mirrorCA":      strings.Repeat("A", 400),
 				},
 			},
 			Status: v1alpha1.TargetStatus{Conditions: ready(metav1.ConditionTrue, "")},
@@ -215,7 +215,7 @@ func TestTargetsTruncateLongValuesAndKeepRoles(t *testing.T) {
 	if tgt.Roles[0] != "edge" || !tgt.InCluster || tgt.Type != "kubernetes" {
 		t.Errorf("target = %+v", tgt)
 	}
-	if ca := tgt.Values["artifactoryCA"]; len([]rune(ca)) != maxValueLen+1 {
+	if ca := tgt.Values["mirrorCA"]; len([]rune(ca)) != maxValueLen+1 {
 		t.Errorf("CA not truncated: %d runes", len([]rune(ca)))
 	}
 }

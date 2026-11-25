@@ -34,7 +34,7 @@ const tools: Step = {
 const registry: Step = {
   name: 'OpenTofu registry setup',
   tool: 'http',
-  does: 'One-hour Artifactory token, .tofurc pointing to the providers network_mirror (rondo-tofu-local repository), HTTP backend for the states.',
+  does: '.tofurc pointing to the providers mirror (network_mirror or OCI), with its credentials: secrets.mirrorToken, a one-hour token minted with preset artifactory, or the service account on an OCI mirror; the state backend (http or s3).',
   writes: ['<state>/.tofurc'],
   dry: 'no token, no .tofurc',
 };
@@ -62,7 +62,7 @@ export const commands: Command[] = [
       { name: 'bootstrap manifest rendering', tool: 'workstation', does: 'PKI (ClusterIssuers selfsigned-bootstrap and cluster-ca-issuer, CA "RONDO <env> CA", Rancher certificate) and the MetalLB pool of the ingress IP.' },
       { name: 'Helm chart deployment', tool: 'helm', does: 'helmfile sync: MetalLB, cert-manager (then the PKI), Rancher (rancher.<base>).' },
       { name: 'operator install', tool: 'kubectl', does: 'CRDs (awaited Established), rondo-system namespace, RBAC, Deployments rondo-controller, rondo-probe, rondo-dashboard, Ingress rondo.<base>, NetworkPolicies. Images at the CLI version.' },
-      { name: 'platform credentials', tool: 'kubectl', does: 'Artifactory account and its CA for the Jobs.', writes: ['Secret rondo-credentials', 'ConfigMap artifactory-ca'] },
+      { name: 'platform credentials', tool: 'kubectl', does: 'Mirror account and its CA for the Jobs.', writes: ['Secret rondo-credentials', 'ConfigMap mirror-ca'] },
       { name: 'network_mirror token', tool: 'http', does: "Long-lived token for the Jobs' tofu providers: secrets.mirrorToken, else a token issued and rotated on each deploy (preset artifactory) or none (preset generic).", writes: ['Secret rondo-tofurc'] },
       { name: 'internal DNS resolution', tool: 'kubectl', does: "Management CoreDNS: rancher|rondo.<base> → management ingress IP; *.<target or role>.<base> → each downstream's ingress IP.", writes: ['ConfigMap kube-system/coredns-custom'] },
       { name: 'Targets and site values', tool: 'kubectl', does: 'Target management, one Target per targets.vsphere entry, component Secrets, machine SSH key (generated once).', writes: ['Target management', 'Target <vsphere>', 'Secret/ConfigMap rondo-vsphere-<n>', 'Secret rondo-platform-values', 'Secret rondo-vm-ssh', 'Secret <secrets.components.x>'] },
@@ -99,7 +99,7 @@ export const commands: Command[] = [
     steps: [
       { name: 'resolution', tool: 'http', does: '<generic>/<name>/platform/<channel>.json, or --version, or --from.' },
       { name: 'download', tool: 'http', does: 'platform-<version>.tar.gz and its .sha256, checked, cached in ~/.rondo/cache/components/<name>/<version>.', dry: 'downloads anyway' },
-      { name: 'site tokens', tool: 'workstation', does: '${REGISTRY_HOST}, ${INGRESS_BASE_DOMAIN}… replaced; an unknown ${UPPERCASE} token refuses the tree.' },
+      { name: 'site tokens', tool: 'workstation', does: '${OCI_REGISTRY}, ${INGRESS_BASE_DOMAIN}… replaced; an unknown ${UPPERCASE} token refuses the tree.' },
       { name: 'apply', tool: 'kubectl', does: 'Only Components and Enrollments are allowed. Server-side apply (field manager rondo-cli), then deletion of what the previous version applied and this one no longer has.', writes: ['Components', 'Enrollments', 'ConfigMap rondo-component-<name>'], dry: 'lists what would be applied' },
     ],
   },

@@ -219,7 +219,7 @@ func mftComponent() *v1alpha1.Component {
 func TestBuildAnsibleVarsTypesAreKept(t *testing.T) {
 	comp := mftComponent()
 	vars, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://arti.local/artifactory", "svc", "pw",
+		"https://files.example.local", "svc", "pw",
 		map[string]string{"NC_DB_PASSWORD": "x", "NC_ADMIN_PASSWORD": "y"}, 0)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
@@ -237,7 +237,7 @@ func TestBuildAnsibleVarsTypesAreKept(t *testing.T) {
 
 func TestBuildAnsibleVarsConfigFormatDefaultsToShell(t *testing.T) {
 	vars, err := BuildAnsibleVars(mftComponent(), vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestBuildAnsibleVarsPropagatesConfigFormat(t *testing.T) {
 		comp := mftComponent()
 		comp.Spec.VM.Installer.ConfigFormat = format
 		vars, err := BuildAnsibleVars(comp, vmTarget(nil),
-			"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+			"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 		if err != nil {
 			t.Fatalf("BuildAnsibleVars(%s): %v", format, err)
 		}
@@ -301,14 +301,14 @@ func TestGroupConfigUnknownGroup(t *testing.T) {
 
 func TestBuildAnsibleVarsBuildsURLs(t *testing.T) {
 	vars, err := BuildAnsibleVars(mftComponent(), vmTarget(nil),
-		"https://arti.local/artifactory/", "svc", "pw", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local/", "svc", "pw", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
-	if got := vars.RPMRepos[0].BaseURL; got != "https://arti.local/artifactory/rondo-rpms-local/el9" {
+	if got := vars.RPMRepos[0].BaseURL; got != "https://files.example.local/rondo-rpms-local/el9" {
 		t.Errorf("RPM repository baseurl = %q", got)
 	}
-	if got := vars.Artifacts[0].URL; got != "https://arti.local/artifactory/rondo-generic-local/mft/nextcloud-33.0.0.tar.bz2" {
+	if got := vars.Artifacts[0].URL; got != "https://files.example.local/rondo-generic-local/mft/nextcloud-33.0.0.tar.bz2" {
 		t.Errorf("artifact URL = %q", got)
 	}
 	if !vars.RPMRepos[0].ModuleHotfixes {
@@ -320,7 +320,7 @@ func TestBuildAnsibleVarsRefusesGPGCheckWithoutKey(t *testing.T) {
 	comp := mftComponent()
 	comp.Spec.VM.RPMRepos[0].GPGCheck = bl(true)
 	comp.Spec.VM.RPMRepos[0].GPGKey = ""
-	_, err := BuildAnsibleVars(comp, vmTarget(nil), "https://a/artifactory", "u", "p",
+	_, err := BuildAnsibleVars(comp, vmTarget(nil), "https://files.example.local", "u", "p",
 		map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err == nil {
 		t.Fatal("gpgCheck without gpgKey accepted")
@@ -332,7 +332,7 @@ func TestBuildAnsibleVarsRefusesGPGCheckWithoutKey(t *testing.T) {
 
 func TestBuildAnsibleVarsRefusesSecretsFileWithoutSecrets(t *testing.T) {
 	_, err := BuildAnsibleVars(mftComponent(), vmTarget(nil),
-		"https://a/artifactory", "u", "p", nil, 0)
+		"https://files.example.local", "u", "p", nil, 0)
 	if err == nil {
 		t.Fatal("secrets file without secrets accepted")
 	}
@@ -343,7 +343,7 @@ func TestBuildAnsibleVarsRefusesSecretsFileWithoutSecrets(t *testing.T) {
 
 func TestBuildAnsibleVarsInstallerContract(t *testing.T) {
 	vars, err := BuildAnsibleVars(mftComponent(), vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
@@ -383,7 +383,7 @@ func installPhase(t *testing.T, vars *AnsibleVars, n int) map[string]any {
 
 func TestBuildAnsibleVarsKeepsPhaseOrderAndArgs(t *testing.T) {
 	vars, err := BuildAnsibleVars(mftComponent(), vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 45*time.Minute)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 45*time.Minute)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestBuildAnsibleVarsDesugarsSingleScript(t *testing.T) {
 		Args: []string{"--yes"}, SkipSteps: []string{"repo"},
 	}
 	vars, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestBuildAnsibleVarsPropagatesTimeout(t *testing.T) {
 	comp.Spec.VM.Installer.Phases[0].Timeout = str("35m")
 
 	vars, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 45*time.Minute)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 45*time.Minute)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
@@ -462,7 +462,7 @@ func TestBuildAnsibleVarsPropagatesTimeout(t *testing.T) {
 func TestBuildAnsibleVarsDerivesTimeoutFromJobBudget(t *testing.T) {
 	budget := 45 * time.Minute
 	vars, err := BuildAnsibleVars(mftComponent(), vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, budget)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, budget)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}
@@ -488,7 +488,7 @@ func TestBuildAnsibleVarsRefusesPhasesInDifferentDirs(t *testing.T) {
 	comp.Spec.VM.Installer.ConfigFlag = ""
 	comp.Spec.VM.Installer.SecretsFlag = ""
 	_, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err == nil {
 		t.Fatal("phases not co-located accepted although the secrets file is " +
 			"delivered by convention")
@@ -500,7 +500,7 @@ func TestBuildAnsibleVarsRefusesPhasesInDifferentDirs(t *testing.T) {
 	comp.Spec.VM.Installer.ConfigFlag = "-c"
 	comp.Spec.VM.Installer.SecretsFlag = "-e"
 	if _, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0); err != nil {
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0); err != nil {
 		t.Fatalf("phases not co-located rejected despite configFlag/secretsFlag: %v", err)
 	}
 }
@@ -509,7 +509,7 @@ func TestBuildAnsibleVarsRefusesDuplicatePhaseNames(t *testing.T) {
 	comp := mftComponent()
 	comp.Spec.VM.Installer.Phases[1].Name = "install"
 	_, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err == nil {
 		t.Fatal("duplicate phase names accepted")
 	}
@@ -521,7 +521,7 @@ func TestBuildAnsibleVarsRefusesDuplicatePhaseNames(t *testing.T) {
 func TestBuildAnsibleVarsRefusesInstallerWithoutEntryPoint(t *testing.T) {
 	comp := mftComponent()
 	comp.Spec.VM.Installer = &v1alpha1.VMInstaller{Version: "1.4.0"}
-	_, err := BuildAnsibleVars(comp, vmTarget(nil), "https://a/artifactory", "u", "p", nil, 0)
+	_, err := BuildAnsibleVars(comp, vmTarget(nil), "https://files.example.local", "u", "p", nil, 0)
 	if err == nil {
 		t.Fatal("installer without script or phases accepted")
 	}
@@ -534,7 +534,7 @@ func TestBuildAnsibleVarsRefusesBadTimeout(t *testing.T) {
 	comp := mftComponent()
 	comp.Spec.VM.Installer.Phases[0].Timeout = str("45min")
 	_, err := BuildAnsibleVars(comp, vmTarget(nil),
-		"https://a/artifactory", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
+		"https://files.example.local", "u", "p", map[string]string{"NC_DB_PASSWORD": "x"}, 0)
 	if err == nil {
 		t.Fatal("unreadable time bound accepted")
 	}
@@ -546,7 +546,7 @@ func TestBuildAnsibleVarsRefusesBadTimeout(t *testing.T) {
 func TestBuildAnsibleVarsRunInstallerFlag(t *testing.T) {
 	comp := mftComponent()
 	comp.Spec.VM.Installer = nil
-	vars, err := BuildAnsibleVars(comp, vmTarget(nil), "https://a/artifactory", "u", "p", nil, 0)
+	vars, err := BuildAnsibleVars(comp, vmTarget(nil), "https://files.example.local", "u", "p", nil, 0)
 	if err != nil {
 		t.Fatalf("BuildAnsibleVars: %v", err)
 	}

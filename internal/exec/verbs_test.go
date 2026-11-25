@@ -26,19 +26,19 @@ func archiveServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func setArtifactoryEnv(t *testing.T) {
+func setMirrorEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv(EnvArtifactoryUser, "svc")
-	t.Setenv(EnvArtifactoryPassword, "pw")
+	t.Setenv(EnvMirrorUser, "svc")
+	t.Setenv(EnvMirrorPassword, "pw")
 	t.Setenv(EnvStateBaseURL, "https://arti/state")
 }
 
 func vmFixtures(t *testing.T, moduleURL string) (*Runtime, *runner.Fake) {
 	t.Helper()
-	setArtifactoryEnv(t)
+	setMirrorEnv(t)
 	t.Setenv(EnvVMModuleURL, moduleURL)
 	t.Setenv(EnvSSHKeySecret, "rondo-vm-ssh")
-	t.Setenv(EnvArtifactoryURL, "https://arti.local/artifactory")
+	t.Setenv(EnvMirrorFilesURL, "https://files.example.local")
 
 	target := vsphereTargetObj(map[string]string{
 		"vmIPs.mft.app": `["10.0.2.10"]`,

@@ -29,7 +29,7 @@ import ArchitectureMap from '../../components/ArchitectureMap.astro';
     **This component on this target**, by name or by role. One Job per action.
   </Card>
   <Card title="Air-gap" icon="padlock">
-    Binaries, images, charts, providers and states: everything goes through the site's Artifactory.
+    Binaries, images, charts, providers and states: everything goes through the site's artifact mirror.
   </Card>
 </CardGrid>
 
@@ -70,7 +70,7 @@ import ArchitectureMap from '../../components/ArchitectureMap.astro';
 
 <CardGrid>
   <LinkCard title="Operate a site" description="Prerequisites, environments, updates, troubleshooting." href="operations/prerequisites/" />
-  <LinkCard title="Write a component" description="A tree of Components and Enrollments, published to Artifactory." href="components/tutorial/" />
+  <LinkCard title="Write a component" description="A tree of Components and Enrollments, published to the artifact mirror." href="components/tutorial/" />
   <LinkCard title="Understand the lifecycle" description="Resolution, Jobs, health, retries, uninstall." href="concepts/lifecycle/" />
   <LinkCard title="Reference" description="CLI, rondo.yaml, API, Jobs, rondo-system objects." href="reference/cli/" />
 </CardGrid>

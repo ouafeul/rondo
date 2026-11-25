@@ -131,7 +131,7 @@ func newRoot() *cobra.Command {
 
 	destroy := &cobra.Command{
 		Use:   "destroy",
-		Short: "Deletes the sandbox's clusters, machines and Artifactory; the cache stays",
+		Short: "Deletes the sandbox's clusters, machines and mirror; the cache stays",
 		Args:  cobra.NoArgs,
 		RunE:  toScript,
 	}
@@ -571,7 +571,7 @@ func runEngine(args []string) error {
 	var registry, rondoVersion string
 	publishRondo := &cobra.Command{
 		Use:   "publish-rondo",
-		Short: "Publishes RONDO's charts, its machine module and its playbook to the sandbox's Artifactory",
+		Short: "Publishes RONDO's charts, its machine module and its playbook to the sandbox's mirror",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return sandbox.RunPublishRondo(cmd.Context(), s, registry, rondoVersion)

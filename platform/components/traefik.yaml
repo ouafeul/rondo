@@ -4,7 +4,7 @@ metadata:
   name: traefik
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/traefik
+    oci: ${CHARTS_OCI}/traefik
     version: 41.0.2
   dependsOn:
   - name: metallb

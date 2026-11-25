@@ -92,7 +92,7 @@ func registry(t *testing.T, served ...string) string {
 }
 
 const webPods = `{"items":[{"kind":"Pod","metadata":{"namespace":"web","name":"web-1"},
-	"spec":{"containers":[{"image":"artifactory.sandbox.test/acme/web:2.1.0"}]}}]}`
+	"spec":{"containers":[{"image":"mirror.sandbox.test/acme/web:2.1.0"}]}}]}`
 
 func TestAwaitConcludesOnceEveryEnrollmentIsReady(t *testing.T) {
 	w, enr := verdictWorld(t)
@@ -127,7 +127,7 @@ func TestAwaitFailsOnAnImageOutsideTheRegistry(t *testing.T) {
 	program(t, fake, enr, w, `{"items":[{"kind":"Pod","metadata":{"namespace":"web","name":"web-1"},
 		"spec":{"initContainers":[{"image":"docker.io/library/busybox:1.36"}]}}]}`)
 	err := awaitComponent(sb, DeployOptions{Timeout: time.Minute, MaxFailures: 2, since: time.Now()})
-	if err == nil || !strings.Contains(err.Error(), "outside the site's Artifactory") {
+	if err == nil || !strings.Contains(err.Error(), "outside the site's mirror") {
 		t.Errorf("image pulled from the Internet: %v", err)
 	}
 }

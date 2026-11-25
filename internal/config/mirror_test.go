@@ -57,11 +57,18 @@ func resolved(t *testing.T, c *Config) map[string]string {
 		"credentials.secret": m.Password,
 	}
 	for k, v := range c.Env() {
-		if strings.HasPrefix(k, "ARTIFACTORY_") || k == "REGISTRY_HOST" || strings.HasPrefix(k, "TF_VAR_mirror_") {
+		if mirrorEnv[k] || strings.HasPrefix(k, "TF_VAR_mirror_") {
 			out["env."+k] = v
 		}
 	}
 	return out
+}
+
+// mirrorEnv are the keys of Env that the mirror resolves: the platform tokens and the credentials.
+var mirrorEnv = map[string]bool{
+	"OCI_REGISTRY": true, "CHARTS_OCI": true, "CHARTS_REPOSITORY": true, "IMAGES_REPOSITORY": true,
+	"FILES_URL": true, "FILES_REPOSITORY": true, "RPM_REPOSITORY": true,
+	"MIRROR_USER": true, "MIRROR_PASSWORD": true,
 }
 
 func checkResolved(t *testing.T, got, want map[string]string) {
@@ -119,14 +126,15 @@ func TestArtifactoryPresetResolvesAsBefore(t *testing.T) {
 				"credentials.user":   "svc-rondo",
 				"credentials.secret": "CHANGEME",
 
-				"env.ARTIFACTORY_URL":                "https://artifactory.example.local/artifactory",
-				"env.ARTIFACTORY_USER":               "svc-rondo",
-				"env.ARTIFACTORY_PASSWORD":           "CHANGEME",
-				"env.ARTIFACTORY_GENERIC_REPO":       "rondo-generic-local",
-				"env.ARTIFACTORY_RPM_REPO":           "rondo-rpms-local",
-				"env.ARTIFACTORY_DOCKER_REPO":        "rondo-docker-local",
-				"env.ARTIFACTORY_HELM_REPO":          "rondo-helm-local",
-				"env.REGISTRY_HOST":                  "artifactory.example.local",
+				"env.FILES_URL":                      "https://artifactory.example.local/artifactory",
+				"env.MIRROR_USER":                    "svc-rondo",
+				"env.MIRROR_PASSWORD":                "CHANGEME",
+				"env.FILES_REPOSITORY":               "rondo-generic-local",
+				"env.RPM_REPOSITORY":                 "rondo-rpms-local",
+				"env.IMAGES_REPOSITORY":              "rondo-docker-local",
+				"env.CHARTS_REPOSITORY":              "rondo-helm-local",
+				"env.CHARTS_OCI":                     "oci://artifactory.example.local/rondo-helm-local",
+				"env.OCI_REGISTRY":                   "artifactory.example.local",
 				"env.TF_VAR_mirror_files_url":        "https://artifactory.example.local/artifactory/rondo-generic-local",
 				"env.TF_VAR_mirror_registry":         "artifactory.example.local",
 				"env.TF_VAR_mirror_registry_rewrite": "",
@@ -211,14 +219,15 @@ func TestGenericPresetResolvesTheDeclaredEndpoints(t *testing.T) {
 		"credentials.user":   "svc-rondo",
 		"credentials.secret": "CHANGEME",
 
-		"env.ARTIFACTORY_URL":                "https://files.example.local",
-		"env.ARTIFACTORY_USER":               "svc-rondo",
-		"env.ARTIFACTORY_PASSWORD":           "CHANGEME",
-		"env.ARTIFACTORY_GENERIC_REPO":       "rondo",
-		"env.ARTIFACTORY_RPM_REPO":           "rpms",
-		"env.ARTIFACTORY_DOCKER_REPO":        "rondo",
-		"env.ARTIFACTORY_HELM_REPO":          "charts",
-		"env.REGISTRY_HOST":                  "registry.example.local",
+		"env.FILES_URL":                      "https://files.example.local",
+		"env.MIRROR_USER":                    "svc-rondo",
+		"env.MIRROR_PASSWORD":                "CHANGEME",
+		"env.FILES_REPOSITORY":               "rondo",
+		"env.RPM_REPOSITORY":                 "rpms",
+		"env.IMAGES_REPOSITORY":              "rondo",
+		"env.CHARTS_REPOSITORY":              "charts",
+		"env.CHARTS_OCI":                     "oci://registry.example.local/charts",
+		"env.OCI_REGISTRY":                   "registry.example.local",
 		"env.TF_VAR_mirror_files_url":        "https://files.example.local/rondo",
 		"env.TF_VAR_mirror_registry":         "registry.example.local",
 		"env.TF_VAR_mirror_registry_rewrite": "rondo",

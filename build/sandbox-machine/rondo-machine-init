@@ -1,6 +1,6 @@
 #!/bin/sh
 # The boot of an rondo-sandbox machine, what cloud-init does on a site's clone
-# (terraform/vm/templates/cloud-init.yaml.tpl): the CA of Artifactory trusted, the
+# (terraform/vm/templates/cloud-init.yaml.tpl): the CA of the mirror trusted, the
 # administration account with RONDO's key and sudo, /etc/rondo-release, and last the marker
 # RONDO's playbook waits for. rondo-sandbox mounts what it needs under /etc/rondo-machine. Then
 # systemd, as PID 1.
@@ -13,7 +13,7 @@ seed=/etc/rondo-machine
 user="${RONDO_MACHINE_USER:-rondo}"
 
 if [ -f "${seed}/ca.pem" ]; then
-    cp "${seed}/ca.pem" /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+    cp "${seed}/ca.pem" /etc/pki/ca-trust/source/anchors/mirror-ca.pem
     update-ca-trust extract
 fi
 

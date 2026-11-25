@@ -20,7 +20,7 @@ type VMSpec struct {
 	// +optional
 	Sizing *VMSizing `json:"sizing,omitempty"`
 
-	// Artifactory YUM repos
+	// YUM repositories of the artifact mirror
 	// +optional
 	RPMRepos []RPMRepo `json:"rpmRepos,omitempty"`
 
@@ -83,7 +83,7 @@ type VMSizing struct {
 	DiskGB int `json:"diskGb"`
 }
 
-// RPMRepo is an Artifactory YUM repo configured on the machines.
+// RPMRepo is a YUM repository of the artifact mirror configured on the machines.
 type RPMRepo struct {
 	// repo id in /etc/yum.repos.d/<name>.repo
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9]([-_.a-zA-Z0-9]*[a-zA-Z0-9])?$`
@@ -93,7 +93,7 @@ type RPMRepo struct {
 	// +optional
 	Description string `json:"description,omitempty"`
 
-	// Artifactory repo name
+	// repository on the mirror, e.g. ${RPM_REPOSITORY}
 	// +kubebuilder:validation:MinLength=1
 	Repo string `json:"repo"`
 
@@ -343,7 +343,7 @@ func parseInstallTimeout(what string, raw *string) (time.Duration, error) {
 
 // VMAnsible describes Ansible content shipped by the component.
 type VMAnsible struct {
-	// Repo and Path locate the content tarball on Artifactory
+	// Repo and Path locate the content tarball on the mirror
 	// +kubebuilder:validation:MinLength=1
 	Repo string `json:"repo"`
 	// +kubebuilder:validation:MinLength=1

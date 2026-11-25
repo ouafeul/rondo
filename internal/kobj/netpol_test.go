@@ -51,7 +51,7 @@ func TestDefaultDenyExists(t *testing.T) {
 		types := strsOf(t, spec["policyTypes"])
 		if len(types) != 1 || types[0] != "Ingress" {
 			t.Errorf("default-deny policyTypes = %v: filtering EGRESS would cut "+
-				"the Jobs off from their dependencies (Artifactory, vCenter, targets)", types)
+				"the Jobs off from their dependencies (mirror, vCenter, targets)", types)
 		}
 	}
 	if !found {

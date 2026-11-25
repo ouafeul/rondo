@@ -105,11 +105,11 @@ func newHarness(t *testing.T) *testHarness {
 	}
 
 	jobCfg := jobs.Config{
-		Namespace:              ns,
-		Image:                  "arti.local/rondo-docker-local/rondo-toolbox:0.1.0",
-		ServiceAccount:         "rondo-exec",
-		ArtifactoryCAConfigMap: "artifactory-ca",
-		ArtifactoryCredsSecret: "rondo-credentials",
+		Namespace:         ns,
+		Image:             "arti.local/rondo-docker-local/rondo-toolbox:0.1.0",
+		ServiceAccount:    "rondo-exec",
+		MirrorCAConfigMap: "mirror-ca",
+		MirrorCredsSecret: "rondo-credentials",
 	}
 	lock := &jobs.Lock{Client: c, Namespace: ns, Holder: "controller-test", Duration: time.Minute}
 

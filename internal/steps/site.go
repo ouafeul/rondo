@@ -22,18 +22,18 @@ func (p *PlatformStage) ApplySite(ctx context.Context) error {
 		log.Info("DRY-RUN management and vSphere Targets, site Secrets")
 		return nil
 	}
-	artiCA, err := p.artifactoryCA()
+	ca, err := p.mirrorCA()
 	if err != nil {
 		return err
 	}
 	values := kubernetesValues(p.cfg.Targets.Management.IngressLoadBalancerIP,
-		p.cfg.Mirror().OCIRepository, artiCA)
+		p.cfg.Mirror().OCIRepository, ca)
 	management := config.Placement{Name: config.ManagementRole, Roles: []string{config.ManagementRole}}
 	if err := p.applyTarget(ctx, management, kobj.InClusterBackend(), values); err != nil {
 		return err
 	}
 	for i := range p.cfg.Targets.VSphere {
-		if err := p.applyVSphereTarget(ctx, &p.cfg.Targets.VSphere[i], artiCA); err != nil {
+		if err := p.applyVSphereTarget(ctx, &p.cfg.Targets.VSphere[i], ca); err != nil {
 			return err
 		}
 	}
@@ -48,28 +48,28 @@ func (p *PlatformStage) ApplySite(ctx context.Context) error {
 
 // ApplyRKE2Target registers a provisioned rke2 cluster as a Target reached through its kubeconfig.
 func (p *PlatformStage) ApplyRKE2Target(ctx context.Context, t *config.DownstreamTarget, server, kubeconfig string) error {
-	artiCA, err := p.artifactoryCA()
+	ca, err := p.mirrorCA()
 	if err != nil {
 		return err
 	}
 	if err := p.applyObject(ctx, kobj.KubeconfigSecret(t.Name, kubeconfig)); err != nil {
 		return fmt.Errorf("kubeconfig of %s: %w", t.Name, err)
 	}
-	values := kubernetesValues(t.RKE2.IngressLoadBalancerIP, p.cfg.RegistryHostFor(&t.RKE2), artiCA)
+	values := kubernetesValues(t.RKE2.IngressLoadBalancerIP, p.cfg.RegistryHostFor(&t.RKE2), ca)
 	return p.applyTarget(ctx, t.Placement,
 		kobj.KubeconfigBackend(server, kobj.KubeconfigSecretName(t.Name)), values)
 }
 
-func kubernetesValues(ingressIP, imageRegistry, artiCA string) map[string]string {
+func kubernetesValues(ingressIP, imageRegistry, ca string) map[string]string {
 	return map[string]string{
 		"ingressIP":     ingressIP,
 		"imageRegistry": imageRegistry,
-		"artifactoryCA": artiCA,
+		"mirrorCA":      ca,
 		"storageClass":  kobj.DefaultStorageClass,
 	}
 }
 
-func (p *PlatformStage) applyVSphereTarget(ctx context.Context, t *config.VSphereTarget, artiCA string) error {
+func (p *PlatformStage) applyVSphereTarget(ctx context.Context, t *config.VSphereTarget, ca string) error {
 	name := kobj.VSphereObjectName(t.Name)
 	creds := kobj.VSphereCredentials(t.Name, t.VCenterUsername,
 		p.cfg.Secrets.VCenterPasswords[t.Name])
@@ -79,7 +79,7 @@ func (p *PlatformStage) applyVSphereTarget(ctx context.Context, t *config.VSpher
 	settings := p.cfg.VSphereVars(t)
 	delete(settings, kobj.VSphereUserKey)
 	delete(settings, kobj.VSpherePasswordKey)
-	settings["mirror_ca_pem"] = artiCA
+	settings["mirror_ca_pem"] = ca
 	if err := p.applyObject(ctx, kobj.VSphereSettings(t.Name, settings)); err != nil {
 		return fmt.Errorf("configmap %s: %w", name, err)
 	}
@@ -100,11 +100,11 @@ func (p *PlatformStage) applyTarget(ctx context.Context, t config.Placement, bac
 	return nil
 }
 
-// artifactoryCA is the mirror's CA bundle, empty when the system trust store is used.
-func (p *PlatformStage) artifactoryCA() (string, error) {
+// mirrorCA is the mirror's CA bundle, empty when the system trust store is used.
+func (p *PlatformStage) mirrorCA() (string, error) {
 	pem, err := p.ws.ReadCA()
 	if err != nil {
-		return "", fmt.Errorf("reading the Artifactory CA (%s): %w", p.ws.CACert, err)
+		return "", fmt.Errorf("reading the mirror CA (%s): %w", p.ws.CACert, err)
 	}
 	return string(pem), nil
 }
@@ -124,9 +124,9 @@ func (p *PlatformStage) applyPlatformValues(ctx context.Context) error {
 
 func platformValues(c *config.Config, authURL string) map[string]string {
 	return map[string]string{
-		"artifactoryUser":     c.Mirror().Username,
-		"artifactoryPassword": c.Mirror().Password,
-		"artifactoryAuthURL":  authURL,
+		"mirrorUser":     c.Mirror().Username,
+		"mirrorPassword": c.Mirror().Password,
+		"mirrorAuthURL":  authURL,
 	}
 }
 

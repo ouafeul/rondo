@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	EnvTargetRef           = "RONDO_TARGET_REF"
-	EnvTargetKind          = "RONDO_TARGET_KIND"
-	EnvNamespace           = kobj.EnvNamespace
-	EnvArtifactoryUser     = kobj.CredentialsUserKey
-	EnvArtifactoryPassword = kobj.CredentialsPasswordKey
-	EnvCAFile              = "SSL_CERT_FILE"
+	EnvTargetRef      = "RONDO_TARGET_REF"
+	EnvTargetKind     = "RONDO_TARGET_KIND"
+	EnvNamespace      = kobj.EnvNamespace
+	EnvMirrorUser     = kobj.CredentialsUserKey
+	EnvMirrorPassword = kobj.CredentialsPasswordKey
+	EnvCAFile         = "SSL_CERT_FILE"
 )
 
 const workDir = "/work"
@@ -77,13 +77,13 @@ func (rt *Runtime) writeFile(name string, content []byte) (string, error) {
 	return path, nil
 }
 
-// artifactoryCreds are the mirror's credentials, both empty when it is read anonymously.
-func artifactoryCreds() (user, password string, err error) {
-	user = os.Getenv(EnvArtifactoryUser)
-	password = os.Getenv(EnvArtifactoryPassword)
+// mirrorCreds are the mirror's credentials, both empty when it is read anonymously.
+func mirrorCreds() (user, password string, err error) {
+	user = os.Getenv(EnvMirrorUser)
+	password = os.Getenv(EnvMirrorPassword)
 	if (user == "") != (password == "") {
 		return "", "", fmt.Errorf("%s and %s go together (credentials Secret mounted via envFrom): "+
-			"both set, or both empty for an anonymous mirror", EnvArtifactoryUser, EnvArtifactoryPassword)
+			"both set, or both empty for an anonymous mirror", EnvMirrorUser, EnvMirrorPassword)
 	}
 	return user, password, nil
 }
@@ -105,7 +105,7 @@ func dropEmptyCA() {
 const maxArchiveBytes = 256 << 20
 
 func downloadArchive(ctx context.Context, url, dest string) error {
-	user, password, err := artifactoryCreds()
+	user, password, err := mirrorCreds()
 	if err != nil {
 		return err
 	}
@@ -133,10 +133,10 @@ func downloadArchive(ctx context.Context, url, dest string) error {
 
 func archiveHTTPClient() (httpx.Doer, error) {
 	const timeout = 10 * time.Minute
-	return artifactoryHTTPClient(timeout)
+	return mirrorHTTPClient(timeout)
 }
 
-func artifactoryHTTPClient(timeout time.Duration) (httpx.Doer, error) {
+func mirrorHTTPClient(timeout time.Duration) (httpx.Doer, error) {
 	if ca := os.Getenv(EnvCAFile); ca != "" {
 		return httpx.NewCAPinned(ca, timeout)
 	}

@@ -15,9 +15,9 @@
   ansible.builtin.get_url:
     url: "{{ item.url }}"
     dest: "{{ rondo_workdir }}/{{ item.dest | default('') }}/{{ item.url | basename }}"
-    url_username: "{{ rondo_artifactory_user | default(omit, true) }}"
-    url_password: "{{ rondo_artifactory_password | default(omit, true) }}"
-    force_basic_auth: "{{ rondo_artifactory_user | length > 0 }}"
+    url_username: "{{ rondo_mirror_user | default(omit, true) }}"
+    url_password: "{{ rondo_mirror_password | default(omit, true) }}"
+    force_basic_auth: "{{ rondo_mirror_user | length > 0 }}"
     checksum: "{{ item.digest | default(omit) }}"
     owner: root
     group: root

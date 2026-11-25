@@ -233,7 +233,7 @@ spec:
 kind: Component
 metadata: {name: agent}
 spec:
-  chart: {oci: "oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/fluent-bit", version: 0.57.2}
+  chart: {oci: "oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/fluent-bit", version: 0.57.2}
   namespace: logging
   releaseName: fluent-bit
   values: {zone: "${target.values.zone}"}
@@ -315,7 +315,7 @@ func TestComponentsShareTheSandbox(t *testing.T) {
 	clash := t.TempDir()
 	for f, content := range map[string]string{
 		"platform/components/agent2.yaml": "apiVersion: rondo.ouafeul.github.io/v1alpha1\nkind: Component\n" +
-			"metadata: {name: agent2}\nspec:\n  chart: {oci: \"oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/fluent-bit\", " +
+			"metadata: {name: agent2}\nspec:\n  chart: {oci: \"oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/fluent-bit\", " +
 			"version: 0.57.2}\n  namespace: logging\n  releaseName: fluent-bit\n",
 		"platform/enrollments/agent2.yaml": "apiVersion: rondo.ouafeul.github.io/v1alpha1\nkind: Enrollment\n" +
 			"metadata: {name: agent2}\nspec: {component: agent2, target: monitoring}\n",

@@ -228,12 +228,12 @@ metadata:
   name: demo
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/demo
+    oci: oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/demo
     version: 1.0.0
   namespace: demo
   values:
     image:
-      registry: ${REGISTRY_HOST}/${ARTIFACTORY_DOCKER_REPO}
+      registry: ${OCI_REGISTRY}/${IMAGES_REPOSITORY}
 `,
 		"enrollments/demo.yaml": chartEnrollment,
 	}))
@@ -556,7 +556,7 @@ func TestComponentArtifactConventionSurvivesAPlaceholderRepo(t *testing.T) {
 	portable := func(path string) string {
 		return strings.Replace(
 			vmArtifactComponent("demo", "component", path),
-			"repo: rondo-generic-local", "repo: ${ARTIFACTORY_GENERIC_REPO}", 1)
+			"repo: rondo-generic-local", "repo: ${FILES_REPOSITORY}", 1)
 	}
 
 	findings := artifactTree(t, portable("components/another/1.0.0/x.tar.gz")).
@@ -609,10 +609,12 @@ func TestVersionComparisonToleratesVPrefix(t *testing.T) {
 
 func TestChartNameFromOCI(t *testing.T) {
 	cases := map[string]string{
-		"oci://arti.local/rondo-helm-local/metallb":   "metallb",
-		"oci://${REGISTRY_HOST}/${REPO}/cert-manager": "cert-manager",
-		"https://arti.local/x":                        "",
-		"oci://arti.local/":                           "",
+		"oci://arti.local/rondo-helm-local/metallb":  "metallb",
+		"oci://${OCI_REGISTRY}/${REPO}/cert-manager": "cert-manager",
+		"${CHARTS_OCI}/traefik":                      "traefik",
+		"${CHARTS_OCI}/":                             "",
+		"https://arti.local/x":                       "",
+		"oci://arti.local/":                          "",
 	}
 	for in, want := range cases {
 		if got := chartNameFromOCI(in); got != want {

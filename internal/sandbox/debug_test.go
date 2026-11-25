@@ -140,7 +140,7 @@ func TestRestartReloadsImagesAndRunsCronJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"docker exec k3d-rondo-sbx-server-0 crictl rmi artifactory.sandbox.test/acme/web:2.1.0",
+		"docker exec k3d-rondo-sbx-server-0 crictl rmi mirror.sandbox.test/acme/web:2.1.0",
 		"-n web rollout restart deployment/web",
 		"--from=cronjob/web-report",
 	} {

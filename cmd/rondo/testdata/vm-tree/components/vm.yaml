@@ -16,7 +16,7 @@ spec:
       HELLO_MESSAGE:
         value: ${target.values.helloMessage}
     artifacts:
-      - repo: ${ARTIFACTORY_GENERIC_REPO}
+      - repo: ${FILES_REPOSITORY}
         provenance: component
         path: components/vm/1.0.0/payload.tar.gz
         extract: true

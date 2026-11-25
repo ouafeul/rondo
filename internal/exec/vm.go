@@ -27,7 +27,7 @@ import (
 const (
 	EnvVMModuleURL       = "RONDO_VM_MODULE_URL"
 	EnvAnsibleContentURL = "RONDO_ANSIBLE_CONTENT_URL"
-	EnvArtifactoryURL    = "ARTIFACTORY_URL"
+	EnvMirrorFilesURL    = kobj.EnvMirrorFilesURL
 	EnvSSHKeySecret      = "RONDO_VM_SSH_SECRET"
 )
 
@@ -296,7 +296,7 @@ func (rt *Runtime) vmBackendEnv(rv *releaseVM, env map[string]string) error {
 		return fmt.Errorf("no state configured (%s): an apply whose state is lost "+
 			"leaves machines nothing knows about anymore", EnvStateBaseURL)
 	}
-	user, password, err := artifactoryCreds()
+	user, password, err := mirrorCreds()
 	if err != nil {
 		return err
 	}
@@ -470,19 +470,19 @@ type AnsibleConfigValue struct {
 }
 
 type AnsibleVars struct {
-	Component           string `json:"rondo_component"`
-	ArtifactoryURL      string `json:"rondo_artifactory_url"`
-	ArtifactoryUser     string `json:"rondo_artifactory_user"`
-	ArtifactoryPassword string `json:"rondo_artifactory_password"`
-	// ArtifactoryCAPath, set to empty, says the machines trust the mirror through their system
+	Component      string `json:"rondo_component"`
+	MirrorFilesURL string `json:"rondo_mirror_files_url"`
+	MirrorUser     string `json:"rondo_mirror_user"`
+	MirrorPassword string `json:"rondo_mirror_password"`
+	// MirrorCAPath, set to empty, says the machines trust the mirror through their system
 	// store; nil keeps the role's default, the CA cloud-init installed.
-	ArtifactoryCAPath *string                       `json:"rondo_artifactory_ca_path,omitempty"`
-	RPMRepos          []AnsibleRPMRepo              `json:"rondo_rpm_repos"`
-	Artifacts         []AnsibleArtifact             `json:"rondo_artifacts"`
-	Config            map[string]AnsibleConfigValue `json:"rondo_config"`
-	Installer         map[string]any                `json:"rondo_installer"`
-	Secrets           map[string]string             `json:"rondo_secrets"`
-	RunInstaller      bool                          `json:"rondo_run_installer"`
+	MirrorCAPath *string                       `json:"rondo_mirror_ca_path,omitempty"`
+	RPMRepos     []AnsibleRPMRepo              `json:"rondo_rpm_repos"`
+	Artifacts    []AnsibleArtifact             `json:"rondo_artifacts"`
+	Config       map[string]AnsibleConfigValue `json:"rondo_config"`
+	Installer    map[string]any                `json:"rondo_installer"`
+	Secrets      map[string]string             `json:"rondo_secrets"`
+	RunInstaller bool                          `json:"rondo_run_installer"`
 }
 
 type AnsibleRPMRepo struct {
@@ -510,25 +510,25 @@ const (
 )
 
 func BuildAnsibleVars(comp *v1alpha1.Component, target *v1alpha1.Target,
-	artifactoryURL, user, password string, secrets map[string]string,
+	filesURL, user, password string, secrets map[string]string,
 	budget time.Duration) (*AnsibleVars, error) {
 	vm := comp.Spec.VM
 	if vm == nil {
 		return nil, fmt.Errorf("Component %s has no spec.vm", comp.Name)
 	}
-	base := strings.TrimRight(artifactoryURL, "/")
+	base := strings.TrimRight(filesURL, "/")
 
 	out := &AnsibleVars{
-		Component:           comp.Name,
-		ArtifactoryURL:      base,
-		ArtifactoryUser:     user,
-		ArtifactoryPassword: password,
-		RPMRepos:            make([]AnsibleRPMRepo, 0, len(vm.RPMRepos)),
-		Artifacts:           make([]AnsibleArtifact, 0, len(vm.Artifacts)),
-		Config:              map[string]AnsibleConfigValue{},
-		Installer:           map[string]any{},
-		Secrets:             secrets,
-		RunInstaller:        vm.Installer != nil,
+		Component:      comp.Name,
+		MirrorFilesURL: base,
+		MirrorUser:     user,
+		MirrorPassword: password,
+		RPMRepos:       make([]AnsibleRPMRepo, 0, len(vm.RPMRepos)),
+		Artifacts:      make([]AnsibleArtifact, 0, len(vm.Artifacts)),
+		Config:         map[string]AnsibleConfigValue{},
+		Installer:      map[string]any{},
+		Secrets:        secrets,
+		RunInstaller:   vm.Installer != nil,
 	}
 
 	for _, r := range vm.RPMRepos {

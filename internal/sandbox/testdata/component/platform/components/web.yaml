@@ -4,7 +4,7 @@ metadata:
   name: web
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/web
+    oci: ${CHARTS_OCI}/web
     published: true
     version: 1.0.0
   namespace: web

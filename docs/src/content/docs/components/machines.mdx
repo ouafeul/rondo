@@ -103,7 +103,7 @@ The VMs are created in `<vmFolder>/<env>/<component>`, with RONDO's SSH key (Sec
 RONDO's playbook (`rondo-ansible`) runs, on each machine, in `/opt/rondo/<component>`:
 
 1. the `rpmRepos` RPM repositories (`/etc/yum.repos.d/<name>.repo`, GPG checked by default);
-2. the `artifacts`, downloaded from Artifactory, checked if `digest`, extracted if `extract`;
+2. the `artifacts`, downloaded from the mirror, checked if `digest`, extracted if `extract`;
 3. the `configFile` file, rendered from `config` (then `groups[].config`, which overrides it) in the `configFormat` format;
 4. the `secretsFile` file, rendered from `secretsFrom`;
 5. the `phases` in order, with `sudo` (`become`, default `true`); a failed phase stops the rest;

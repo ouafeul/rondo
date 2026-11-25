@@ -1,4 +1,4 @@
-# Archetype A, upstream chart: podinfo, which the site mirrors to its Artifactory from
+# Archetype A, upstream chart: podinfo, which the site mirrors to its artifact mirror from
 # manifests/dependencies.yaml, along with its images.
 apiVersion: rondo.ouafeul.github.io/v1alpha1
 kind: Component
@@ -6,7 +6,7 @@ metadata:
   name: __NAME__-podinfo
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/podinfo
+    oci: ${CHARTS_OCI}/podinfo
     version: 6.17.0                     # the one in manifests/dependencies.yaml
   namespace: __NAME__
   dependsOn:

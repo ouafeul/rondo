@@ -173,20 +173,20 @@ func loadConfig() (*config, error) {
 		ttl = d
 	}
 	c.jobs = jobs.Config{
-		Namespace:              c.namespace,
-		Image:                  image,
-		ServiceAccount:         getenv(kobj.EnvExecSA, kobj.ExecServiceAccount),
-		ArtifactoryCAConfigMap: getenv(kobj.EnvCACM, kobj.ArtifactoryCACM),
-		ArtifactoryCredsSecret: getenv(kobj.EnvCredsSecret, kobj.CredentialsSecret),
-		TTL:                    ttl,
-		TofuStateBaseURL:       os.Getenv(kobj.EnvTofuStateURL),
-		TofuStateS3:            os.Getenv(kobj.EnvTofuStateS3),
-		TofuRCSecret:           os.Getenv(kobj.EnvTofuRCSecret),
-		AllowLocalTofuState:    os.Getenv(envAllowLocalState) == "1",
-		VMModuleURL:            os.Getenv(kobj.EnvVMModuleURL),
-		AnsibleContentURL:      os.Getenv(kobj.EnvAnsibleContentURL),
-		VMSSHSecret:            getenv(kobj.EnvVMSSHSecret, kobj.VMSSHSecret),
-		ArtifactoryURL:         os.Getenv(kobj.EnvArtifactoryURL),
+		Namespace:           c.namespace,
+		Image:               image,
+		ServiceAccount:      getenv(kobj.EnvExecSA, kobj.ExecServiceAccount),
+		MirrorCAConfigMap:   getenv(kobj.EnvCACM, kobj.MirrorCACM),
+		MirrorCredsSecret:   getenv(kobj.EnvCredsSecret, kobj.CredentialsSecret),
+		TTL:                 ttl,
+		TofuStateBaseURL:    os.Getenv(kobj.EnvTofuStateURL),
+		TofuStateS3:         os.Getenv(kobj.EnvTofuStateS3),
+		TofuRCSecret:        os.Getenv(kobj.EnvTofuRCSecret),
+		AllowLocalTofuState: os.Getenv(envAllowLocalState) == "1",
+		VMModuleURL:         os.Getenv(kobj.EnvVMModuleURL),
+		AnsibleContentURL:   os.Getenv(kobj.EnvAnsibleContentURL),
+		VMSSHSecret:         getenv(kobj.EnvVMSSHSecret, kobj.VMSSHSecret),
+		MirrorFilesURL:      os.Getenv(kobj.EnvMirrorFilesURL),
 	}
 	return c, nil
 }

@@ -4,8 +4,8 @@ pki:
   caCommonName: "RONDO Downstream Internal CA"
   caDuration: "87600h"
 
-artifactoryCA:
+mirrorCA:
   pem: ""
-  secretName: artifactory-ca
+  secretName: mirror-ca
   namespaces:
     - monitoring

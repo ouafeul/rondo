@@ -23,9 +23,9 @@ In this order (as in `tasks/main.yml`), each step idempotent:
    fail on a lock still held by the running cloud-init. A missing marker **warns** without blocking;
 2. **creates the component's working directory** (`/opt/rondo/<component>`), one per component: two
    components on the same machine must not step on each other, and a recovery `rm -rf` must be safe;
-3. **configures the RPM repositories** (`spec.vm.rpmRepos`) as `.repo` files pointing at Artifactory,
+3. **configures the RPM repositories** (`spec.vm.rpmRepos`) as `.repo` files pointing at the mirror,
    with the CA and the credentials;
-4. **downloads the artifacts** (`spec.vm.artifacts`) from Artifactory, with checksum verification, and
+4. **downloads the artifacts** (`spec.vm.artifacts`) from the mirror, with checksum verification, and
    extracts them when asked;
 5. **renders the configuration file** (`spec.vm.config` + the group's) in shell format, telling apart
    scalars, booleans and **arrays**;
@@ -49,9 +49,9 @@ two mechanisms, the same packages, and guaranteed drift at the first version bum
 packages: adding an entry there brings the package in through the rondo mirror. The base platform pins
 its packages elsewhere (`base_images`).
 
-What this means for the role: nothing more than a baseurl. `spec.vm.rpmRepos` describes an Artifactory
-repository, whether it is fed by the mirror or by the component's CI. The role never builds a `file://`
-repository extracted from a bundle: that would be a second way into the air gap.
+What this means for the role: nothing more than a baseurl. `spec.vm.rpmRepos` describes a
+repository of the artifact mirror, whether the rondo mirror or the component's CI feeds it. The role
+never builds a `file://` repository extracted from a bundle: that would be a second way into the air gap.
 
 ## The per-phase time bound, and what it guarantees
 
@@ -87,8 +87,8 @@ that we would rewrite badly. And it requires **nothing** on the target machine b
 installed by cloud-init.
 
 `site.yml` plays the role on the `rondo_machines` group, with `serial: 4` by default: enough for a
-multi-VM component, few enough that the `kubectl logs` output stays readable and the Artifactory
-repository is not hammered by N simultaneous downloads.
+multi-VM component, few enough that the `kubectl logs` output stays readable and the artifact
+mirror is not hammered by N simultaneous downloads.
 
 > Note for components whose instructions say "no Ansible control node": that constraint comes from a
 > Windows jump host, not from the target. Here the control node is an ephemeral pod of the management

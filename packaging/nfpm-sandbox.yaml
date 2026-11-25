@@ -13,8 +13,8 @@ description: |
   Runs on the workstation what the rondo CLI runs on a site (deploy, deploy downstreams,
   component install), for charts as for machines (containers), and tells whether
   RONDO judges the component deployed. Ships the RONDO tree of its version; its images come
-  from Artifactory.
-  Prerequisites not packaged: Docker (with `docker login` to Artifactory), k3d, kubectl, helm.
+  from the registry RONDO publishes them to.
+  Prerequisites not packaged: Docker (with `docker login` to that registry), k3d, kubectl, helm.
 
 depends:
   - bash

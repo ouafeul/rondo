@@ -23,7 +23,7 @@
     mode: "0750"
   become: true
 
-- name: "Artifactory RPM repositories"
+- name: "Mirror RPM repositories"
   ansible.builtin.include_tasks: rpm_repos.yml
   when: rondo_rpm_repos | length > 0
 

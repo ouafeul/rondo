@@ -34,7 +34,7 @@ func cmdComponent() *cobra.Command {
 		Use:   "install <name>",
 		Short: "Applies the Components and Enrollments a component publishes",
 		Long: "Downloads the tree a component publishes\n" +
-			"  <artifactory>/<generic>/<name>/platform/platform-<version>.tar.gz\n" +
+			"  <files url>/<files repository>/<name>/platform/platform-<version>.tar.gz\n" +
 			"checks its `.sha256` checksum, then applies its Components and Enrollments.\n\n" +
 			"Without --version, the version is the one of the channel pointer `latest.json`.\n" +
 			"--from installs from an already extracted local directory, without network.\n\n" +

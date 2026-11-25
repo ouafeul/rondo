@@ -10,8 +10,8 @@ clusters:
 - **cert-manager PKI** (selfSigned `ClusterIssuer` -> CA `Certificate` `cluster-ca` -> `ClusterIssuer`
   `cluster-ca-issuer`), mirroring the management cluster, **without** the `rancher-tls` cert
   (management-only).
-- **Artifactory CA** as a Secret in the namespaces listed in `artifactoryCA.namespaces`, when
-  `artifactoryCA.pem` is set.
+- **Mirror CA** as a Secret in the namespaces listed in `mirrorCA.namespaces`, when
+  `mirrorCA.pem` is set.
 
 ## Context
 
@@ -23,4 +23,4 @@ declares `dependsOn` on `metallb` and `cert-manager`, and its `Enrollment` sets
 `skipDryRunOnMissingCRD: true` to tolerate a CRD that is not established yet.
 
 > No `dependencies:` subcharts here (CI's `helm dependency update` does not substitute
-> `${REGISTRY_HOST}`). The engines are separate Components, not subcharts.
+> `${OCI_REGISTRY}`). The engines are separate Components, not subcharts.

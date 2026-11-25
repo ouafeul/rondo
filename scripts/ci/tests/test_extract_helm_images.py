@@ -49,7 +49,7 @@ metadata:
   name: probe
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/probe-chart
+    oci: oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/probe-chart
     version: 1.0.0
   namespace: probe
   values:
@@ -57,7 +57,7 @@ spec:
       enabled: true
       storageClassName: ${target.values.storageClass}
     image:
-      repository: ${REGISTRY_HOST}/${ARTIFACTORY_DOCKER_REPO}/probe/app
+      repository: ${OCI_REGISTRY}/${IMAGES_REPOSITORY}/probe/app
 """
 
 
@@ -124,7 +124,7 @@ def test_ip_valued_placeholder_gets_an_ip_probe(extract_helm_images):
 
 def test_unknown_placeholder_is_fatal(extract_helm_images, tmp_path):
     root = _tree(tmp_path, component=_COMPONENT.replace(
-        "${target.values.storageClass}", "${ARTIFACTORY_URLL}/typo"))
+        "${target.values.storageClass}", "${FILES_URLL}/typo"))
     with pytest.raises(extract_helm_images.PlatformError, match="unknown placeholder"):
         extract_helm_images.parse_platform_values(str(root / "platform"))
 
@@ -221,7 +221,7 @@ def test_component_own_image_stays_out_of_the_inventory(
     stub_bin("helm", _HELM_STUB)
     monkeypatch.setattr(extract_helm_images, "OWN_IMAGE_PATHS", frozenset())
     root = _tree(tmp_path, component=_COMPONENT.replace(
-        "${REGISTRY_HOST}/${ARTIFACTORY_DOCKER_REPO}/probe/app",
+        "${OCI_REGISTRY}/${IMAGES_REPOSITORY}/probe/app",
         "${target.values.imageRegistry}/probe/app",
     ))
     monkeypatch.chdir(root)
@@ -363,7 +363,7 @@ def test_first_party_chart_is_rendered_from_apps(
 
 
 _COMPONENT_PER_TARGET_REGISTRY = _COMPONENT.replace(
-    "${REGISTRY_HOST}/${ARTIFACTORY_DOCKER_REPO}/probe/app",
+    "${OCI_REGISTRY}/${IMAGES_REPOSITORY}/probe/app",
     "${target.values.imageRegistry}/probe/app",
 )
 

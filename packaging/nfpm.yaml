@@ -9,7 +9,7 @@ homepage: "https://github.com/ouafeul/rondo"
 license: "MIT"
 description: |
   RONDO platform orchestrator (k3s management + RKE2 downstream).
-  Fetches its tools and IaC bundle from Artifactory at run time.
+  Fetches its tools and IaC bundle from the artifact mirror at run time.
 
 depends:
   - openssh-clients
