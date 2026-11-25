@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Component contract uses neutral names: site tokens `${OCI_REGISTRY}`, `${IMAGES_REPOSITORY}`, `${CHARTS_REPOSITORY}`, `${CHARTS_OCI}` (a chart is `${CHARTS_OCI}/<chart>`), `${FILES_URL}`, `${FILES_REPOSITORY}`, `${RPM_REPOSITORY}`; Target value `mirrorCA`; `rondo-platform-values` keys `mirrorUser`, `mirrorPassword`, `mirrorAuthURL`; ConfigMap `mirror-ca`; Job environment `MIRROR_USER`, `MIRROR_PASSWORD`, `MIRROR_FILES_URL`; Ansible variables `rondo_mirror_*`.
 
 ### Security
-- Images and tools on current patch releases: Go 1.26.11, Helm 3.22.1, kubectl 1.34.13, OpenTofu 1.11.14, Rocky Linux 9.9 for the sandbox machine, OS packages upgraded at build.
+- Platform on supported releases: Rancher 2.15.3 on k3s 1.36.6, rke2 1.36.5 clusters, cert-manager 1.21.3, MetalLB 0.16.2 (layer 2, no FRR images), Traefik 3.7.20 (chart 42.4.3), local-path-provisioner 0.0.37; tools OpenTofu 1.13.10, kubectl 1.36.6, Helm 3.22.1, helmfile 1.8.5 (`helmfile.yaml.gotmpl`), helm-diff 3.15.15, k9s 0.51.0, yq 4.54.3, ansible-core 2.22.0; providers rancher2 15.3.0, vsphere 2.18.0, cloudinit 2.4.1; images on Go 1.27.4, Debian 13, distroless Debian 13, Python 3.14 and Rocky Linux 9.9, OS packages upgraded at build. HIGH and CRITICAL findings drop across the mirrored images and binaries.
 - The local-path-provisioner chart runs non-root with a read-only root filesystem, no privilege escalation, all capabilities dropped and the RuntimeDefault seccomp profile.
 - Workstation tools are verified against the sha256 pinned in `manifests/dependencies.yaml` and the `<file>.sha256` served by the mirror; a mismatch is refused.
 
