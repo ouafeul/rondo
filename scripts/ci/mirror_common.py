@@ -41,6 +41,9 @@ def add_target_args(parser: argparse.ArgumentParser, *, oci: bool = False, files
     if oci:
         group.add_argument("--oci-registry", default=os.environ.get("MIRROR_REGISTRY", ""),
                            help="OCI registry, host[/prefix] (env MIRROR_REGISTRY)")
+        group.add_argument("--charts-oci", default=os.environ.get("MIRROR_CHARTS_OCI", ""),
+                           help="where Helm charts go, host/path (default: <oci-registry>/charts; "
+                                "env MIRROR_CHARTS_OCI), e.g. a separate Helm repository")
     if files:
         group.add_argument("--files-url", default=os.environ.get("MIRROR_FILES_URL", ""),
                            help="HTTP file server base URL, s3://bucket/prefix (boto3 needed) "
@@ -78,6 +81,13 @@ def join_url(base: str, *parts: str) -> str:
 
 def registry_host(registry: str) -> str:
     return re.sub(r"^https?://", "", registry).split("/", 1)[0]
+
+
+def charts_ref(oci_registry: str, charts_oci: str = "") -> str:
+    """host/path the Helm charts are pushed to: --charts-oci, else <oci-registry>/charts."""
+    if charts_oci:
+        return re.sub(r"^(oci|https?)://", "", charts_oci).rstrip("/")
+    return registry_ref(oci_registry, "charts")
 
 
 def registry_ref(registry: str, path: str) -> str:

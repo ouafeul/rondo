@@ -192,3 +192,10 @@ def test_without_createrepo_c_the_packages_still_go_and_the_script_warns(release
     assert "createrepo_c is not installed" in result.stderr
     assert (rpm_site / "rondo" / "v1.2.3" / "rondo-1.2.3.x86_64.rpm").exists()
     assert not (rpm_site / "rondo" / "v1.2.3" / "repodata").exists()
+
+
+def test_dry_run_sends_charts_to_charts_oci(release):
+    lines = plan(release.run("--dry-run", "--charts-oci", "oci://reg.site/helm-repo/"))
+    assert ("chart: oci://ghcr.io/ouafeul/charts/dashboard 0.2.0 -> "
+            "oci://reg.site/helm-repo/dashboard") in lines
+    assert any(line.startswith("image: ") and "-> reg.site/rondo/" in line for line in lines)

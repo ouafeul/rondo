@@ -119,3 +119,9 @@ def test_target_flags_default_to_the_environment(mirror_common, monkeypatch):
     assert args.provider_mirror == ""
     args = parser.parse_args(["--oci-registry", "other/x"])
     assert args.oci_registry == "other/x"
+
+
+def test_charts_ref_defaults_under_the_registry_and_follows_charts_oci(mirror_common):
+    assert mirror_common.charts_ref("reg.site/rondo") == "reg.site/rondo/charts"
+    assert mirror_common.charts_ref("https://reg.site", "") == "reg.site/charts"
+    assert mirror_common.charts_ref("reg.site/rondo", "oci://reg.site/helm-local/") == "reg.site/helm-local"

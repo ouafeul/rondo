@@ -107,7 +107,7 @@ def test_chart_upload_pushes_under_the_registry_prefix(download_deps, stub_bin, 
     chart_dir.mkdir(parents=True)
     (chart_dir / "metallb-0.14.9.tgz").write_bytes(b"chart")
     dep = {"name": "metallb", "version": "0.14.9", "kind": "chart", "path": "metallb"}
-    state = download_deps.upload_helm_chart(dep, str(tmp_path / "local"), "reg.site/mirror", False)
+    state = download_deps.upload_helm_chart(dep, str(tmp_path / "local"), "reg.site/mirror/charts", False)
     assert state == "ok"
     lines = log.read_text().splitlines()
     assert lines[0].startswith("show chart oci://reg.site/mirror/charts/metallb --version 0.14.9")

@@ -27,7 +27,6 @@ import mirror_common as mc
 import requests
 
 DEFAULT_PROVIDER_HOST = "registry.opentofu.org"
-CHARTS_PATH = "charts"
 PLATFORM = re.compile(r"_([a-z0-9]+_[a-z0-9]+)\.zip$")
 
 
@@ -101,14 +100,14 @@ def download_helm_chart_local(dep: dict, local_dir: str) -> bool:
             subprocess.run(["helm", "repo", "remove", repo_alias], capture_output=True)
 
 
-def chart_in_registry(registry: str, name: str, version: str) -> bool:
-    ref = f"oci://{mc.registry_ref(registry, CHARTS_PATH)}/{name}"
+def chart_in_registry(charts: str, name: str, version: str) -> bool:
+    ref = f"oci://{charts}/{name}"
     result = subprocess.run(["helm", "show", "chart", ref, "--version", version,
                              *mc.helm_tls_args()], capture_output=True, text=True)
     return result.returncode == 0
 
 
-def upload_helm_chart(dep: dict, local_dir: str, registry: str, force: bool) -> str:
+def upload_helm_chart(dep: dict, local_dir: str, charts: str, force: bool) -> str:
     """'ok', 'skip' or 'error'."""
     name, version = dep["name"], dep["version"]
     chart_dir = os.path.join(local_dir, "helm_charts")
@@ -121,11 +120,11 @@ def upload_helm_chart(dep: dict, local_dir: str, registry: str, force: bool) -> 
             return "error"
         chart_file = tgz_files[0]
 
-    if not force and chart_in_registry(registry, name, version):
+    if not force and chart_in_registry(charts, name, version):
         print(f"  SKIP: {name} {version} already in the registry")
         return "skip"
 
-    oci_target = f"oci://{mc.registry_ref(registry, CHARTS_PATH)}"
+    oci_target = f"oci://{charts}"
     try:
         print(f"  Push OCI: {os.path.basename(chart_file)} -> {oci_target}")
         subprocess.run(["helm", "push", chart_file, oci_target, *mc.helm_tls_args()],
@@ -241,8 +240,9 @@ def main():
 
     uploading = not args.download_only
     if uploading:
-        if args.type == "helm_charts" and not args.oci_registry:
-            mc.die("--oci-registry (MIRROR_REGISTRY) is required to upload charts")
+        if args.type == "helm_charts" and not (args.oci_registry or args.charts_oci):
+            mc.die("--oci-registry (MIRROR_REGISTRY) or --charts-oci (MIRROR_CHARTS_OCI) is "
+                   "required to upload charts")
         if args.type == "tofu_providers" and not (args.provider_mirror or args.files_url):
             mc.die("--provider-mirror (MIRROR_PROVIDER_URL) or --files-url is required to "
                    "upload providers")
@@ -260,7 +260,7 @@ def main():
 
     files_store = provider_store = None
     if uploading and args.type == "helm_charts":
-        mc.helm_login(args.oci_registry)
+        mc.helm_login(mc.charts_ref(args.oci_registry, args.charts_oci))
     elif uploading and args.type == "tofu_providers":
         provider_store = (mc.store_for(args.provider_mirror) if args.provider_mirror
                           else mc.sub_store(args.files_url, "providers"))
@@ -290,7 +290,8 @@ def main():
         if args.type == "tofu_providers":
             continue  # uploaded as one tree below
         if args.type == "helm_charts":
-            state = upload_helm_chart(dep, local_dir, args.oci_registry, args.force)
+            state = upload_helm_chart(dep, local_dir, mc.charts_ref(args.oci_registry, args.charts_oci),
+                                      args.force)
         else:
             state = upload_one(files_store, dep["path"],
                                get_local_path(local_dir, args.type, dep), args.force)

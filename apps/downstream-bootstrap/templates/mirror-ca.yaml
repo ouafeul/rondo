@@ -1,4 +1,8 @@
-{{- if .Values.mirrorCA.pem }}
+{{- /*
+The mirror CA, in every namespace that asks for it. The Secret always exists so that
+components can mount it unconditionally; ca.crt is empty when the mirror's certificate is
+publicly trusted (artifacts.caCertificateFile unset): test it is non-empty before using it.
+*/}}
 {{- range .Values.mirrorCA.namespaces }}
 ---
 apiVersion: v1
@@ -12,8 +16,6 @@ metadata:
   name: {{ $.Values.mirrorCA.secretName }}
   namespace: {{ . }}
 type: Opaque
-stringData:
-  ca.crt: |
-{{ $.Values.mirrorCA.pem | indent 4 }}
-{{- end }}
+data:
+  ca.crt: {{ $.Values.mirrorCA.pem | default "" | b64enc | quote }}
 {{- end }}
