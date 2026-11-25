@@ -3,6 +3,8 @@ ingressBaseDomain: cluster.example.local
 
 artifacts:
   preset: generic
+  # username (with secrets.mirrorPassword) and caCertificateFile are optional: without them the
+  # mirror is read anonymously, and trusted through the system trust store.
   username: svc-rondo
   caCertificateFile: ./certs/mirror-ca.pem
   releaseChannel: stable
@@ -17,8 +19,13 @@ artifacts:
     url: https://files.example.local
     repository: ""
   tofu:
+    # One provider source: a network mirror (`tofu providers mirror` served over HTTPS), or an
+    # OCI mirror, providerOCI: registry.example.local/opentofu-providers.
     providerMirror: https://files.example.local/tofu-providers/
-    stateURL: https://files.example.local/tofu-state
+    # One state backend: http, or s3: {bucket, endpoint, region, keyPrefix, usePathStyle}.
+    state:
+      http:
+        url: https://files.example.local/tofu-state
   # A JFrog Artifactory derives every endpoint from its URL, in place of oci, files, rpm and tofu:
   # preset: artifactory
   # artifactory:

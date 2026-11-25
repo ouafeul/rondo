@@ -28,14 +28,17 @@ const (
 const (
 	CredentialsUserKey     = "ARTIFACTORY_USER"
 	CredentialsPasswordKey = "ARTIFACTORY_PASSWORD"
-	ArtifactoryCAKey       = "ca.pem"
-	TofurcKey              = ".tofurc"
-	TofurcTokenKey         = "token"
-	KubeconfigKey          = "kubeconfig"
-	VMSSHPrivateKey        = "ssh-privatekey"
-	VMSSHPublicKey         = "ssh-publickey"
-	VSphereUserKey         = "vsphere_user"
-	VSpherePasswordKey     = "vsphere_password"
+	// The keys of the s3 state backend in the credentials Secret, named as OpenTofu reads them.
+	StateAccessKeyEnv  = "AWS_ACCESS_KEY_ID"
+	StateSecretKeyEnv  = "AWS_SECRET_ACCESS_KEY"
+	ArtifactoryCAKey   = "ca.pem"
+	TofurcKey          = ".tofurc"
+	TofurcTokenKey     = "token"
+	KubeconfigKey      = "kubeconfig"
+	VMSSHPrivateKey    = "ssh-privatekey"
+	VMSSHPublicKey     = "ssh-publickey"
+	VSphereUserKey     = "vsphere_user"
+	VSpherePasswordKey = "vsphere_password"
 )
 
 // Environment of rondo-controller: its Deployment sets it, main reads it.
@@ -47,6 +50,7 @@ const (
 	EnvCACM              = "RONDO_ARTIFACTORY_CA_CONFIGMAP"
 	EnvCredsSecret       = "RONDO_ARTIFACTORY_CREDS_SECRET"
 	EnvTofuStateURL      = "RONDO_TOFU_STATE_URL"
+	EnvTofuStateS3       = "RONDO_TOFU_STATE_S3"
 	EnvTofuRCSecret      = "RONDO_TOFU_RC_SECRET"
 	EnvVMModuleURL       = "RONDO_VM_MODULE_URL"
 	EnvAnsibleContentURL = "RONDO_ANSIBLE_CONTENT_URL"

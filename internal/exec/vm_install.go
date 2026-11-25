@@ -16,6 +16,16 @@ import (
 	"rondo/internal/runner"
 )
 
+// machineCAPath is the CA the machines' dnf repositories trust: the role's default, the CA
+// cloud-init installed, when the Job has one; none (the system trust store) otherwise, as the
+// machines got the CA the Job got.
+func machineCAPath() *string {
+	if os.Getenv(EnvCAFile) != "" {
+		return nil
+	}
+	return new(string)
+}
+
 func VMInstall(ctx context.Context, rt *Runtime) error {
 	rv, err := rt.loadVM(ctx)
 	if err != nil {
@@ -56,6 +66,7 @@ func VMInstall(ctx context.Context, rt *Runtime) error {
 	if err != nil {
 		return err
 	}
+	vars.ArtifactoryCAPath = machineCAPath()
 
 	env := rt.ansibleRunEnv(keyPath)
 	if u := rv.target.Spec.Values[v1alpha1.ValueSSHUser]; u != "" {

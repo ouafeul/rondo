@@ -7,9 +7,9 @@
     enabled: true
     gpgcheck: "{{ item.gpgcheck | default(true) | bool }}"
     gpgkey: "{{ item.gpgkey | default(omit) }}"
-    username: "{{ rondo_artifactory_user }}"
-    password: "{{ rondo_artifactory_password }}"
-    sslcacert: "{{ rondo_artifactory_ca_path }}"
+    username: "{{ rondo_artifactory_user | default(omit, true) }}"
+    password: "{{ rondo_artifactory_password | default(omit, true) }}"
+    sslcacert: "{{ rondo_artifactory_ca_path | default(omit, true) }}"
     module_hotfixes: "{{ item.module_hotfixes | default(false) | bool }}"
     priority: "{{ item.priority | default(omit) }}"
     file: "{{ item.name }}"

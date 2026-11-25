@@ -30,4 +30,10 @@ func (w Workspace) RancherCA() string {
 
 func (w Workspace) TofuRC() string { return filepath.Join(w.StateDir, ".tofurc") }
 
-func (w Workspace) ReadCA() ([]byte, error) { return os.ReadFile(w.CACert) }
+// ReadCA is the mirror's CA bundle, empty when the mirror is trusted through the system store.
+func (w Workspace) ReadCA() ([]byte, error) {
+	if w.CACert == "" {
+		return nil, nil
+	}
+	return os.ReadFile(w.CACert)
+}

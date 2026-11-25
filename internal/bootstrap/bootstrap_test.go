@@ -48,4 +48,27 @@ func TestPlatformInstallForTakesImagesAndDashboard(t *testing.T) {
 	if inst.DashboardHostname == "" {
 		t.Error("empty DashboardHostname for a set IngressBaseDomain")
 	}
+	if inst.TofuStateS3 != "" {
+		t.Errorf("TofuStateS3 = %q with an http state", inst.TofuStateS3)
+	}
+}
+
+func TestPlatformInstallForAnS3State(t *testing.T) {
+	c := &config.Config{
+		EnvironmentName: "prod",
+		Artifacts: config.Artifacts{
+			OCI:   config.OCIEndpoint{Registry: "registry.example.local"},
+			Files: config.FilesEndpoint{URL: "https://files.example.local"},
+			Tofu: config.TofuEndpoints{State: config.TofuState{S3: &config.S3State{
+				Bucket: "states", Endpoint: "https://s3.example.local"}}},
+		},
+	}
+	inst := PlatformInstallFor(c, "v1.2.3")
+	if inst.TofuStateBaseURL != "" {
+		t.Errorf("http state base %q with an s3 state", inst.TofuStateBaseURL)
+	}
+	want := `{"bucket":"states","endpoint":"https://s3.example.local","region":"us-east-1","keyPrefix":"prod"}`
+	if inst.TofuStateS3 != want {
+		t.Errorf("TofuStateS3 = %s, want %s", inst.TofuStateS3, want)
+	}
 }

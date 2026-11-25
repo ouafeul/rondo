@@ -257,11 +257,15 @@ func TestRefFromEnvValidates(t *testing.T) {
 	}
 }
 
-func TestArtifactoryCredsRequired(t *testing.T) {
+func TestArtifactoryCredsBothOrNeither(t *testing.T) {
 	t.Setenv(EnvArtifactoryUser, "")
 	t.Setenv(EnvArtifactoryPassword, "")
+	if u, p, err := artifactoryCreds(); err != nil || u != "" || p != "" {
+		t.Errorf("anonymous mirror: artifactoryCreds = (%q, %q, %v)", u, p, err)
+	}
+	t.Setenv(EnvArtifactoryUser, "svc")
 	if _, _, err := artifactoryCreds(); err == nil {
-		t.Fatal("missing credentials accepted")
+		t.Fatal("a username without a password accepted")
 	} else if !strings.Contains(err.Error(), "envFrom") {
 		t.Errorf("message = %q, want it to say where the credentials come from", err)
 	}

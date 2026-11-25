@@ -81,23 +81,26 @@ func (c *Config) VSphereVars(v *VSphereTarget) map[string]string {
 // RKE2Vars are the variables of terraform/rke2 for one downstream, Rancher access aside.
 func (c *Config) RKE2Vars(d *DownstreamTarget) map[string]string {
 	r := &d.RKE2
+	mr := c.Mirror()
 	vars := c.VSphereVars(c.VSphereNamed(r.VSphereTarget))
 	for k, v := range map[string]string{
-		"rke2_cluster_name":     d.Name,
-		"rke2_k8s_version":      r.RKE2Version,
-		"rke2_cni":              r.CNIPlugin,
-		"rke2_master_ips":       jsonOf(r.ControlPlaneNodeIPs),
-		"rke2_master_cpu":       strconv.Itoa(r.ControlPlaneNodeSize.CPUCores),
-		"rke2_master_memory_mb": strconv.Itoa(r.ControlPlaneNodeSize.MemoryMB),
-		"rke2_master_disk_gb":   strconv.Itoa(r.ControlPlaneNodeSize.DiskGB),
-		"rke2_worker_ips":       jsonOf(append([]string{}, r.WorkerNodeIPs...)),
-		"rke2_worker_cpu":       strconv.Itoa(r.WorkerNodeSize.CPUCores),
-		"rke2_worker_memory_mb": strconv.Itoa(r.WorkerNodeSize.MemoryMB),
-		"rke2_worker_disk_gb":   strconv.Itoa(r.WorkerNodeSize.DiskGB),
-		"rke2_registry_host":    c.RegistryHostFor(r),
-		"rke2_registry_ip":      r.RegistryIP,
-		"rancher_api_url":       "https://" + c.RancherHostname(),
-		"rancher_ingress_ip":    c.Targets.Management.IngressLoadBalancerIP,
+		"rke2_cluster_name":       d.Name,
+		"rke2_k8s_version":        r.RKE2Version,
+		"rke2_cni":                r.CNIPlugin,
+		"rke2_master_ips":         jsonOf(r.ControlPlaneNodeIPs),
+		"rke2_master_cpu":         strconv.Itoa(r.ControlPlaneNodeSize.CPUCores),
+		"rke2_master_memory_mb":   strconv.Itoa(r.ControlPlaneNodeSize.MemoryMB),
+		"rke2_master_disk_gb":     strconv.Itoa(r.ControlPlaneNodeSize.DiskGB),
+		"rke2_worker_ips":         jsonOf(append([]string{}, r.WorkerNodeIPs...)),
+		"rke2_worker_cpu":         strconv.Itoa(r.WorkerNodeSize.CPUCores),
+		"rke2_worker_memory_mb":   strconv.Itoa(r.WorkerNodeSize.MemoryMB),
+		"rke2_worker_disk_gb":     strconv.Itoa(r.WorkerNodeSize.DiskGB),
+		"rke2_registry_host":      c.RegistryHostFor(r),
+		"rke2_registry_ip":        r.RegistryIP,
+		"rke2_registry_auth":      strconv.FormatBool(!mr.Anonymous()),
+		"mirror_registry_rewrite": mr.RegistryRewrite,
+		"rancher_api_url":         "https://" + c.RancherHostname(),
+		"rancher_ingress_ip":      c.Targets.Management.IngressLoadBalancerIP,
 	} {
 		vars[k] = v
 	}
@@ -131,13 +134,13 @@ func (c *Config) Env() map[string]string {
 		"RANCHER_HOSTNAME":           c.RancherHostname(),
 		"RANCHER_BOOTSTRAP_PASSWORD": c.Secrets.RancherBootstrapPassword,
 
-		"TF_VAR_artifactory_url":          mr.FilesBase,
-		"TF_VAR_artifactory_user":         mr.Username,
-		"TF_VAR_artifactory_pass":         mr.Password,
-		"TF_VAR_artifactory_generic_repo": mr.FilesRepo,
-		"TF_VAR_artifactory_docker_repo":  mr.ImagesRepo,
-		"TF_VAR_environment":              c.EnvironmentName,
-		"TF_VAR_vms":                      vmsVar(m.ServerNodes),
+		"TF_VAR_mirror_files_url":        mr.FilesRepoURL(),
+		"TF_VAR_mirror_registry":         mr.OCIRegistry,
+		"TF_VAR_mirror_registry_rewrite": mr.RegistryRewrite,
+		"TF_VAR_mirror_username":         mr.Username,
+		"TF_VAR_mirror_password":         mr.Password,
+		"TF_VAR_environment":             c.EnvironmentName,
+		"TF_VAR_vms":                     vmsVar(m.ServerNodes),
 		"TF_VAR_vm_specs": jsonOf(map[string]int{"cpu": m.ServerNodeSize.CPUCores,
 			"memory_mb": m.ServerNodeSize.MemoryMB, "disk_gb": m.ServerNodeSize.DiskGB}),
 		"TF_VAR_ssh_user":     m.NodeSSHUsername,

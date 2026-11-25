@@ -34,7 +34,7 @@ func (a *ArtifactoryClient) ensureHTTP() error {
 	if a.HTTP != nil {
 		return nil
 	}
-	client, err := httpx.NewCAPinned(a.CACertPath, apiTimeout)
+	client, err := httpx.NewForCA(a.CACertPath, apiTimeout)
 	if err != nil {
 		return err
 	}

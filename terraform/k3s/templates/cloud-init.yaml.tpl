@@ -5,21 +5,17 @@ fqdn: ${fqdn}
 manage_etc_hosts: true
 
 write_files:
-  - path: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+%{ if mirror_ca != "" ~}
+  - path: ${mirror_ca_path}
     permissions: "0644"
     content: |
-      ${indent(6, ca_cert)}
+      ${indent(6, mirror_ca)}
 
+%{ endif ~}
   - path: /etc/rancher/k3s/registries.yaml
-    permissions: "0644"
+    permissions: "0600"
     content: |
-      configs:
-        "${artifactory_host}":
-          auth:
-            username: "${artifactory_user}"
-            password: "${artifactory_pass}"
-          tls:
-            ca_file: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+      ${indent(6, registries)}
 
   - path: /etc/NetworkManager/system-connections/ens32.nmconnection
     permissions: "0600"
@@ -66,7 +62,9 @@ write_files:
               metallb.universe.tf/loadBalancerIPs: ${ingress_ip}
 
 runcmd:
+%{ if mirror_ca != "" ~}
   - update-ca-trust extract
+%{ endif ~}
 
   - nmcli connection reload
   - nmcli connection up ens32 || true
@@ -75,18 +73,18 @@ runcmd:
   - printf '[Journal]\nSystemMaxUse=2G\nSystemMaxFileSize=100M\n' > /etc/systemd/journald.conf.d/00-size-limit.conf
   - systemctl restart systemd-journald || true
 
-  - |
-    curl -sSf --cacert /etc/pki/ca-trust/source/anchors/artifactory-ca.pem -u "${artifactory_user}:${artifactory_pass}" -o /dev/null "${artifactory_url}/api/system/ping" || { echo "ERROR: Artifactory unreachable"; exit 1; }
-
   - mkdir -p /usr/local/bin
   - mkdir -p /var/lib/rancher/k3s/agent/images
 
-  - curl -sSfL --cacert /etc/pki/ca-trust/source/anchors/artifactory-ca.pem -u "${artifactory_user}:${artifactory_pass}" -o /usr/local/bin/k3s "${artifactory_url}/${generic_repo}/k3s/${urlencode(k3s_version)}/k3s"
+  # The k3s binary is the known file that proves the file server reachable and the credentials good.
+  - |
+    curl -sSfL ${curl_opts} -o /usr/local/bin/k3s "${mirror_files_url}/k3s/${urlencode(k3s_version)}/k3s" || { echo "ERROR: k3s not downloadable from ${mirror_files_url}/k3s/ (file server unreachable, credentials or CA wrong, or k3s ${k3s_version} not mirrored)"; exit 1; }
   - chmod 755 /usr/local/bin/k3s
   - |
     test -x /usr/local/bin/k3s || { echo "ERROR: k3s binary not installed"; exit 1; }
 
-  - curl -sSfL --cacert /etc/pki/ca-trust/source/anchors/artifactory-ca.pem -u "${artifactory_user}:${artifactory_pass}" -o /var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.zst "${artifactory_url}/${generic_repo}/k3s/${urlencode(k3s_version)}/k3s-airgap-images-amd64.tar.zst"
+  - |
+    curl -sSfL ${curl_opts} -o /var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.zst "${mirror_files_url}/k3s/${urlencode(k3s_version)}/k3s-airgap-images-amd64.tar.zst"
   - |
     test -s /var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.zst || { echo "ERROR: airgap images not downloaded"; exit 1; }
 

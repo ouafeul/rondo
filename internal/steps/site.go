@@ -79,7 +79,7 @@ func (p *PlatformStage) applyVSphereTarget(ctx context.Context, t *config.VSpher
 	settings := p.cfg.VSphereVars(t)
 	delete(settings, kobj.VSphereUserKey)
 	delete(settings, kobj.VSpherePasswordKey)
-	settings["artifactory_ca_pem"] = artiCA
+	settings["mirror_ca_pem"] = artiCA
 	if err := p.applyObject(ctx, kobj.VSphereSettings(t.Name, settings)); err != nil {
 		return fmt.Errorf("configmap %s: %w", name, err)
 	}
@@ -100,8 +100,9 @@ func (p *PlatformStage) applyTarget(ctx context.Context, t config.Placement, bac
 	return nil
 }
 
+// artifactoryCA is the mirror's CA bundle, empty when the system trust store is used.
 func (p *PlatformStage) artifactoryCA() (string, error) {
-	pem, err := os.ReadFile(p.ws.CACert) //nolint:gosec // config path
+	pem, err := p.ws.ReadCA()
 	if err != nil {
 		return "", fmt.Errorf("reading the Artifactory CA (%s): %w", p.ws.CACert, err)
 	}

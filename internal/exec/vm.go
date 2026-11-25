@@ -20,6 +20,7 @@ import (
 	"rondo/internal/kobj"
 	"rondo/internal/log"
 	"rondo/internal/runner"
+	"rondo/internal/tofustate"
 	"rondo/internal/values"
 )
 
@@ -86,6 +87,9 @@ func (rt *Runtime) vmTofu(ctx context.Context, action string) error {
 	env, err := rt.vmTofuEnv(ctx, rv)
 	if err != nil {
 		return err
+	}
+	if err := tofustate.Select(dir, stateBackend()); err != nil {
+		return fmt.Errorf("state backend of the machine module: %w", err)
 	}
 	sc := &tofuWorkdir{dir: dir, env: env}
 	if err := sc.initModule(ctx, rt); err != nil {
@@ -219,7 +223,7 @@ var vmSettingKeys = []string{
 	"vsphere_cluster", "vsphere_datastore", "vsphere_network",
 	"vsphere_folder", "vsphere_resource_pool",
 	"network_gateway", "network_netmask", "network_dns", "network_domain",
-	"artifactory_ca_pem",
+	"mirror_ca_pem",
 }
 
 func (rt *Runtime) readEnumerated(ctx context.Context, name string, secret bool, keys []string) (map[string]string, error) {
@@ -258,7 +262,31 @@ func (rt *Runtime) readEnumerated(ctx context.Context, name string, secret bool,
 	return out, nil
 }
 
+// stateBackend is the backend the Job's environment selects.
+func stateBackend() string {
+	if os.Getenv(EnvStateS3) != "" {
+		return tofustate.S3
+	}
+	return tofustate.HTTP
+}
+
+// vmBackendEnv configures the state of the machines of rv: the s3 backend of EnvStateS3 (its
+// keys come with the credentials Secret), else the http one under EnvStateBaseURL.
 func (rt *Runtime) vmBackendEnv(rv *releaseVM, env map[string]string) error {
+	if raw := os.Getenv(EnvStateS3); raw != "" {
+		bucket, err := tofustate.Decode(raw)
+		if err != nil {
+			return err
+		}
+		key := bucket.Key("vm", rv.release.Name)
+		path, err := rt.writeFile("state.s3.tfbackend", []byte(bucket.BackendConfig(key)))
+		if err != nil {
+			return err
+		}
+		env["TF_CLI_ARGS_init"] = "-backend-config=" + path
+		log.Info("machine state", "bucket", bucket.Bucket, "key", key)
+		return nil
+	}
 	base := os.Getenv(EnvStateBaseURL)
 	if base == "" {
 		if os.Getenv(EnvAllowLocalState) == "1" {
@@ -275,8 +303,10 @@ func (rt *Runtime) vmBackendEnv(rv *releaseVM, env map[string]string) error {
 	addr := strings.TrimRight(base, "/") + "/vm/" + rv.release.Name + "/terraform.tfstate"
 	env["TF_HTTP_ADDRESS"] = addr
 	env["TF_HTTP_UPDATE_METHOD"] = "PUT"
-	env["TF_HTTP_USERNAME"] = user
-	env["TF_HTTP_PASSWORD"] = password
+	if user != "" {
+		env["TF_HTTP_USERNAME"] = user
+		env["TF_HTTP_PASSWORD"] = password
+	}
 	log.Info("machine state", "address", addr)
 	return nil
 }
@@ -440,16 +470,19 @@ type AnsibleConfigValue struct {
 }
 
 type AnsibleVars struct {
-	Component           string                        `json:"rondo_component"`
-	ArtifactoryURL      string                        `json:"rondo_artifactory_url"`
-	ArtifactoryUser     string                        `json:"rondo_artifactory_user"`
-	ArtifactoryPassword string                        `json:"rondo_artifactory_password"`
-	RPMRepos            []AnsibleRPMRepo              `json:"rondo_rpm_repos"`
-	Artifacts           []AnsibleArtifact             `json:"rondo_artifacts"`
-	Config              map[string]AnsibleConfigValue `json:"rondo_config"`
-	Installer           map[string]any                `json:"rondo_installer"`
-	Secrets             map[string]string             `json:"rondo_secrets"`
-	RunInstaller        bool                          `json:"rondo_run_installer"`
+	Component           string `json:"rondo_component"`
+	ArtifactoryURL      string `json:"rondo_artifactory_url"`
+	ArtifactoryUser     string `json:"rondo_artifactory_user"`
+	ArtifactoryPassword string `json:"rondo_artifactory_password"`
+	// ArtifactoryCAPath, set to empty, says the machines trust the mirror through their system
+	// store; nil keeps the role's default, the CA cloud-init installed.
+	ArtifactoryCAPath *string                       `json:"rondo_artifactory_ca_path,omitempty"`
+	RPMRepos          []AnsibleRPMRepo              `json:"rondo_rpm_repos"`
+	Artifacts         []AnsibleArtifact             `json:"rondo_artifacts"`
+	Config            map[string]AnsibleConfigValue `json:"rondo_config"`
+	Installer         map[string]any                `json:"rondo_installer"`
+	Secrets           map[string]string             `json:"rondo_secrets"`
+	RunInstaller      bool                          `json:"rondo_run_installer"`
 }
 
 type AnsibleRPMRepo struct {

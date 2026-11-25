@@ -867,7 +867,11 @@ func (m *Model) siteSummary(env string) string {
 	b.WriteString(kv("environmentName", dash(c.EnvironmentName)))
 	b.WriteString(kv("ingressBaseDomain", c.IngressBaseDomain))
 	mr := c.Mirror()
-	b.WriteString(kv("Artifacts", mr.Preset+": "+mr.OCIRegistry+", "+mr.FilesBase+" "+stDim.Render("("+mr.Username+")")))
+	who := mr.Username
+	if mr.Anonymous() {
+		who = "anonymous"
+	}
+	b.WriteString(kv("Artifacts", mr.Preset+": "+mr.OCIRegistry+", "+mr.FilesBase+" "+stDim.Render("("+who+")")))
 	b.WriteString(kv("RONDO channel", dash(c.Artifacts.ReleaseChannel)))
 	mg := c.Targets.Management
 	b.WriteString(kv("Management", fmt.Sprintf("k3s %s on %s, %d nodes, ingress %s",

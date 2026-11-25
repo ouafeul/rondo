@@ -24,10 +24,12 @@ import (
 
 const downloadTimeout = 10 * time.Minute
 
+// resolveCA is the path of artifacts.caCertificateFile, empty when the mirror is trusted through
+// the system trust store.
 func resolveCA(c *config.Config) (string, error) {
 	p := paths.ExpandHome(c.Artifacts.CACertificateFile)
 	if p == "" {
-		return "", fmt.Errorf("artifacts.caCertificateFile is empty")
+		return "", nil
 	}
 	if filepath.IsAbs(p) {
 		return p, nil
@@ -61,7 +63,7 @@ func resolveWorkspace(ctx context.Context, c *config.Config, caCert string) (pro
 	if err := ensureSiteState(c.EnvironmentName); err != nil {
 		return "", "", "", err
 	}
-	client, err := httpx.NewCAPinned(caCert, downloadTimeout)
+	client, err := httpx.NewForCA(caCert, downloadTimeout)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -215,7 +217,7 @@ func (d *deps) ensureTools(ctx context.Context) error {
 	if flagDryRun {
 		return inst.Describe(ctx)
 	}
-	client, err := httpx.NewCAPinned(d.ws.CACert, downloadTimeout)
+	client, err := httpx.NewForCA(d.ws.CACert, downloadTimeout)
 	if err != nil {
 		return err
 	}

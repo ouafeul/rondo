@@ -208,9 +208,9 @@ func TestResolveCA(t *testing.T) {
 		t.Errorf("resolveCA absolute = %q", got)
 	}
 
-	c3 := &config.Config{}
-	if _, err := resolveCA(c3); err == nil {
-		t.Error("empty caCertPath accepted")
+	// No CA file: the system trust store.
+	if got, err := resolveCA(&config.Config{}); err != nil || got != "" {
+		t.Errorf("resolveCA without a CA = %q, %v; want empty", got, err)
 	}
 }
 
@@ -577,6 +577,21 @@ func TestCmdInitWritesTheArtifactoryPreset(t *testing.T) {
 	}
 	if c.EnvironmentName != "recette" {
 		t.Errorf("environmentName = %q", c.EnvironmentName)
+	}
+}
+
+// Only the preset artifactory gets a token minter: any other mirror takes secrets.mirrorToken.
+func TestMirrorTokensMintOnlyOnArtifactory(t *testing.T) {
+	tokens, minter := mirrorTokens(config.Mirror{Preset: config.PresetGeneric, MirrorToken: "tok"}, "")
+	if minter != nil {
+		t.Errorf("minter %T on a generic mirror", minter)
+	}
+	if tok, err := tokens.Token(context.Background()); err != nil || tok != "tok" {
+		t.Errorf("token = %q, %v; want the declared one", tok, err)
+	}
+	_, minter = mirrorTokens(config.Mirror{Preset: config.PresetArtifactory, ArtifactoryURL: "https://a"}, "")
+	if _, ok := minter.(*steps.ArtifactoryClient); !ok {
+		t.Errorf("minter %T on an Artifactory, want the Artifactory client", minter)
 	}
 }
 

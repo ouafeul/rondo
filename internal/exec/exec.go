@@ -77,14 +77,29 @@ func (rt *Runtime) writeFile(name string, content []byte) (string, error) {
 	return path, nil
 }
 
+// artifactoryCreds are the mirror's credentials, both empty when it is read anonymously.
 func artifactoryCreds() (user, password string, err error) {
 	user = os.Getenv(EnvArtifactoryUser)
 	password = os.Getenv(EnvArtifactoryPassword)
-	if user == "" || password == "" {
-		return "", "", fmt.Errorf("%s and %s required (credentials Secret mounted via envFrom)",
-			EnvArtifactoryUser, EnvArtifactoryPassword)
+	if (user == "") != (password == "") {
+		return "", "", fmt.Errorf("%s and %s go together (credentials Secret mounted via envFrom): "+
+			"both set, or both empty for an anonymous mirror", EnvArtifactoryUser, EnvArtifactoryPassword)
 	}
 	return user, password, nil
+}
+
+// dropEmptyCA unsets SSL_CERT_FILE when it names an empty bundle, the CA ConfigMap of a mirror
+// trusted through the system store: every tool then reads the system trust store.
+func dropEmptyCA() {
+	p := os.Getenv(EnvCAFile)
+	if p == "" {
+		return
+	}
+	raw, err := os.ReadFile(p) //nolint:gosec // path from the Job's own environment
+	if err == nil && strings.TrimSpace(string(raw)) == "" {
+		os.Unsetenv(EnvCAFile)
+		log.Info("no mirror CA mounted, the system trust store is used")
+	}
 }
 
 const maxArchiveBytes = 256 << 20
@@ -160,5 +175,6 @@ func Dispatch(ctx context.Context, name string, rt *Runtime) error {
 		}
 		return fmt.Errorf("unknown verb %q (known: %s)", name, strings.Join(known, ", "))
 	}
+	dropEmptyCA()
 	return verb(ctx, rt)
 }

@@ -78,6 +78,7 @@ type Config struct {
 	Resources              corev1.ResourceRequirements
 
 	TofuStateBaseURL    string
+	TofuStateS3         string
 	TofuRCSecret        string
 	AllowLocalTofuState bool
 
@@ -212,6 +213,9 @@ func (c Config) Build(req Request) (*batchv1.Job, error) {
 	if req.Verb.NeedsTofu() {
 		if c.TofuStateBaseURL != "" {
 			env = append(env, corev1.EnvVar{Name: "RONDO_TOFU_STATE_URL", Value: c.TofuStateBaseURL})
+		}
+		if c.TofuStateS3 != "" {
+			env = append(env, corev1.EnvVar{Name: "RONDO_TOFU_STATE_S3", Value: c.TofuStateS3})
 		}
 		if c.TofuRCSecret != "" {
 			env = append(env, corev1.EnvVar{Name: "RONDO_TOFU_RC_SECRET", Value: c.TofuRCSecret})

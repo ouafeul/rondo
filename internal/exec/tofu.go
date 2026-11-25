@@ -18,6 +18,7 @@ import (
 
 const (
 	EnvStateBaseURL    = "RONDO_TOFU_STATE_URL"
+	EnvStateS3         = kobj.EnvTofuStateS3
 	EnvAllowLocalState = "RONDO_TOFU_ALLOW_LOCAL_STATE"
 	EnvMirrorSecret    = "RONDO_TOFU_RC_SECRET"
 	EnvMirrorSecretKey = "RONDO_TOFU_RC_KEY"
@@ -81,6 +82,10 @@ func (sc *tofuWorkdir) checkMirror(ctx context.Context) error {
 			"will decide", "err", err)
 		return nil
 	}
+	if registry := parseTofurcOCI(string(raw)); registry != "" {
+		probeOCIMirror(ctx, registry)
+		return nil
+	}
 	mirror, token := parseTofurcMirror(string(raw))
 	if mirror == "" {
 		log.Warn("network_mirror probe NOT POSSIBLE: no recognized `network_mirror` block " +
@@ -125,6 +130,43 @@ func probeMirror(ctx context.Context, mirror, token string) error {
 	log.Info("network_mirror reachable and credentials accepted", "url", mirror,
 		"http", resp.StatusCode)
 	return nil
+}
+
+// parseTofurcOCI is the registry host of the oci_mirror of rc, empty when it has none.
+func parseTofurcOCI(rc string) string {
+	for _, line := range strings.Split(rc, "\n") {
+		if field := strings.TrimSpace(line); strings.HasPrefix(field, "repository_template") {
+			host, _, _ := strings.Cut(quotedValue(field), "/")
+			return host
+		}
+	}
+	return ""
+}
+
+// probeOCIMirror tells whether the registry of the OCI provider mirror answers the OCI
+// distribution API. It never fails: the credentials are the mirror's own, not a token that
+// expires, and an anonymous /v2/ answers 401 on most registries anyway.
+func probeOCIMirror(ctx context.Context, registry string) {
+	client, err := artifactoryHTTPClient(mirrorProbeTimeout)
+	if err != nil {
+		log.Warn("oci_mirror probe NOT POSSIBLE (HTTPS client), `tofu init` will decide", "err", err)
+		return
+	}
+	url := "https://" + registry + "/v2/"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.Warn("oci_mirror probe NOT POSSIBLE (invalid registry), `tofu init` will decide",
+			"registry", registry, "err", err)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Warn("oci_mirror registry unreachable, probe INCONCLUSIVE, `tofu init` will decide",
+			"url", url, "err", err)
+		return
+	}
+	resp.Body.Close()
+	log.Info("oci_mirror registry reachable", "url", url, "http", resp.StatusCode)
 }
 
 func parseTofurcMirror(rc string) (mirror, token string) {

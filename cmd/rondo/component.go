@@ -118,7 +118,7 @@ func runComponentInstall(ctx context.Context, c *config.Config, name string) err
 	}
 	src, version := flagComponentFrom, "local"
 	if src == "" {
-		client, err := httpx.NewCAPinned(d.ws.CACert, downloadTimeout)
+		client, err := httpx.NewForCA(d.ws.CACert, downloadTimeout)
 		if err != nil {
 			return err
 		}

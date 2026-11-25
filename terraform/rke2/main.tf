@@ -20,17 +20,32 @@ locals {
     }
   }
 
+  mirror_ca = var.mirror_ca_pem != "" ? var.mirror_ca_pem : (
+    var.mirror_ca_cert_path != "" ? file(var.mirror_ca_cert_path) : ""
+  )
+
+  # Registry mirrors with rewrites: an image asked of the registry, or of a public registry, as
+  # <path> is pulled as <rke2_registry_host>/<mirror_registry_rewrite>/<path>. A path already under
+  # the repository is left as is.
+  rewrite_repo = replace(var.mirror_registry_rewrite, ".", "\\.")
+  registry_mirrors = {
+    for host, rewrites in merge(
+      { for upstream in var.mirror_upstream_registries : upstream => { "^(.*)$" = "${var.mirror_registry_rewrite}/$1" } },
+      { (var.rke2_registry_host) = { "^(${local.rewrite_repo}/)?(.*)$" = "${var.mirror_registry_rewrite}/$2" } },
+    ) : host => rewrites if var.mirror_registry_rewrite != ""
+  }
+
   cloud_config_common = {
-    cluster_ca     = var.cluster_ca_pem != "" ? var.cluster_ca_pem : file(var.cluster_ca_cert_path)
-    artifactory_ca = var.artifactory_ca_pem != "" ? var.artifactory_ca_pem : file(var.artifactory_ca_cert_path)
-    netmask        = var.network_netmask
-    gateway        = var.network_gateway
-    dns_servers    = join(";", var.network_dns)
-    domain         = var.network_domain
-    ingress_ip     = var.rancher_ingress_ip
-    rancher_host   = local.rancher_host
-    registry_host  = var.rke2_registry_host
-    registry_ip    = var.rke2_registry_ip
+    cluster_ca    = var.cluster_ca_pem != "" ? var.cluster_ca_pem : file(var.cluster_ca_cert_path)
+    mirror_ca     = local.mirror_ca
+    netmask       = var.network_netmask
+    gateway       = var.network_gateway
+    dns_servers   = join(";", var.network_dns)
+    domain        = var.network_domain
+    ingress_ip    = var.rancher_ingress_ip
+    rancher_host  = local.rancher_host
+    registry_host = var.rke2_registry_host
+    registry_ip   = var.rke2_registry_ip
   }
 }
 
@@ -121,10 +136,24 @@ resource "rancher2_cluster_v2" "rke2_downstream" {
       "write-kubeconfig-mode"   = "0644"
     })
 
-    registries {
-      configs {
-        hostname                = var.rke2_registry_host
-        auth_config_secret_name = "regcred"
+    dynamic "registries" {
+      for_each = var.rke2_registry_auth || length(local.registry_mirrors) > 0 ? [1] : []
+      content {
+        dynamic "configs" {
+          for_each = var.rke2_registry_auth ? [var.rke2_registry_host] : []
+          content {
+            hostname                = configs.value
+            auth_config_secret_name = "regcred"
+          }
+        }
+        dynamic "mirrors" {
+          for_each = local.registry_mirrors
+          content {
+            hostname  = mirrors.key
+            endpoints = ["https://${var.rke2_registry_host}"]
+            rewrites  = mirrors.value
+          }
+        }
       }
     }
 

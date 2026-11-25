@@ -34,6 +34,14 @@ func NewCAPinned(caPath string, timeout time.Duration) (*http.Client, error) {
 	}, nil
 }
 
+// NewForCA trusts the CA bundle at caPath, or the system trust store when caPath is empty.
+func NewForCA(caPath string, timeout time.Duration) (*http.Client, error) {
+	if caPath == "" {
+		return NewDefault(timeout), nil
+	}
+	return NewCAPinned(caPath, timeout)
+}
+
 func NewDefault(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,

@@ -13,6 +13,7 @@ terraform/**/vcsim.auto.tfvars
 terraform/**/plan.json
 terraform/**/zz_vcsim_backend_override.tf
 terraform/**/zz_simhifi_backend_override.tf
+terraform/**/backend_override.tf
 kubeconfig*.yaml
 certs/*
 !certs/.gitkeep

@@ -227,14 +227,35 @@ func TestHelmApplyMissingTarget(t *testing.T) {
 	}
 }
 
-func TestHelmApplyRefusesWithoutCreds(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "")
+func TestHelmApplyRefusesHalfCredentials(t *testing.T) {
+	t.Setenv(EnvArtifactoryUser, "svc")
 	t.Setenv(EnvArtifactoryPassword, "")
 	rt, _ := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())
 	if err := HelmApply(t.Context(), rt); err == nil {
-		t.Fatal("missing credentials accepted")
+		t.Fatal("a username without a password accepted")
 	}
+}
+
+func TestHelmApplyOnAnAnonymousMirrorDoesNotLogIn(t *testing.T) {
+	t.Setenv(EnvArtifactoryUser, "")
+	t.Setenv(EnvArtifactoryPassword, "")
+	t.Setenv(EnvCAFile, "")
+	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
+		chartRelease(nil), chartComponent(nil), inClusterTarget())
+	fk.Outputs["helm get manifest victoria-logs --namespace logging"] = ""
+	if err := HelmApply(t.Context(), rt); err != nil {
+		t.Fatalf("HelmApply: %v", err)
+	}
+	for _, c := range fk.Calls {
+		if len(c.Args) > 0 && c.Args[0] == "registry" {
+			t.Errorf("registry login on an anonymous mirror: %s", c.String())
+		}
+		if strings.Contains(c.String(), "--ca-file") {
+			t.Errorf("--ca-file without a CA: %s", c.String())
+		}
+	}
+	findCall(t, fk.Calls, "upgrade")
 }
 
 func TestParseInventoryScopes(t *testing.T) {

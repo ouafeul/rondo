@@ -170,7 +170,7 @@ func siteConfig(st *site, plans []*plan) *config.Config {
 			Files:    config.FilesEndpoint{URL: filesURL, Repository: genericRepo},
 			RPM:      config.RPMEndpoint{URL: filesURL, Repository: rpmRepo},
 			Tofu: config.TofuEndpoints{ProviderMirror: providerMirrorURL,
-				StateURL: filesURL + "/" + tofuStateRepo},
+				State: config.TofuState{HTTP: &config.HTTPState{URL: filesURL + "/" + tofuStateRepo}}},
 		},
 		Secrets: config.Secrets{
 			MirrorPassword:           sandboxSecret,
@@ -623,7 +623,7 @@ func (sb *sandbox) vsphereObjects(ca string) ([]kobj.Object, error) {
 		settings := sb.cfg.VSphereVars(t)
 		delete(settings, kobj.VSphereUserKey)
 		delete(settings, kobj.VSpherePasswordKey)
-		settings["artifactory_ca_pem"] = ca
+		settings["mirror_ca_pem"] = ca
 		values := map[string]string{v1alpha1.ValueVMTemplate: t.VMTemplate, v1alpha1.ValueSSHUser: kobj.VMSSHUser}
 		for k, v := range t.ComponentValues {
 			values[k] = v
@@ -638,7 +638,7 @@ func (sb *sandbox) vsphereObjects(ca string) ([]kobj.Object, error) {
 		return nil, err
 	}
 	return append(objs, kobj.VMSSHKey(priv, pub),
-		kobj.TofuMirror(mirror.ProviderMirrorURL, mirror.ProviderMirrorHost(), mirror.MirrorToken, false)), nil
+		kobj.TofuMirror(mirror.TofuRC(mirror.MirrorToken), mirror.MirrorToken, false)), nil
 }
 
 // install is `rondo component install <name> --from <tree>`. A redeploy also clears the

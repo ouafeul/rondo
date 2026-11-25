@@ -28,26 +28,29 @@ func configMap(name, ns string, data map[string]string) Object {
 	}
 }
 
-// ArtifactoryCredentials is read as env by every Job, through envFrom.
-func ArtifactoryCredentials(user, password string) Object {
-	return OpaqueSecret(CredentialsSecret, map[string]string{
+// ArtifactoryCredentials is read as env by every Job, through envFrom: the mirror's credentials,
+// both empty for an anonymous mirror, and the keys of an s3 state backend when there is one,
+// under the names OpenTofu's s3 backend reads.
+func ArtifactoryCredentials(user, password, stateAccessKey, stateSecretKey string) Object {
+	data := map[string]string{
 		CredentialsUserKey:     user,
 		CredentialsPasswordKey: password,
-	})
+	}
+	if stateAccessKey != "" {
+		data[StateAccessKeyEnv] = stateAccessKey
+		data[StateSecretKeyEnv] = stateSecretKey
+	}
+	return OpaqueSecret(CredentialsSecret, data)
 }
 
+// ArtifactoryCA holds the CA bundle of the mirror, empty when the system trust store is used.
 func ArtifactoryCA(pem string) Object {
 	return configMap(ArtifactoryCACM, PlatformNamespace, map[string]string{ArtifactoryCAKey: pem})
 }
 
-// TofuMirror holds the .tofurc that points OpenTofu at the provider network mirror, with the
-// token of host when there is one. storeToken also keeps the bare token, so a later run can
-// revoke what it minted.
-func TofuMirror(mirrorURL, host, token string, storeToken bool) Object {
-	tofurc := fmt.Sprintf("provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\n", mirrorURL)
-	if token != "" {
-		tofurc += fmt.Sprintf("credentials %q {\n  token = %q\n}\n", host, token)
-	}
+// TofuMirror holds the .tofurc that points OpenTofu at the provider mirror (config.Mirror.TofuRC).
+// storeToken also keeps the bare token, so a later run can revoke what it minted.
+func TofuMirror(tofurc, token string, storeToken bool) Object {
 	data := map[string]string{TofurcKey: tofurc}
 	if storeToken {
 		data[TofurcTokenKey] = token

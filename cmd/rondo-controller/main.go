@@ -180,6 +180,7 @@ func loadConfig() (*config, error) {
 		ArtifactoryCredsSecret: getenv(kobj.EnvCredsSecret, kobj.CredentialsSecret),
 		TTL:                    ttl,
 		TofuStateBaseURL:       os.Getenv(kobj.EnvTofuStateURL),
+		TofuStateS3:            os.Getenv(kobj.EnvTofuStateS3),
 		TofuRCSecret:           os.Getenv(kobj.EnvTofuRCSecret),
 		AllowLocalTofuState:    os.Getenv(envAllowLocalState) == "1",
 		VMModuleURL:            os.Getenv(kobj.EnvVMModuleURL),

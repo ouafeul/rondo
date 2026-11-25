@@ -75,7 +75,7 @@ data "cloudinit_config" "vm" {
       domain             = var.network_domain
       ssh_user           = var.ssh_user
       ssh_authorized_key = var.ssh_authorized_key
-      artifactory_ca_pem = var.artifactory_ca_pem
+      mirror_ca_pem      = var.mirror_ca_pem
       extra_packages     = var.extra_packages
       group              = each.value.group
       component          = var.component

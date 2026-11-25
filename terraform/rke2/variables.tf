@@ -150,24 +150,42 @@ variable "vsphere_resource_pool" {
 }
 
 variable "rke2_registry_host" {
-  description = "Docker registry authority (Artifactory subdomain), used as the RKE2 system-default-registry (e.g. rondo-docker-local.artifactory.example.com)"
+  description = "Registry authority the nodes pull from, the RKE2 system-default-registry: the mirror's registry (e.g. registry.example.com), or an Artifactory docker subdomain (e.g. rondo-docker-local.artifactory.example.com)"
   type        = string
 }
 
 variable "rke2_registry_ip" {
-  description = "IP of the Artifactory nginx, to resolve rke2_registry_host through /etc/hosts (leave empty if a wildcard DNS resolves the subdomain for the nodes)"
+  description = "IP of the registry, to resolve rke2_registry_host through /etc/hosts (leave empty if DNS resolves it for the nodes)"
   type        = string
   default     = ""
 }
 
-variable "artifactory_ca_cert_path" {
-  description = "Local path to the Artifactory CA (registry cert). Optional if artifactory_ca_pem is set (Crossplane)."
+variable "rke2_registry_auth" {
+  description = "Whether the nodes authenticate on the registry with the regcred Secret (fleet-default); false for an anonymous mirror"
+  type        = bool
+  default     = true
+}
+
+variable "mirror_registry_rewrite" {
+  description = "Repository of the mirror's images: an image asked of rke2_registry_host (or of a public registry) as rancher/x is pulled as <rke2_registry_host>/<mirror_registry_rewrite>/rancher/x. Empty when the registry serves the images at its root, as an Artifactory docker subdomain does."
   type        = string
   default     = ""
 }
 
-variable "artifactory_ca_pem" {
-  description = "PEM content of the Artifactory CA (takes precedence over artifactory_ca_cert_path), injected by Crossplane."
+variable "mirror_upstream_registries" {
+  description = "Public registries whose images the nodes pull from the mirror, with mirror_registry_rewrite"
+  type        = list(string)
+  default     = ["docker.io", "registry.k8s.io", "quay.io", "ghcr.io", "gcr.io"]
+}
+
+variable "mirror_ca_cert_path" {
+  description = "Local path to the mirror's CA. Optional if mirror_ca_pem is set; both empty, the nodes trust the mirror through their system store."
+  type        = string
+  default     = ""
+}
+
+variable "mirror_ca_pem" {
+  description = "PEM content of the mirror's CA (takes precedence over mirror_ca_cert_path)."
   type        = string
   default     = ""
 }

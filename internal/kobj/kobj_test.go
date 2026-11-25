@@ -116,7 +116,7 @@ func TestSecretAndConfigMapShapes(t *testing.T) {
 }
 
 func TestArtifactoryObjectsMatchWhatTheJobsRead(t *testing.T) {
-	c := ArtifactoryCredentials("u", "p")
+	c := ArtifactoryCredentials("u", "p", "", "")
 	sd := nested(t, c, "stringData").(Object)
 	if nested(t, c, "metadata", "name") != CredentialsSecret || sd["ARTIFACTORY_USER"] != "u" || sd["ARTIFACTORY_PASSWORD"] != "p" {
 		t.Errorf("credentials = %v", c)
@@ -128,19 +128,16 @@ func TestArtifactoryObjectsMatchWhatTheJobsRead(t *testing.T) {
 }
 
 func TestTofuMirrorKeepsTheTokenOnlyWhenAsked(t *testing.T) {
-	with := nested(t, TofuMirror("https://a/mirror/", "a", "tok", true), "stringData").(Object)
-	without := nested(t, TofuMirror("https://a/mirror/", "a", "tok", false), "stringData").(Object)
+	with := nested(t, TofuMirror("provider_installation {}\n", "tok", true), "stringData").(Object)
+	without := nested(t, TofuMirror("provider_installation {}\n", "tok", false), "stringData").(Object)
 	if with["token"] != "tok" {
 		t.Errorf("token missing although it must be kept: %v", with)
 	}
 	if _, ok := without["token"]; ok {
 		t.Errorf("token kept although it comes from an override: %v", without)
 	}
-	rc, _ := with[".tofurc"].(string)
-	for _, want := range []string{`url = "https://a/mirror/"`, `credentials "a" {`, `token = "tok"`} {
-		if !strings.Contains(rc, want) {
-			t.Errorf(".tofurc without %q:\n%s", want, rc)
-		}
+	if rc, _ := with[".tofurc"].(string); rc != "provider_installation {}\n" {
+		t.Errorf(".tofurc = %q, want the one given", rc)
 	}
 }
 

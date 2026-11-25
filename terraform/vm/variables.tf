@@ -105,8 +105,8 @@ variable "ssh_authorized_key" {
   sensitive   = true
 }
 
-variable "artifactory_ca_pem" {
-  description = "Artifactory CA, placed in the machines' trust store."
+variable "mirror_ca_pem" {
+  description = "CA of the mirror, placed in the machines' trust store; empty, they trust it through their system store."
   type        = string
   default     = ""
 }

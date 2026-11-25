@@ -57,7 +57,7 @@ func vmFixtures(t *testing.T, moduleURL string) (*Runtime, *runner.Fake) {
 			"vsphere_cluster": "cl", "vsphere_datastore": "ds",
 			"vsphere_network": "net", "network_gateway": "10.0.2.1",
 			"network_netmask": "24", "network_dns": `["10.0.0.1"]`,
-			"network_domain": "local", "artifactory_ca_pem": "CA",
+			"network_domain": "local", "mirror_ca_pem": "CA",
 		}))
 }
 
