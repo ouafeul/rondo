@@ -1,0 +1,2 @@
+# Shared Trivy settings for CI (.github/workflows/ci.yml, images.yml).
+ignorefile: .trivyignore.yaml

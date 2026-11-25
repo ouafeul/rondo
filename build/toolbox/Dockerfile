@@ -1,7 +1,7 @@
-ARG GO_VERSION=1.26.10
-ARG HELM_VERSION=3.17.3
-ARG KUBECTL_VERSION=v1.34.0
-ARG TOFU_VERSION=1.11.5
+ARG GO_VERSION=1.26.11
+ARG HELM_VERSION=3.22.1
+ARG KUBECTL_VERSION=v1.34.13
+ARG TOFU_VERSION=1.11.14
 ARG ANSIBLE_CORE_VERSION=2.18.6
 
 FROM alpine/helm:${HELM_VERSION} AS helm
@@ -29,6 +29,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
 FROM debian:stable-slim
 ARG ANSIBLE_CORE_VERSION
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends \
       git ca-certificates openssh-client python3 python3-pip \
  && pip3 install --no-cache-dir --break-system-packages \

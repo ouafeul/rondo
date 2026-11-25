@@ -30,10 +30,10 @@ func def(env map[string]string, key, fallback string) string {
 }
 
 func toolset(env map[string]string) []tool {
-	tofu := def(env, "TOFU_VERSION", "1.11.5")
-	helm := def(env, "HELM_VERSION", "v3.17.3")
+	tofu := def(env, "TOFU_VERSION", "1.11.14")
+	helm := def(env, "HELM_VERSION", "v3.22.1")
 	helmfile := def(env, "HELMFILE_VERSION", "0.171.0")
-	kubectl := def(env, "KUBECTL_VERSION", "v1.34.0")
+	kubectl := def(env, "KUBECTL_VERSION", "v1.34.13")
 	k9s := def(env, "K9S_VERSION", "v0.40.5")
 	yq := def(env, "YQ_VERSION", "v4.44.6")
 	return []tool{

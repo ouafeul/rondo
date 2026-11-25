@@ -14,11 +14,22 @@ spec:
         app: local-path-provisioner
     spec:
       serviceAccountName: local-path-provisioner
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: {{ .Values.priorityClassName }}
       containers:
         - name: local-path-provisioner
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           command: ["local-path-provisioner"]
           args:
             - start
