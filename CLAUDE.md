@@ -48,6 +48,9 @@ shellcheck scripts/ci/*.sh cmd/rondo-sandbox/rondo-sandbox.sh install.sh
 - `images.yml`: images to `ghcr.io/ouafeul/rondo-*` on `main` (`edge-main`, `edge-main-<sha>`, `sha-<sha>`) and on tags.
 - `release.yml`: on `v*` tags; the release body is the matching `## [x.y.z]` CHANGELOG section, which must exist.
 - `pages.yml`: docs to https://ouafeul.github.io/rondo/.
+- `claude.yml`: `@claude` in an issue or PR comment (maintainer only). Reviews are on demand:
+  comment `@claude review` on a PR, or run `/ship` locally (it runs `/code-review`). Rules: `REVIEW.md`.
+- Dependabot opens one grouped pull request a month for every ecosystem.
 
 ## Releasing
 
