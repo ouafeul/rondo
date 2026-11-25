@@ -24,7 +24,7 @@ func (d *deps) deployPlan() []steps.Step {
 		{Name: "Helm chart deployment", Run: d.helm.Deploy},
 		{Name: "operator install", Run: d.platform.Install},
 		{Name: "platform credentials", Run: d.platform.ApplyCredentials},
-		{Name: "network_mirror token", Run: d.platform.ApplyMirrorToken},
+		{Name: "OpenTofu provider mirror", Run: d.platform.ApplyMirrorToken},
 		{Name: "internal DNS resolution", Run: d.platform.ApplyCoreDNSHosts},
 		{Name: "Targets and site values", Run: d.platform.ApplySite},
 		{Name: "operator startup wait", Run: d.platform.WaitReady},
