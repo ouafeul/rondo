@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""Download third-party dependencies and push them to the mirror.
+
+  download-deps.py --deps deps-resolved.json --type binaries --download-only --local-dir out
+  download-deps.py --deps deps-resolved.json --type binaries --upload-only --local-dir out \
+      --files-url https://files.site/mirror
+
+Targets per `kind` (see manifests/dependencies.yaml; flags or MIRROR_* environment, see
+mirror_common.py):
+  file, grafana_plugin  PUT to <files-url>/<path>, with a .sha256 sidecar
+  provider              a static OpenTofu network_mirror tree under --provider-mirror
+                        (default <files-url>/providers)
+  chart                 helm push to oci://<oci-registry>/charts
+"""
 
 import argparse
 import glob
@@ -8,62 +21,28 @@ import re
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
+import mirror_common as mc
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
-
-def get_session() -> requests.Session:
-    session = requests.Session()
-    user = os.environ.get("ARTIFACTORY_USER", "")
-    password = os.environ.get("ARTIFACTORY_PASSWORD", "")
-    token = os.environ.get("ARTIFACTORY_TOKEN", "")
-
-    if token:
-        session.headers["Authorization"] = f"Bearer {token}"
-    elif user and password:
-        session.auth = (user, password)
-
-    return session
-
-
-def source_session() -> requests.Session:
-    session = requests.Session()
-    retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        backoff_factor=2,
-        status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET", "HEAD"]),
-        raise_on_status=False,
-    )
-    session.mount("https://", HTTPAdapter(max_retries=retry))
-    session.mount("http://", HTTPAdapter(max_retries=retry))
-    return session
+DEFAULT_PROVIDER_HOST = "registry.opentofu.org"
+CHARTS_PATH = "charts"
+PLATFORM = re.compile(r"_([a-z0-9]+_[a-z0-9]+)\.zip$")
 
 
 def get_local_path(local_dir: str, dep_type: str, dep: dict) -> str:
     if dep_type == "helm_charts":
         return os.path.join(local_dir, "helm_charts", f"{dep['name']}-{dep['version']}.tgz")
     safe_name = dep["name"].replace("/", "_")
-    basename = os.path.basename(dep["target_path"])
-    return os.path.join(local_dir, dep_type, safe_name, basename)
-
-
-def check_exists_in_artifactory(session: requests.Session, artifactory_url: str,
-                                 repo: str, path: str) -> bool:
-    url = f"{artifactory_url}/{repo}/{path}"
-    resp = session.head(url, timeout=30)
-    return resp.status_code == 200
+    return os.path.join(local_dir, dep_type, safe_name, os.path.basename(dep["path"]))
 
 
 def download_to_local(source_url: str, local_path: str) -> bool:
     print(f"  Downloading: {source_url}")
     try:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        resp = source_session().get(source_url, stream=True, timeout=300, verify=True)
+        resp = mc.source_session().get(source_url, stream=True, timeout=300, verify=True)
         resp.raise_for_status()
         with open(local_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
@@ -93,14 +72,9 @@ def download_helm_chart_local(dep: dict, local_dir: str) -> bool:
                 check=True, capture_output=True, text=True,
             )
         else:
-            subprocess.run(
-                ["helm", "repo", "add", repo_alias, source_repo, "--force-update"],
-                check=True, capture_output=True,
-            )
-            subprocess.run(
-                ["helm", "repo", "update", repo_alias],
-                check=True, capture_output=True,
-            )
+            subprocess.run(["helm", "repo", "add", repo_alias, source_repo, "--force-update"],
+                           check=True, capture_output=True)
+            subprocess.run(["helm", "repo", "update", repo_alias], check=True, capture_output=True)
             subprocess.run(
                 ["helm", "pull", f"{repo_alias}/{name}", "--version", version, "-d", chart_dir],
                 check=True, capture_output=True, text=True,
@@ -127,26 +101,16 @@ def download_helm_chart_local(dep: dict, local_dir: str) -> bool:
             subprocess.run(["helm", "repo", "remove", repo_alias], capture_output=True)
 
 
-def upload_to_artifactory(session: requests.Session, local_path: str,
-                          artifactory_url: str, target_repo: str,
-                          target_path: str) -> bool:
-    upload_url = f"{artifactory_url}/{target_repo}/{target_path}"
-    print(f"  Upload: {upload_url}")
-    try:
-        with open(local_path, "rb") as f:
-            resp = session.put(upload_url, data=f, timeout=600)
-            resp.raise_for_status()
-        print(f"  OK: {target_path}")
-        return True
-    except (requests.exceptions.RequestException, FileNotFoundError) as e:
-        print(f"  ERROR: {e}", file=sys.stderr)
-        return False
+def chart_in_registry(registry: str, name: str, version: str) -> bool:
+    ref = f"oci://{mc.registry_ref(registry, CHARTS_PATH)}/{name}"
+    result = subprocess.run(["helm", "show", "chart", ref, "--version", version,
+                             *mc.helm_tls_args()], capture_output=True, text=True)
+    return result.returncode == 0
 
 
-def upload_helm_chart(dep: dict, local_dir: str, artifactory_url: str) -> bool:
-    name = dep["name"]
-    version = dep["version"]
-    target_repo = dep["target_repo"]
+def upload_helm_chart(dep: dict, local_dir: str, registry: str, force: bool) -> str:
+    """'ok', 'skip' or 'error'."""
+    name, version = dep["name"], dep["version"]
     chart_dir = os.path.join(local_dir, "helm_charts")
     chart_file = os.path.join(chart_dir, f"{name}-{version}.tgz")
 
@@ -154,229 +118,207 @@ def upload_helm_chart(dep: dict, local_dir: str, artifactory_url: str) -> bool:
         tgz_files = glob.glob(os.path.join(chart_dir, f"{name}-*.tgz"))
         if not tgz_files:
             print(f"  ERROR: {name}-{version}.tgz not found in {chart_dir}", file=sys.stderr)
-            return False
+            return "error"
         chart_file = tgz_files[0]
 
+    if not force and chart_in_registry(registry, name, version):
+        print(f"  SKIP: {name} {version} already in the registry")
+        return "skip"
+
+    oci_target = f"oci://{mc.registry_ref(registry, CHARTS_PATH)}"
     try:
-        helm_host = re.sub(r'^https?://', '', artifactory_url).split('/')[0]
-        oci_target = f"oci://{helm_host}/{target_repo}"
         print(f"  Push OCI: {os.path.basename(chart_file)} -> {oci_target}")
-        subprocess.run(
-            ["helm", "push", chart_file, oci_target],
-            check=True, capture_output=True, text=True,
-        )
+        subprocess.run(["helm", "push", chart_file, oci_target, *mc.helm_tls_args()],
+                       check=True, capture_output=True, text=True)
         print(f"  OK: {os.path.basename(chart_file)}")
-        return True
+        return "ok"
     except subprocess.CalledProcessError as e:
         stderr = e.stderr if e.stderr else e.stdout if e.stdout else str(e)
         print(f"  ERROR helm push: {stderr}", file=sys.stderr)
-        return False
+        return "error"
 
 
-def download_and_upload(session: requests.Session, source_url: str,
-                        artifactory_url: str, target_repo: str,
-                        target_path: str) -> bool:
-    print(f"  Downloading: {source_url}")
-
-    tmp_path = None
+def upload_one(store: mc.Store, rel: str, local_path: str, force: bool) -> str:
+    """'ok', 'skip' or 'error'."""
+    print(f"  Upload: {store.describe(rel)}")
     try:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp_path = tmp.name
-            resp = source_session().get(source_url, stream=True, timeout=300, verify=True)
-            resp.raise_for_status()
-            for chunk in resp.iter_content(chunk_size=8192):
-                tmp.write(chunk)
-            tmp.flush()
-
-        upload_url = f"{artifactory_url}/{target_repo}/{target_path}"
-        print(f"  Upload: {upload_url}")
-
-        with open(tmp_path, "rb") as f:
-            resp = session.put(upload_url, data=f, timeout=600)
-            resp.raise_for_status()
-
-        print(f"  OK: {target_path}")
-        return True
-    except requests.exceptions.RequestException as e:
+        if force:
+            store.put(rel, local_path)
+            return "ok"
+        return "ok" if store.put_checked(rel, local_path) else "skip"
+    except (requests.exceptions.RequestException, OSError) as e:
         print(f"  ERROR: {e}", file=sys.stderr)
-        return False
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        return "error"
 
 
-def download_helm_chart(session: requests.Session, dep: dict,
-                        artifactory_url: str) -> bool:
-    name = dep["name"]
-    version = dep["version"]
-    source_repo = dep.get("source_repo", "")
-    source_type = dep.get("source_type", "repo")
-    target_repo = dep["target_repo"]
-    repo_alias = f"tmp-{name}-{os.getpid()}"
+def provider_tree(entries: list[tuple[dict, str]], out_dir: str) -> list[str]:
+    """Write a static OpenTofu network_mirror tree and return its relative file paths.
 
-    try:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            if source_type == "oci":
-                oci_ref = f"{source_repo}/{name}"
-                print(f"  Pull OCI: {oci_ref} --version {version}")
-                subprocess.run(
-                    ["helm", "pull", oci_ref, "--version", version, "-d", tmp_dir],
-                    check=True, capture_output=True, text=True
-                )
+    Layout, as `tofu providers mirror` produces it:
+      <hostname>/<namespace>/<type>/index.json              {"versions": {"<v>": {}}}
+      <hostname>/<namespace>/<type>/<version>.json          {"archives": {"<os_arch>": {...}}}
+      <hostname>/<namespace>/<type>/terraform-provider-*.zip
+    `entries` pairs each tofu_providers entry with its local archive.
+    """
+    out = Path(out_dir)
+    versions: dict[tuple[str, str, str], dict[str, dict]] = {}
+    files: list[str] = []
+    for dep, archive in entries:
+        host = dep.get("registry", DEFAULT_PROVIDER_HOST)
+        namespace, ptype = dep["path"].split("/")[:2]
+        name = os.path.basename(dep["path"])
+        match = PLATFORM.search(name)
+        if not match:
+            raise ValueError(f"provider archive {name!r} does not end in _<os>_<arch>.zip")
+        directory = out / host / namespace / ptype
+        directory.mkdir(parents=True, exist_ok=True)
+        dest = directory / name
+        dest.write_bytes(Path(archive).read_bytes())
+        files.append(str(dest.relative_to(out)))
+        platforms = versions.setdefault((host, namespace, ptype), {}).setdefault(dep["version"], {})
+        platforms[match.group(1)] = {"url": name, "hashes": [f"zh:{mc.sha256_of(archive)}"]}
+    for (host, namespace, ptype), by_version in versions.items():
+        directory = out / host / namespace / ptype
+        for version, platforms in by_version.items():
+            path = directory / f"{version}.json"
+            path.write_text(json.dumps({"archives": platforms}, indent=2) + "\n")
+            files.append(str(path.relative_to(out)))
+        index = directory / "index.json"
+        index.write_text(
+            json.dumps({"versions": {v: {} for v in sorted(by_version)}}, indent=2) + "\n")
+        files.append(str(index.relative_to(out)))
+    return files
+
+
+def upload_providers(dep_list: list[dict], local_dir: str, store: mc.Store,
+                     force: bool) -> tuple[int, int, int]:
+    entries, failed = [], 0
+    for dep in dep_list:
+        archive = get_local_path(local_dir, "tofu_providers", dep)
+        if os.path.exists(archive):
+            entries.append((dep, archive))
+        else:
+            print(f"  ERROR: {archive} not found", file=sys.stderr)
+            failed += 1
+    ok = skipped = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        files = provider_tree(entries, tmp)
+        # Metadata last: a client never reads the description of a missing archive.
+        files.sort(key=lambda f: f.endswith(".json"))
+        for rel in files:
+            state = upload_one(store, rel, os.path.join(tmp, rel), force)
+            if state == "ok":
+                ok += 1
+            elif state == "skip":
+                skipped += 1
             else:
-                subprocess.run(
-                    ["helm", "repo", "add", repo_alias, source_repo, "--force-update"],
-                    check=True, capture_output=True
-                )
-                subprocess.run(["helm", "repo", "update", repo_alias], check=True, capture_output=True)
-                subprocess.run(
-                    ["helm", "pull", f"{repo_alias}/{name}", "--version", version, "-d", tmp_dir],
-                    check=True, capture_output=True, text=True
-                )
-
-            tgz_files = glob.glob(os.path.join(tmp_dir, "*.tgz"))
-            if not tgz_files:
-                print(f"  ERROR: chart {name}-{version}.tgz not found", file=sys.stderr)
-                return False
-
-            chart_file = tgz_files[0]
-            chart_filename = os.path.basename(chart_file)
-
-            helm_host = os.environ.get("ARTIFACTORY_ONLINE_URL", "")
-            if not helm_host:
-                print("  ERROR: ARTIFACTORY_ONLINE_URL is required for helm push OCI", file=sys.stderr)
-                return False
-
-            helm_host = re.sub(r'^https?://', '', helm_host).split('/')[0]
-
-            oci_target = f"oci://{helm_host}/{target_repo}"
-            print(f"  Push OCI: {chart_filename} -> {oci_target}")
-            subprocess.run(
-                ["helm", "push", chart_file, oci_target],
-                check=True, capture_output=True, text=True
-            )
-
-            print(f"  OK: {chart_filename}")
-            return True
-    except subprocess.CalledProcessError as e:
-        stderr = e.stderr if e.stderr else e.stdout if e.stdout else str(e)
-        print(f"  ERROR helm: {stderr}", file=sys.stderr)
-        return False
-    except requests.exceptions.RequestException as e:
-        print(f"  ERROR upload: {e}", file=sys.stderr)
-        return False
-    finally:
-        if source_type != "oci":
-            subprocess.run(["helm", "repo", "remove", repo_alias], capture_output=True)
+                failed += 1
+    return ok, skipped, failed
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download and push dependencies")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--deps", required=True, help="Resolved deps JSON file")
     parser.add_argument("--type", required=True,
                         choices=["binaries", "tofu_providers", "helm_charts", "grafana_plugins"],
                         help="Type of dependencies to process")
-    parser.add_argument("--artifactory-url", default="", help="Artifactory base URL")
-    parser.add_argument("--skip-existing", action="store_true", default=True,
-                        help="Skip deps already in Artifactory")
+    mc.add_target_args(parser, oci=True, files=True, providers=True)
+    parser.add_argument("--force", action="store_true",
+                        help="Upload even when the .sha256 sidecar matches")
     parser.add_argument("--local-dir", default="",
-                        help="Local directory for the artifacts")
+                        help="Local directory for the artifacts (a temporary one by default)")
     parser.add_argument("--download-only", action="store_true",
-                        help="Download only (no upload to Artifactory)")
+                        help="Download only (no upload)")
     parser.add_argument("--upload-only", action="store_true",
-                        help="Upload only, from --local-dir to Artifactory")
+                        help="Upload only, from --local-dir")
     args = parser.parse_args()
 
     if args.download_only and args.upload_only:
-        print("ERROR: --download-only and --upload-only are mutually exclusive", file=sys.stderr)
-        sys.exit(1)
-
+        mc.die("--download-only and --upload-only are mutually exclusive")
     if (args.download_only or args.upload_only) and not args.local_dir:
-        print("ERROR: --local-dir is required with --download-only or --upload-only", file=sys.stderr)
-        sys.exit(1)
+        mc.die("--local-dir is required with --download-only or --upload-only")
 
-    if not args.download_only and not args.artifactory_url:
-        print("ERROR: --artifactory-url is required for upload", file=sys.stderr)
-        sys.exit(1)
+    uploading = not args.download_only
+    if uploading:
+        if args.type == "helm_charts" and not args.oci_registry:
+            mc.die("--oci-registry (MIRROR_REGISTRY) is required to upload charts")
+        if args.type == "tofu_providers" and not (args.provider_mirror or args.files_url):
+            mc.die("--provider-mirror (MIRROR_PROVIDER_URL) or --files-url is required to "
+                   "upload providers")
+        if args.type not in ("helm_charts", "tofu_providers") and not args.files_url:
+            mc.die("--files-url (MIRROR_FILES_URL) is required to upload")
 
     with open(args.deps) as f:
-        deps = json.load(f)
+        dep_list = json.load(f).get(args.type, [])
 
-    session = get_session() if not args.download_only else None
-    dep_list = deps.get(args.type, [])
-    success = 0
-    skipped = 0
-    failed = 0
+    tmp_dir = None
+    local_dir = args.local_dir
+    if not local_dir:
+        tmp_dir = tempfile.TemporaryDirectory()
+        local_dir = tmp_dir.name
+
+    files_store = provider_store = None
+    if uploading and args.type == "helm_charts":
+        mc.helm_login(args.oci_registry)
+    elif uploading and args.type == "tofu_providers":
+        provider_store = (mc.store_for(args.provider_mirror) if args.provider_mirror
+                          else mc.sub_store(args.files_url, "providers"))
+    elif uploading:
+        files_store = mc.store_for(args.files_url)
+
+    success = skipped = failed = 0
 
     for dep in dep_list:
-        name = dep["name"]
-        version = dep["version"]
-        target_repo = dep["target_repo"]
-        target_path = dep.get("target_path", "")
+        print(f"\n{'='*60}\n  {dep['name']} {dep['version']}\n{'='*60}")
 
-        print(f"\n{'='*60}")
-        print(f"  {name} {version}")
-        print(f"{'='*60}")
-
-        if not args.download_only and args.skip_existing and target_path:
-            if check_exists_in_artifactory(session, args.artifactory_url, target_repo, target_path):
-                print(f"  SKIP: already present in {target_repo}/{target_path}")
-                skipped += 1
+        if not args.upload_only:
+            if args.type == "helm_charts":
+                ok = download_helm_chart_local(dep, local_dir)
+            elif not dep.get("source_url"):
+                print(f"  ERROR: no source_url for {dep['name']}", file=sys.stderr)
+                ok = False
+            else:
+                ok = download_to_local(dep["source_url"], get_local_path(local_dir, args.type, dep))
+            if not ok:
+                failed += 1
                 continue
 
-        if args.download_only:
-            if args.type == "helm_charts":
-                ok = download_helm_chart_local(dep, args.local_dir)
-            else:
-                source_url = dep.get("source_url", "")
-                if not source_url:
-                    print(f"  ERROR: no source_url for {name}", file=sys.stderr)
-                    failed += 1
-                    continue
-                local_path = get_local_path(args.local_dir, args.type, dep)
-                ok = download_to_local(source_url, local_path)
-
-        elif args.upload_only:
-            if args.type == "helm_charts":
-                ok = upload_helm_chart(dep, args.local_dir, args.artifactory_url)
-            else:
-                local_path = get_local_path(args.local_dir, args.type, dep)
-                ok = upload_to_artifactory(session, local_path, args.artifactory_url,
-                                           target_repo, target_path)
-
-        else:
-            if args.type == "helm_charts":
-                ok = download_helm_chart(session, dep, args.artifactory_url)
-            else:
-                source_url = dep.get("source_url", "")
-                if not source_url:
-                    print(f"  ERROR: no source_url for {name}", file=sys.stderr)
-                    failed += 1
-                    continue
-                ok = download_and_upload(session, source_url, args.artifactory_url,
-                                         target_repo, target_path)
-
-        if ok:
+        if not uploading:
             success += 1
+            continue
+        if args.type == "tofu_providers":
+            continue  # uploaded as one tree below
+        if args.type == "helm_charts":
+            state = upload_helm_chart(dep, local_dir, args.oci_registry, args.force)
+        else:
+            state = upload_one(files_store, dep["path"],
+                               get_local_path(local_dir, args.type, dep), args.force)
+        if state == "ok":
+            success += 1
+        elif state == "skip":
+            skipped += 1
         else:
             failed += 1
 
-    report = {
-        "type": args.type,
-        "total": len(dep_list),
-        "success": success,
-        "skipped": skipped,
-        "failed": failed
-    }
+    if uploading and args.type == "tofu_providers":
+        print(f"\n{'='*60}\n  OpenTofu network mirror\n{'='*60}")
+        ok, skip, bad = upload_providers(dep_list, local_dir, provider_store, args.force)
+        success += ok
+        skipped += skip
+        failed += bad
 
-    report_file = f"download-report-{args.type}.json"
-    with open(report_file, "w") as f:
+    report = {"type": args.type, "total": len(dep_list), "success": success,
+              "skipped": skipped, "failed": failed}
+    with open(f"download-report-{args.type}.json", "w") as f:
         json.dump(report, f, indent=2)
 
     print(f"\n{'='*60}")
     print(f"Result: {success} OK, {skipped} skipped, {failed} failed out of {len(dep_list)}")
     print(f"{'='*60}")
 
+    if tmp_dir:
+        tmp_dir.cleanup()
     if failed > 0:
         sys.exit(1)
 

@@ -145,8 +145,8 @@ func TestPlanMachinesStopsBeyondItsAddresses(t *testing.T) {
 
 func TestVMSourcesNeedABuildOrAnUpstream(t *testing.T) {
 	tr := vmTree(t)
-	deps := &depsFile{Binaries: []genericDep{{Name: "jq", Version: "1.7", TargetRepo: "rondo-generic-local",
-		TargetPath: "tools/jq/{version}/jq"}}}
+	deps := &depsFile{Binaries: []genericDep{{Name: "jq", Version: "1.7", Kind: "file",
+		Path: "tools/jq/{version}/jq"}}}
 	builds := []artifactBuild{{Path: "components/vm/1.0.0/payload.tar.gz", Dir: "payload"},
 		{Path: "/components/vm/ansible.tar.gz/", Dir: "ansible"}}
 	srcs, err := vmSources(tr, builds, deps)

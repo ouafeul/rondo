@@ -23,6 +23,7 @@ COPY --from=helm /usr/bin/helm /usr/local/bin/helm
 COPY --from=build /out/rondo /usr/local/bin/rondo
 COPY manifests/crds /opt/rondo/crds
 # The deps train, for a component to mirror the upstream dependencies of its own manifest.
-COPY scripts/ci/extract-helm-images.py scripts/ci/resolve-deps.py scripts/ci/download-deps.py scripts/ci/mirror-images.py /opt/rondo/deps/
+COPY scripts/ci/extract-helm-images.py scripts/ci/resolve-deps.py scripts/ci/download-deps.py \
+     scripts/ci/mirror-images.py scripts/ci/mirror_common.py /opt/rondo/deps/
 ENV RONDO_CRDS_DIR=/opt/rondo/crds
 WORKDIR /work

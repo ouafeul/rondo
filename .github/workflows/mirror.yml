@@ -1,13 +1,28 @@
 name: Air-gap mirror
 
 # Resolves the third-party dependencies of a release (manifests/dependencies.yaml + rendered charts),
-# downloads them, scans them with ClamAV, and uploads them to the mirror configured in the
-# MIRROR_* secrets. Without those secrets it stops after the scan and keeps the bundle as an artifact.
+# downloads them, scans them (ClamAV on every file, Trivy on the images and the binaries), and
+# uploads them to the mirror configured in the MIRROR_* secrets: any OCI registry, any HTTP file
+# server (or S3-compatible bucket), any RPM repository server. Without those secrets it stops after
+# the scans and keeps the reports as artifacts.
+#
+# Secrets (all optional until `upload` is set):
+#   MIRROR_REGISTRY    OCI registry, host[/prefix]: images at <registry>/<image path>, charts at
+#                      <registry>/charts/<chart>
+#   MIRROR_FILES_URL   HTTP base URL (PUT) or s3://bucket/prefix: binaries, tofu providers (under
+#                      <files-url>/providers, as an OpenTofu network_mirror tree)
+#   MIRROR_RPM_URL     base URL of the RPM repository server
+#   MIRROR_USER, MIRROR_PASSWORD   credentials for all three
+#   MIRROR_CA_CERT    PEM text of the CA that signs the mirror's certificates
 on:
   workflow_dispatch:
     inputs:
       upload:
         description: Upload to the mirror configured in the MIRROR_* secrets
+        type: boolean
+        default: false
+      fail_on_vulns:
+        description: Fail the run when Trivy finds a CRITICAL or HIGH vulnerability with a fix
         type: boolean
         default: false
 
@@ -24,15 +39,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      MIRROR_URL: ${{ secrets.MIRROR_URL }}
       MIRROR_REGISTRY: ${{ secrets.MIRROR_REGISTRY }}
+      MIRROR_FILES_URL: ${{ secrets.MIRROR_FILES_URL }}
+      MIRROR_RPM_URL: ${{ secrets.MIRROR_RPM_URL }}
       MIRROR_USER: ${{ secrets.MIRROR_USER }}
       MIRROR_PASSWORD: ${{ secrets.MIRROR_PASSWORD }}
+      MIRROR_CA_CERT_PEM: ${{ secrets.MIRROR_CA_CERT }}
+      FAIL_ON_VULNS: ${{ inputs.fail_on_vulns }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Mirror CA
+        run: |
+          if [ -n "${MIRROR_CA_CERT_PEM}" ]; then
+            printf '%s\n' "${MIRROR_CA_CERT_PEM}" > "${RUNNER_TEMP}/mirror-ca.pem"
+            echo "MIRROR_CA_CERT=${RUNNER_TEMP}/mirror-ca.pem" >> "$GITHUB_ENV"
+          fi
       - name: Tools
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
@@ -40,18 +64,22 @@ jobs:
           helm_version="$(grep -A2 'name: helm$' manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}')"
           curl -fsSL "https://get.helm.sh/helm-${helm_version}-linux-amd64.tar.gz" | tar xz -C /tmp
           sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: S3 client
+        if: startsWith(env.MIRROR_FILES_URL, 's3://')
+        run: pip install --quiet boto3
       - name: Resolve
         run: |
           python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml \
             --platform platform --apps apps --update-manifest
           python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
       - name: Download
+        # Images already in the mirror are not downloaded again (and so not scanned again).
         run: |
           for t in binaries tofu_providers helm_charts grafana_plugins; do
             python3 scripts/ci/download-deps.py --deps deps-resolved.json --type "$t" --download-only --local-dir deps-artifacts
           done
           python3 scripts/ci/mirror-images.py --deps deps-resolved.json --section docker_images --download-only \
-            --local-dir deps-artifacts --target-registry "${MIRROR_REGISTRY:-mirror.invalid}"
+            --local-dir deps-artifacts
       - name: ClamAV scan
         run: |
           docker run --rm -v "$PWD:/w" -w /w --entrypoint sh clamav/clamav:1.4 -c '
@@ -67,18 +95,82 @@ jobs:
             clamav-report.html
             clamav-junit.xml
           retention-days: 30
+      - name: Trivy scan of the downloaded binaries
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: deps-artifacts/binaries
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-binaries.sarif
+          exit-code: ${{ inputs.fail_on_vulns && '1' || '0' }}
+      - name: Trivy scan of the downloaded images
+        # The action above installs trivy; each image tarball gets its own SARIF file.
+        run: |
+          command -v trivy >/dev/null || { echo "FAILED: trivy is not on PATH" >&2; exit 1; }
+          exit_code=0
+          [ "${FAIL_ON_VULNS}" = "true" ] && exit_code=1
+          mkdir -p trivy-images
+          status=0
+          for tarball in deps-artifacts/docker_images/*.tar; do
+            [ -f "${tarball}" ] || continue
+            echo "==> ${tarball}"
+            trivy image --input "${tarball}" --severity CRITICAL,HIGH --ignore-unfixed \
+              --format sarif --output "trivy-images/$(basename "${tarball}" .tar).sarif" \
+              --exit-code "${exit_code}" || status=1
+          done
+          exit "${status}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: trivy-report
+          path: |
+            trivy-binaries.sarif
+            trivy-images/
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Upload to the mirror
         if: inputs.upload
         run: |
-          if [ -z "${MIRROR_URL}" ] || [ -z "${MIRROR_REGISTRY}" ]; then
-            echo "FAILED: MIRROR_URL and MIRROR_REGISTRY secrets are required to upload" >&2
+          if [ -z "${MIRROR_REGISTRY}" ] || [ -z "${MIRROR_FILES_URL}" ]; then
+            echo "FAILED: the MIRROR_REGISTRY and MIRROR_FILES_URL secrets are required to upload" >&2
             exit 1
           fi
-          host="$(echo "${MIRROR_URL}" | sed -E 's#^https?://##; s#/.*$##')"
-          echo "${MIRROR_PASSWORD}" | helm registry login "$host" --username "${MIRROR_USER}" --password-stdin
           for t in binaries tofu_providers helm_charts grafana_plugins; do
             python3 scripts/ci/download-deps.py --deps deps-resolved.json --type "$t" --upload-only \
-              --local-dir deps-artifacts --artifactory-url "${MIRROR_URL}"
+              --local-dir deps-artifacts
           done
           python3 scripts/ci/mirror-images.py --deps deps-resolved.json --section docker_images --upload-only \
-            --local-dir deps-artifacts --target-registry "${MIRROR_REGISTRY}" --dest-creds "${MIRROR_USER}:${MIRROR_PASSWORD}"
+            --local-dir deps-artifacts
+      - name: Upstream image lists (Rancher, rke2)
+        # Copied registry to registry, never staged on the runner: the lists hold hundreds of images.
+        if: inputs.upload
+        run: |
+          rancher_version="$(jq -r '.helm_charts[] | select(.name == "rancher") | .version' deps-resolved.json)"
+          rke2_version="$(jq -r '.binaries[] | select(.name == "rke2") | .version' deps-resolved.json)"
+          [ -n "${rancher_version}" ] && [ -n "${rke2_version}" ] \
+            || { echo "FAILED: rancher or rke2 missing from deps-resolved.json" >&2; exit 1; }
+          python3 scripts/ci/mirror-images.py \
+            --list-url "https://github.com/rancher/rancher/releases/download/v${rancher_version#v}/rancher-images.txt"
+          python3 scripts/ci/mirror-images.py \
+            --list-url "https://github.com/rancher/rke2/releases/download/${rke2_version}/rke2-images.linux-amd64.txt"
+      - name: RPM packages
+        if: inputs.upload
+        run: |
+          count="$(jq '[.rpm_packages[] | select(.name != "_repos")] | length' deps-resolved.json)"
+          if [ "${count}" = "0" ]; then
+            echo "No RPM package declared in manifests/dependencies.yaml: nothing to mirror"
+            exit 0
+          fi
+          [ -n "${MIRROR_RPM_URL}" ] || { echo "FAILED: the MIRROR_RPM_URL secret is required" >&2; exit 1; }
+          ca_args=()
+          if [ -n "${MIRROR_CA_CERT:-}" ]; then
+            ca_args=(-e MIRROR_CA_CERT -v "${MIRROR_CA_CERT}:${MIRROR_CA_CERT}:ro")
+          fi
+          docker run --rm -v "$PWD:/w" -w /w -e MIRROR_RPM_URL -e MIRROR_USER -e MIRROR_PASSWORD \
+            ${ca_args[@]+"${ca_args[@]}"} \
+            registry.access.redhat.com/ubi9/ubi sh -c '
+              dnf install -y -q python3-pip createrepo_c &&
+              pip3 install --quiet pyyaml==6.0.2 requests==2.32.3 certifi &&
+              python3 scripts/ci/mirror-rpms.py --deps deps-resolved.json --dest /tmp/rpms'

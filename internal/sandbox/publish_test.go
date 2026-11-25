@@ -123,13 +123,13 @@ func TestGenericDownloadsOnce(t *testing.T) {
 	pub, _ := testPublisher(t, "r")
 	root := t.TempDir()
 	dep := genericDep{Name: "p", Version: "v1", SourceURL: srv.URL + "/{version}/p-{version}.zip",
-		TargetRepo: "rondo-generic-local", TargetPath: "plugins/{version}/p.zip"}
+		Kind: "file", Path: "plugins/{version}/p.zip"}
 	for i := 0; i < 2; i++ {
 		if err := pub.generic(context.Background(), root, dep); err != nil {
 			t.Fatal(err)
 		}
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "rondo-generic-local", "plugins", "v1", "p.zip"))
+	raw, err := os.ReadFile(filepath.Join(root, "plugins", "v1", "p.zip"))
 	if err != nil || string(raw) != "zip" || hits != 1 {
 		t.Errorf("file %q (%v), %d download(s)", raw, err, hits)
 	}

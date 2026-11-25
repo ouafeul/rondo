@@ -34,11 +34,11 @@ type depsFile struct {
 }
 
 type genericDep struct {
-	Name       string `json:"name"`
-	Version    string `json:"version"`
-	SourceURL  string `json:"source_url"`
-	TargetRepo string `json:"target_repo"`
-	TargetPath string `json:"target_path"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	SourceURL string `json:"source_url"`
+	Kind      string `json:"kind"`
+	Path      string `json:"path"`
 }
 
 func readDeps(p string) (*depsFile, error) {
@@ -171,7 +171,7 @@ func RunPublish(ctx context.Context, s Settings, component, registry string, noB
 
 	log.Step("component generic files")
 	for _, a := range append(compDeps.GrafanaPlugins, compDeps.Binaries...) {
-		if err := pub.generic(ctx, filepath.Join(s.StateDir, "generic"), a); err != nil {
+		if err := pub.generic(ctx, filepath.Join(s.StateDir, "generic", genericRepo), a); err != nil {
 			return err
 		}
 	}
@@ -364,10 +364,10 @@ func (pub *publisher) hasTag(ctx context.Context, repo, tag string) (bool, error
 
 // generic lays a file where the site's generic repository has it, under the stand-in's root.
 func (pub *publisher) generic(ctx context.Context, root string, a genericDep) error {
-	if a.SourceURL == "" || a.TargetRepo == "" || a.TargetPath == "" {
+	if a.SourceURL == "" || a.Path == "" {
 		return nil
 	}
-	dest := filepath.Join(root, a.TargetRepo, strings.ReplaceAll(a.TargetPath, "{version}", a.Version))
+	dest := filepath.Join(root, strings.ReplaceAll(a.Path, "{version}", a.Version))
 	if fileExists(dest) {
 		log.Info("generic file already on the sandbox", "name", a.Name, "version", a.Version)
 		return nil
@@ -400,8 +400,8 @@ func (pub *publisher) generic(ctx context.Context, root string, a genericDep) er
 	if err := f.Close(); err != nil {
 		return err
 	}
-	log.Info("generic file published", "name", a.Name, "version", a.Version, "path", a.TargetRepo+"/"+
-		strings.ReplaceAll(a.TargetPath, "{version}", a.Version))
+	log.Info("generic file published", "name", a.Name, "version", a.Version, "path",
+		strings.ReplaceAll(a.Path, "{version}", a.Version))
 	return os.Rename(tmp, dest)
 }
 

@@ -49,8 +49,7 @@ def _args(**kw):
         list_url = None
         list_file = None
         section = "docker_images"
-        target_registry = "reg.local/rondo-docker-local"
-        dest_creds = ""
+        oci_registry = "reg.local/rondo-docker-local"
         local_dir = ""
         download_only = False
         upload_only = False

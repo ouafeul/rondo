@@ -1,9 +1,12 @@
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+# The scripts import their helper module (mirror_common) from their own directory.
+sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
 def _load(name: str):
@@ -25,8 +28,13 @@ def clamav_scan():
 
 
 @pytest.fixture(scope="session")
-def xray_scan():
-    return _load("xray-scan")
+def mirror_common():
+    return _load("mirror_common")
+
+
+@pytest.fixture(scope="session")
+def download_deps():
+    return _load("download-deps")
 
 
 @pytest.fixture(scope="session")

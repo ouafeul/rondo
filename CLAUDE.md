@@ -25,7 +25,7 @@ python3 scripts/ci/check-coverage.py cover.out # after go test -coverprofile=cov
 scripts/ci/gen-crds.sh                          # after any api/v1alpha1 change; --check in CI
 go run ./cmd/rondo component lint platform     # after platform/ or apps/ changes
 python3 -m pytest scripts/ci/tests -q && ruff check scripts/ci
-shellcheck scripts/ci/*.sh cmd/rondo-sandbox/rondo-sandbox.sh install.sh
+shellcheck scripts/ci/*.sh scripts/*.sh cmd/rondo-sandbox/rondo-sandbox.sh install.sh
 (cd docs && npm ci && npm run build)
 (cd web/dashboard && npm ci && npm run lint && npm run build)
 ```

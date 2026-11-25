@@ -2,49 +2,73 @@
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 import yaml
+
+PROVIDER_ARCHIVE = re.compile(r"_[a-z0-9]+_[a-z0-9]+\.zip$")
 
 
 def resolve_version_placeholders(data: dict) -> dict:
     resolved = {}
     for dep_type, deps in data.items():
         resolved[dep_type] = []
-        for dep in deps:
+        for dep in deps or []:
             entry = dict(dep)
             version = entry.get("version", "")
-            for key in ("source_url", "target_path"):
+            for key in ("source_url", "path"):
                 if key in entry and "{version}" in entry[key]:
                     entry[key] = entry[key].replace("{version}", version)
             resolved[dep_type].append(entry)
     return resolved
 
 
+# Section -> the `kind` its entries must declare (see the header of manifests/dependencies.yaml).
+SECTION_KINDS = {
+    "binaries": "file",
+    "grafana_plugins": "grafana_plugin",
+    "tofu_providers": "provider",
+    "helm_charts": "chart",
+    "docker_images": "image",
+    "rpm_packages": "rpm",
+}
+# rpm_packages carries one `_repos` pseudo-entry (upstream repositories), which is not mirrored.
+PSEUDO_ENTRIES = {"rpm_packages": "_repos"}
+
+
 def validate_manifest(data: dict) -> list[str]:
     errors = []
-    valid_types = {"binaries", "tofu_providers", "docker_images", "helm_charts", "grafana_plugins",
-                   "base_images", "rpm_packages"}
+    valid_types = set(SECTION_KINDS) | {"base_images"}
     types_requiring_source = {"binaries", "tofu_providers", "grafana_plugins"}
-    types_without_target = {"base_images"}
 
     for dep_type in data:
         if dep_type not in valid_types:
             errors.append(f"Unknown type: {dep_type}")
             continue
 
-        for i, dep in enumerate(data[dep_type]):
+        for i, dep in enumerate(data[dep_type] or []):
             if "name" not in dep:
                 errors.append(f"{dep_type}[{i}]: missing 'name' field")
-            if "version" not in dep:
+            if "version" not in dep and dep.get("name") != PSEUDO_ENTRIES.get(dep_type):
                 errors.append(f"{dep_type}[{i}]: missing 'version' field")
-            if "target_repo" not in dep and dep_type not in types_without_target:
-                errors.append(f"{dep_type}[{i}]: missing 'target_repo' field")
             if dep_type in types_requiring_source and "source_url" not in dep:
                 errors.append(f"{dep_type}[{i}]: missing 'source_url' field")
             if dep_type == "helm_charts" and "source_repo" not in dep:
                 errors.append(f"{dep_type}[{i}]: missing 'source_repo' field")
+            if dep_type not in SECTION_KINDS or dep.get("name") == PSEUDO_ENTRIES.get(dep_type):
+                continue
+            want = SECTION_KINDS[dep_type]
+            if dep.get("kind") != want:
+                errors.append(f"{dep_type}[{i}]: 'kind' must be {want!r}, got {dep.get('kind')!r}")
+            path = dep.get("path")
+            if not path or not isinstance(path, str):
+                errors.append(f"{dep_type}[{i}]: missing 'path' field")
+            elif path.startswith("/") or ".." in path.split("/"):
+                errors.append(f"{dep_type}[{i}]: 'path' must be relative, without '..': {path}")
+            elif dep_type == "tofu_providers" and not PROVIDER_ARCHIVE.search(path):
+                errors.append(f"{dep_type}[{i}]: 'path' must end in _<os>_<arch>.zip: {path}")
 
     return errors
 

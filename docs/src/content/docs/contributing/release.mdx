@@ -16,7 +16,7 @@ flowchart LR
   PR --> PG["pages.yml<br/><small>this site</small>"]
   TAG["tag v*"] --> REL["release.yml<br/><small>binaries, bundle, packages,<br/>charts, GitHub Release</small>"]
   TAG --> IMG
-  MAN["manual run"] --> MIR["mirror.yml<br/><small>release + dependencies<br/>→ site Artifactory</small>"]
+  MAN["manual run"] --> MIR["mirror.yml<br/><small>release + dependencies<br/>→ site mirror</small>"]
 ```
 
 | Workflow | Trigger | Does |
@@ -25,7 +25,7 @@ flowchart LR
 | `images.yml` | push to `main`, tag `v*` | builds `rondo-controller`, `rondo-toolbox`, `rondo-component-toolbox`, `rondo-sandbox-machine` and pushes them to `ghcr.io/ouafeul/` |
 | `release.yml` | tag `v*` | builds the release files, pushes the `apps/` charts to `oci://ghcr.io/ouafeul/charts`, and creates the GitHub Release with the tag's `CHANGELOG.md` section |
 | `pages.yml` | push to `main` touching `docs/` | builds this site and deploys it to GitHub Pages |
-| `mirror.yml` | manual (`workflow_dispatch`) | copies a release and the dependencies into an air-gap site's Artifactory |
+| `mirror.yml` | manual (`workflow_dispatch`) | resolves, downloads and scans (ClamAV, Trivy) the dependencies, and copies them into an air-gap site's mirror |
 
 ## What a release publishes
 
@@ -44,21 +44,55 @@ The release notes are the tag's section of `CHANGELOG.md`.
 
 ## Air-gap mirror
 
-A site has no Internet access: RONDO and everything it installs must be copied into the site's Artifactory, from a connected network. `mirror.yml` does it for a given version (or the same scripts run by hand from a connected machine that can reach the Artifactory):
+A site has no Internet access: RONDO and everything it installs must be copied into the site's mirror, from a connected network. The mirror is whatever the site runs, as long as it offers three services:
+
+| Service | Any of | Flag | Environment |
+|---|---|---|---|
+| OCI registry | Harbor, GHCR, distribution, Artifactory, Nexus | `--oci-registry host[/prefix]` | `MIRROR_REGISTRY` |
+| file server | any HTTP server accepting `PUT` (nginx with WebDAV, Artifactory, Nexus raw), an S3-compatible bucket (`s3://bucket/prefix`, needs `boto3`, optional), or a directory | `--files-url` | `MIRROR_FILES_URL` |
+| RPM repository server | same as the file server | `--rpm-url` | `MIRROR_RPM_URL` |
+
+Credentials are `MIRROR_USER` / `MIRROR_PASSWORD`, and `MIRROR_CA_CERT` is the path of the PEM file of the CA that signs the mirror. OpenTofu providers go to a static network mirror under `--provider-mirror` (`MIRROR_PROVIDER_URL`, default `<files-url>/providers`). A file already on the server is not sent again: every upload is followed by a `<file>.sha256` sidecar, and a file whose sidecar matches is skipped.
+
+### A release
+
+`scripts/mirror-release.sh` (also a release asset) copies one RONDO release:
+
+```bash
+scripts/mirror-release.sh --version v1.0.0 \
+  --registry registry.site/rondo --files-url https://files.site/mirror \
+  --rpm-url https://rpm.site/rondo --channel stable
+```
+
+Add `--dry-run` to print the copy list first. `skopeo`, `helm`, `curl` and `git` are needed; `createrepo_c` builds the RPM `repodata/` when it is installed.
 
 | From | To |
 |---|---|
-| release assets: CLI, `install.sh`, `rondo.yaml.example`, IaC bundle | `rondo-generic-local/rondo/<tag>/` |
-| `stable.json` | `rondo-generic-local/rondo/` (the CLI's `stable` channel) |
-| `vm.tar.gz` | `rondo-generic-local/tofu-modules/vm/<tag>/` |
-| `rondo-ansible.tar.gz` | `rondo-generic-local/ansible/rondo/<tag>/` |
-| RPMs | `rondo-rpms-local` |
-| deb | `rondo-deb-local` (distribution `stable`, component `main`) |
-| GHCR images | `rondo-docker-local` |
-| `oci://ghcr.io/ouafeul/charts` | `rondo-helm-local` |
-| `manifests/dependencies.yaml`: binaries, tofu providers, charts, images (extracted from the charts of `helmfile.yaml`, `platform/` and `apps/`, plus the upstream Rancher and rke2 lists), RPMs | `rondo-generic-local`, `rondo-tofu-local`, `rondo-helm-local`, `rondo-docker-local`, `rondo-rpms-local` |
+| release assets: CLI, `install.sh`, `rondo.yaml.example`, IaC bundle, checked against `SHA256SUMS` | `<files-url>/rondo/<tag>/` |
+| `vm.tar.gz` | `<files-url>/tofu-modules/vm/<tag>/` |
+| `rondo-ansible.tar.gz` | `<files-url>/ansible/rondo/<tag>/` |
+| `--channel stable` | `<files-url>/rondo/stable.json` (the CLI's `stable` channel) |
+| RPMs, deb | `<rpm-url>/rondo/<tag>/` |
+| GHCR images `rondo-controller`, `rondo-toolbox`, `rondo-component-toolbox`, `rondo-sandbox-machine` | `<registry>/rondo-<name>:<tag>` |
+| `oci://ghcr.io/ouafeul/charts` (the `apps/` charts of the tag) | `oci://<registry>/charts/<chart>` |
 
-Each downloaded file is scanned before upload. `stable.json` is written **last**, so that a site never resolves a version whose files are missing.
+The channel file is written **last**, so that a site never resolves a version whose files are missing.
+
+### The dependencies
+
+`mirror.yml` copies what the release installs from third parties, from `manifests/dependencies.yaml`. Each entry has a `kind` (`file`, `grafana_plugin`, `provider`, `chart`, `image`, `rpm`) and a `path` relative to that kind's root, so the file says what is mirrored and the flags say where:
+
+| Kind | Root | Mirrored by |
+|---|---|---|
+| `file`, `grafana_plugin` | `--files-url` | `download-deps.py` |
+| `provider` | `--provider-mirror` | `download-deps.py`: `<host>/<namespace>/<type>/index.json`, `<version>.json` and the archives |
+| `chart` | `<registry>/charts` | `download-deps.py` (`helm push`) |
+| `image` (extracted from the charts of `helmfile.yaml`, `platform/` and `apps/`) | `<registry>` | `mirror-images.py` (`skopeo`) |
+| `rpm` | `--rpm-url` | `mirror-rpms.py`, with `repodata/` built by `createrepo_c` |
+
+The run also copies the upstream Rancher and rke2 image lists (`rancher-images.txt`, `rke2-images.linux-amd64.txt` of the pinned versions), registry to registry.
+
+Each downloaded file is scanned with ClamAV, and the images and binaries with Trivy (SARIF report as an artifact; the run fails on a fixable CRITICAL or HIGH vulnerability only with the `fail_on_vulns` input). Secrets: `MIRROR_REGISTRY`, `MIRROR_FILES_URL`, `MIRROR_RPM_URL`, `MIRROR_USER`, `MIRROR_PASSWORD`, `MIRROR_CA_CERT`.
 
 <Aside type="tip">A component follows the same pattern: its CI publishes its tree, charts and images, and its `dependencies.yaml` says what the site must mirror. See [Publish](/components/publish/).</Aside>
 
@@ -71,6 +105,6 @@ Each downloaded file is scanned before upload. `stable.json` is written **last**
 3. Annotated tag on `main`: `git tag -a vX.Y.Z -m "vX.Y.Z, description"`.
 4. `git push origin vX.Y.Z`.
 5. Check that `release.yml` and `images.yml` succeeded: the GitHub Release has its assets, the images and charts are on GHCR.
-6. For air-gap sites, run `mirror.yml` for the new version.
+6. For air-gap sites, run `scripts/mirror-release.sh --version vX.Y.Z` (and `mirror.yml` for the dependencies).
 
 </Steps>

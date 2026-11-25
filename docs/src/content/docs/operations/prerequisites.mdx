@@ -72,7 +72,7 @@ Every repository is a path segment under its root, `<root>/<repository>/<path>`.
 | OpenTofu providers (network mirror, a `tofu providers mirror` tree) | `tofu.providerMirror` | `rondo-tofu-local` |
 | tofu states (HTTP backend, written) | `tofu.stateURL` | `rondo-tofu-state-local` |
 
-They are fed from a connected network: RONDO releases come from [GitHub Releases](https://github.com/ouafeul/rondo/releases), images from `ghcr.io/ouafeul`, RONDO charts from `oci://ghcr.io/ouafeul/charts`, and third-party dependencies from `manifests/dependencies.yaml`. See [Air-gap mirror](/contributing/release/#air-gap-mirror).
+They are fed from a connected network: RONDO releases come from [GitHub Releases](https://github.com/ouafeul/rondo/releases), images from `ghcr.io/ouafeul`, RONDO charts from `oci://ghcr.io/ouafeul/charts`, and third-party dependencies from `manifests/dependencies.yaml`. The copy scripts are not tied to Artifactory: they write to any OCI registry, any HTTP file server (or S3-compatible bucket) and any RPM repository server, given as `--oci-registry`, `--files-url` and `--rpm-url`; for Artifactory, pass the URLs of its repositories. See [Air-gap mirror](/contributing/release/#air-gap-mirror).
 
 The service account (`artifacts.username`, `secrets.mirrorPassword`) reads every endpoint and writes the tofu states. The Jobs' providers authenticate on the provider mirror with `secrets.mirrorToken`; when it is empty, an Artifactory issues a token on each `rondo deploy` (without expiry, `artifactory.mirrorTokenLifetimeSeconds` empty, it needs an admin account) and a generic mirror is read without a token.
 

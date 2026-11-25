@@ -14,11 +14,13 @@ type Dependency struct {
 	Version string
 }
 
+// Mirror is what manifests/dependencies.yaml makes available on a site. Artifacts are the
+// paths of the `file` and `grafana_plugin` entries, relative to the file server root;
+// RPMPaths the repository sub-paths of the `rpm` entries.
 type Mirror struct {
-	Charts       map[string]Dependency
-	Artifacts    map[string]bool
-	GenericRepos map[string]bool
-	RPMRepos     map[string]bool
+	Charts    map[string]Dependency
+	Artifacts map[string]bool
+	RPMPaths  map[string]bool
 }
 
 type mirrorFile struct {
@@ -29,14 +31,13 @@ type mirrorFile struct {
 	Binaries       []mirrorArtifact `json:"binaries"`
 	GrafanaPlugins []mirrorArtifact `json:"grafana_plugins"`
 	RPMPackages    []struct {
-		TargetRepo string `json:"target_repo"`
+		Path string `json:"path"`
 	} `json:"rpm_packages"`
 }
 
 type mirrorArtifact struct {
-	Version    string `json:"version"`
-	TargetRepo string `json:"target_repo"`
-	TargetPath string `json:"target_path"`
+	Version string `json:"version"`
+	Path    string `json:"path"`
 }
 
 func LoadDependencies(path string) (*Mirror, error) {
@@ -49,26 +50,24 @@ func LoadDependencies(path string) (*Mirror, error) {
 		return nil, fmt.Errorf("%s unreadable: %w", path, err)
 	}
 	m := &Mirror{
-		Charts:       map[string]Dependency{},
-		Artifacts:    map[string]bool{},
-		GenericRepos: map[string]bool{},
-		RPMRepos:     map[string]bool{},
+		Charts:    map[string]Dependency{},
+		Artifacts: map[string]bool{},
+		RPMPaths:  map[string]bool{},
 	}
 	for _, c := range manifest.HelmCharts {
 		m.Charts[c.Name] = Dependency{Name: c.Name, Version: c.Version}
 	}
 	for _, group := range [][]mirrorArtifact{manifest.Binaries, manifest.GrafanaPlugins} {
 		for _, a := range group {
-			if a.TargetRepo == "" || a.TargetPath == "" {
+			if a.Path == "" {
 				continue
 			}
-			m.GenericRepos[a.TargetRepo] = true
-			m.Artifacts[artifactKey(a.TargetRepo, expandVersion(a.TargetPath, a.Version))] = true
+			m.Artifacts[artifactKey(expandVersion(a.Path, a.Version))] = true
 		}
 	}
 	for _, r := range manifest.RPMPackages {
-		if r.TargetRepo != "" {
-			m.RPMRepos[r.TargetRepo] = true
+		if p := artifactKey(r.Path); p != "" {
+			m.RPMPaths[p] = true
 		}
 	}
 	if len(m.Charts) == 0 {
@@ -81,8 +80,8 @@ func expandVersion(path, version string) string {
 	return strings.ReplaceAll(path, "{version}", version)
 }
 
-func artifactKey(repo, path string) string {
-	return strings.Trim(repo, "/") + "/" + strings.Trim(path, "/")
+func artifactKey(path string) string {
+	return strings.Trim(path, "/")
 }
 
 var firstPartyCharts = map[string]bool{
@@ -152,9 +151,8 @@ func validateVMMirror(obj Object, vm map[string]any, m *Mirror) []Finding {
 		if !ok {
 			continue
 		}
-		repo, _ := a["repo"].(string)
 		path, _ := a["path"].(string)
-		if repo == "" || path == "" {
+		if path == "" {
 			continue
 		}
 		where := fmt.Sprintf("Component/%s, spec.vm.artifacts[%d]", obj.Name, i)
@@ -167,26 +165,20 @@ func validateVMMirror(obj Object, vm map[string]any, m *Mirror) []Finding {
 		}
 		provenance, _ := a["provenance"].(string)
 		if provenance == provenanceComponent {
-			out = append(out, checkComponentArtifact(obj, where, repo, path, m)...)
+			out = append(out, checkComponentArtifact(obj, where, path)...)
 			continue
 		}
-		if unresolved(repo) {
-			out = append(out, Finding{obj.Path, LevelWarning, fmt.Sprintf(
-				"%s: repository %q holds a placeholder, mirror coverage NOT verified",
-				where, repo)})
-			continue
-		}
-		if m.Artifacts[artifactKey(repo, path)] {
+		if m.Artifacts[artifactKey(path)] {
 			continue
 		}
 		out = append(out, Finding{obj.Path, LevelError, fmt.Sprintf(
-			"%s references %s/%s with provenance `upstream` (the default), missing from "+
+			"%s references %s with provenance `upstream` (the default), missing from "+
 				"manifests/dependencies.yaml: the artifact will NOT be mirrored, and its "+
 				"download will fail with 404 ON THE MACHINE, after provisioning. "+
 				"Either it is an upstream COTS artifact and must be declared in the manifest "+
-				"(target repository %s, target path %s), or it is an artifact published by "+
+				"(`kind: file`, `path: %s`), or it is an artifact published by "+
 				"the component's CI and must be annotated `provenance: component`.",
-			where, repo, path, repo, path)})
+			where, path, path)})
 	}
 
 	repos, _ := nestedSlice(vm, "rpmRepos")
@@ -195,39 +187,33 @@ func validateVMMirror(obj Object, vm map[string]any, m *Mirror) []Finding {
 		if !ok {
 			continue
 		}
-		repo, _ := r["repo"].(string)
-		if repo == "" {
+		path, _ := r["path"].(string)
+		if path == "" {
 			continue
 		}
 		where := fmt.Sprintf("Component/%s, spec.vm.rpmRepos[%d]", obj.Name, i)
-		if unresolved(repo) {
+		if unresolved(path) {
 			out = append(out, Finding{obj.Path, LevelWarning, fmt.Sprintf(
-				"%s: repository %q holds a placeholder, mirror coverage NOT verified",
-				where, repo)})
+				"%s: path %q holds a placeholder, mirror coverage NOT verified",
+				where, path)})
 			continue
 		}
-		if m.RPMRepos[repo] {
+		if m.RPMPaths[artifactKey(path)] {
 			continue
 		}
 		out = append(out, Finding{obj.Path, LevelError, fmt.Sprintf(
-			"%s configures package repository %q, which no `rpm_packages` entry of "+
+			"%s configures package repository path %q, which no `rpm_packages` entry of "+
 				"manifests/dependencies.yaml feeds: `dnf` would find nothing there. "+
-				"Fed repositories: %s",
-			where, repo, strings.Join(sortedNames(m.RPMRepos), ", "))})
+				"Fed paths: %s",
+			where, path, strings.Join(sortedNames(m.RPMPaths), ", "))})
 	}
 	return out
 }
 
 const componentArtifactPrefix = "components/"
 
-func checkComponentArtifact(obj Object, where, repo, path string, m *Mirror) []Finding {
+func checkComponentArtifact(obj Object, where, path string) []Finding {
 	var out []Finding
-	if !unresolved(repo) && len(m.GenericRepos) > 0 && !m.GenericRepos[repo] {
-		out = append(out, Finding{obj.Path, LevelError, fmt.Sprintf(
-			"%s publishes to repository %q, which no entry of manifests/dependencies.yaml "+
-				"uses: wrong repository name? Known repositories: %s",
-			where, repo, strings.Join(sortedNames(m.GenericRepos), ", "))})
-	}
 	want := componentArtifactPrefix + obj.Name + "/"
 	if !strings.HasPrefix(strings.TrimLeft(path, "/"), want) {
 		out = append(out, Finding{obj.Path, LevelError, fmt.Sprintf(
