@@ -25,6 +25,10 @@ updates:
     multi-ecosystem-group: dependencies
     cooldown:
       default-days: 7
+    ignore:
+      # typescript-eslint must support a TypeScript major before the dashboard can take it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directories:
       - /build/controller
