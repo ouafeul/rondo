@@ -2,13 +2,11 @@ name: Images
 
 on:
   pull_request:
+    # Go changes are compiled and tested by CI; pull requests rebuild images only when
+    # what goes into them beyond the Go code changes.
     paths:
-      - '**/*.go'
-      - go.mod
-      - go.sum
       - 'build/**'
       - 'manifests/dependencies.yaml'
-      - 'manifests/crds/**'
       - '.github/workflows/images.yml'
   push:
     branches: [main]

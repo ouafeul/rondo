@@ -1,33 +1,30 @@
+# One monthly pull request for every ecosystem, after a cooldown so fresh releases settle first.
 version: 2
+
+multi-ecosystem-groups:
+  dependencies:
+    schedule:
+      interval: monthly
+
 updates:
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns: ["*"]
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    cooldown:
+      default-days: 7
   - package-ecosystem: gomod
     directory: /
-    schedule:
-      interval: weekly
-    groups:
-      k8s:
-        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    cooldown:
+      default-days: 7
   - package-ecosystem: npm
-    directory: /docs
-    schedule:
-      interval: monthly
-    groups:
-      docs:
-        patterns: ["*"]
-  - package-ecosystem: npm
-    directory: /web/dashboard
-    schedule:
-      interval: monthly
-    groups:
-      dashboard:
-        patterns: ["*"]
+    directories: [/docs, /web/dashboard]
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    cooldown:
+      default-days: 7
   - package-ecosystem: docker
     directories:
       - /build/controller
@@ -35,5 +32,7 @@ updates:
       - /build/component-toolbox
       - /build/sandbox-machine
       - /build/ci-toolbox
-    schedule:
-      interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    cooldown:
+      default-days: 7
