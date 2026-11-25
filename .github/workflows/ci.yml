@@ -244,7 +244,7 @@ jobs:
           version: ${{ steps.versions.outputs.helm }}
       - name: Render charts and resolve dependencies
         run: |
-          pip install --quiet pyyaml==6.0.2 requests==2.32.3
+          pip install --quiet pyyaml==6.0.2 requests==2.34.2
           python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml \
             --platform platform --apps apps --update-manifest --emit-gvks rendered-gvks.txt
           python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
@@ -264,7 +264,7 @@ jobs:
       - name: Install linters
         run: >-
           pip install --quiet pytest==9.1.1 ruff==0.15.22 shellcheck-py==0.11.0.1 pyyaml==6.0.2
-          requests==2.32.3 jinja2==3.1.6 ansible-lint==26.9.0
+          requests==2.34.2 jinja2==3.1.6 ansible-lint==26.9.0
       - run: ruff check scripts/ci
       - run: shellcheck scripts/ci/*.sh .githooks/pre-commit .githooks/pre-push cmd/rondo-sandbox/rondo-sandbox.sh install.sh
       - run: ansible-lint ansible/
@@ -336,6 +336,7 @@ jobs:
       - name: Secrets (blocking)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          trivy-config: trivy.yaml
           scan-type: fs
           scanners: secret
           exit-code: "1"
@@ -343,6 +344,7 @@ jobs:
       - name: Vulnerabilities and misconfigurations (report)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          trivy-config: trivy.yaml
           scan-type: fs
           scanners: vuln,misconfig
           severity: CRITICAL,HIGH

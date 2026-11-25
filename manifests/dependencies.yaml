@@ -12,19 +12,19 @@ binaries:
     target_path: "k3s/{version}/k3s-airgap-images-amd64.tar.zst"
 
   - name: opentofu
-    version: "1.11.5"
+    version: "1.11.14"
     source_url: "https://github.com/opentofu/opentofu/releases/download/v{version}/tofu_{version}_linux_amd64.zip"
     target_repo: rondo-generic-local
     target_path: "opentofu/{version}/tofu_{version}_linux_amd64.zip"
 
   - name: helm
-    version: "v3.17.3"
+    version: "v3.22.1"
     source_url: "https://get.helm.sh/helm-{version}-linux-amd64.tar.gz"
     target_repo: rondo-generic-local
     target_path: "helm/{version}/helm-{version}-linux-amd64.tar.gz"
 
   - name: kubectl
-    version: "v1.34.0"
+    version: "v1.34.13"
     source_url: "https://dl.k8s.io/release/{version}/bin/linux/amd64/kubectl"
     target_repo: rondo-generic-local
     target_path: "kubectl/{version}/kubectl"

@@ -1,0 +1,31 @@
+# Findings reviewed and accepted, each with its reason. Read through trivy.yaml (ignorefile).
+misconfigurations:
+  - id: DS-0026
+    statement: >-
+      No HEALTHCHECK: the controller runs in Kubernetes, which probes it; the other images are
+      CLI, Job or CI images that run to completion. Docker health checks are ignored by Kubernetes.
+  - id: DS-0002
+    paths:
+      - build/sandbox-machine/Dockerfile
+    statement: >-
+      rondo-sandbox-machine boots systemd as PID 1 to stand in for a virtual machine; it needs root.
+  - id: DS-0002
+    paths:
+      - build/component-toolbox/Dockerfile
+      - build/ci-toolbox/Dockerfile
+    statement: >-
+      CI job images: runners mount the workspace owned by root and run steps in it; a non-root
+      user would not be able to write the checkout or install tooling during a job.
+  - id: KSV-0048
+    paths:
+      - apps/local-path-provisioner/templates/rbac.yaml
+    statement: >-
+      The provisioner creates and deletes helper pods to prepare and clean volume directories on nodes.
+  - id: KSV-0125
+    statement: >-
+      Images come from each site's own mirror registry, which RONDO cannot know in advance.
+vulnerabilities:
+  - id: GO-2026-5932
+    statement: >-
+      Advisory on golang.org/x/crypto/openpgp, which has no fix. RONDO imports only
+      golang.org/x/crypto/ssh; openpgp is never compiled in (govulncheck reports no reachable call).

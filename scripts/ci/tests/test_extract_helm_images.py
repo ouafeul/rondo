@@ -431,3 +431,13 @@ def test_rendered_gvks_are_accumulated_across_charts(
     assert "apps/Deployment" in extract_helm_images.RENDERED_GVKS, (
         "the helm stub renders a Deployment: it must appear in the accumulator"
     )
+
+
+def test_cluster_kube_version_is_the_newest_pinned_cluster(extract_helm_images):
+    manifest = {"binaries": [
+        {"name": "k3s", "version": "v1.31.4+k3s1"},
+        {"name": "rke2", "version": "v1.34.5+rke2r1"},
+        {"name": "helm", "version": "v3.22.1"},
+    ]}
+    assert extract_helm_images.cluster_kube_version(manifest) == "v1.34.5"
+    assert extract_helm_images.cluster_kube_version({"binaries": []}) is None

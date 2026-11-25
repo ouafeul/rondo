@@ -289,7 +289,7 @@ artifacts:                        # machine files the component's CI publishes
     build: make rpm                 # …or a file, after a command
     file: dist/mft-agent.rpm
 rpmRepos:                         # upstream of each RPM repository the site mirrors
-  rondo-rpms-local/el9/9.6/baseos: https://dl.rockylinux.org/vault/rocky/9.6/BaseOS/x86_64/os/
+  rondo-rpms-local/el9/9.9/baseos: https://dl.rockylinux.org/pub/rocky/9.9/BaseOS/x86_64/os/
 ```
 
 `component install ../other` reads that directory's `rondo-sandbox.yaml`: its component keys,
@@ -359,7 +359,7 @@ spec:
     groups:
       - {name: web, replicas: 2}
     rpmRepos:
-      - {name: baseos, repo: "${ARTIFACTORY_RPM_REPO}", path: el9/9.6/baseos,
+      - {name: baseos, repo: "${ARTIFACTORY_RPM_REPO}", path: el9/9.9/baseos,
          gpgKey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9}
     artifacts:
       - {repo: "${ARTIFACTORY_GENERIC_REPO}", provenance: component,
@@ -391,7 +391,7 @@ artifacts:
   - path: components/hello-vm/1.0.0/hello.tar.gz
     dir: payload                    # payload/deploy/install.sh, verify.sh
 rpmRepos:
-  rondo-rpms-local/el9/9.6/baseos: https://dl.rockylinux.org/vault/rocky/9.6/BaseOS/x86_64/os/
+  rondo-rpms-local/el9/9.9/baseos: https://dl.rockylinux.org/pub/rocky/9.9/BaseOS/x86_64/os/
 ports:
   - {hostPort: 8088, machine: hello-vm-web-1, port: 8080, protocol: http}
 ```

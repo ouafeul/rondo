@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset.
 
+### Security
+- Images and tools on current patch releases: Go 1.26.11, Helm 3.22.1, kubectl 1.34.13, OpenTofu 1.11.14, Rocky Linux 9.9 for the sandbox machine, OS packages upgraded at build.
+- The local-path-provisioner chart runs non-root with a read-only root filesystem, no privilege escalation, all capabilities dropped and the RuntimeDefault seccomp profile.
+
 ## [1.0.0-rc.1] - First release candidate
 
 RONDO deploys components onto air-gapped infrastructure with three objects and three actions:

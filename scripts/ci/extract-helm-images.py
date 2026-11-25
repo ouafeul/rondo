@@ -309,8 +309,28 @@ def helm_pull(chart_name, version, repo, dest_dir):
     return os.path.join(dest_dir, chart_name)
 
 
+# Kubernetes version charts are rendered for: the newest cluster RONDO deploys (set by main()),
+# not Helm's built-in default, which follows Helm releases and trips charts' kubeVersion bounds.
+KUBE_VERSION = None
+
+
+def cluster_kube_version(manifest):
+    """Highest k3s/rke2 Kubernetes version pinned in the manifest, e.g. 'v1.34.5'."""
+    found = []
+    for entry in (manifest or {}).get("binaries") or []:
+        if isinstance(entry, dict) and entry.get("name") in ("k3s", "rke2"):
+            m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", str(entry.get("version", "")))
+            if m:
+                found.append(tuple(int(x) for x in m.groups()))
+    if not found:
+        return None
+    return "v%d.%d.%d" % max(found)
+
+
 def helm_template(chart_dir, values_files=None):
     cmd = ["helm", "template", "extract", chart_dir]
+    if KUBE_VERSION:
+        cmd.extend(["--kube-version", KUBE_VERSION])
     for vf in (values_files or []):
         cmd.extend(["-f", vf])
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -604,6 +624,11 @@ def main():
 
     with open(args.manifest) as f:
         manifest = yaml.safe_load(f)
+
+    global KUBE_VERSION
+    KUBE_VERSION = os.environ.get("RONDO_KUBE_VERSION") or cluster_kube_version(manifest)
+    if KUBE_VERSION:
+        print(f"==> rendering charts for Kubernetes {KUBE_VERSION}")
 
     charts = manifest.get("helm_charts", [])
     if not charts:
