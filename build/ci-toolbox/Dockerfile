@@ -13,5 +13,7 @@ RUN curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
     && rm -rf /tmp/linux-amd64 \
     && helm version --short
 
+# pip is only needed to build the image; removing it also drops the packages it vendors.
 RUN pip install --no-cache-dir --upgrade pip setuptools \
-    && pip install --no-cache-dir pyyaml==6.0.4 requests==2.34.2 certifi
+    && pip install --no-cache-dir pyyaml==6.0.4 requests==2.34.2 certifi \
+    && python -m pip uninstall -y pip
