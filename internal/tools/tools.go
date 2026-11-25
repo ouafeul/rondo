@@ -30,12 +30,12 @@ func def(env map[string]string, key, fallback string) string {
 }
 
 func toolset(env map[string]string) []tool {
-	tofu := def(env, "TOFU_VERSION", "1.11.14")
+	tofu := def(env, "TOFU_VERSION", "1.13.10")
 	helm := def(env, "HELM_VERSION", "v3.22.1")
 	helmfile := def(env, "HELMFILE_VERSION", "1.8.5")
-	kubectl := def(env, "KUBECTL_VERSION", "v1.34.13")
-	k9s := def(env, "K9S_VERSION", "v0.40.5")
-	yq := def(env, "YQ_VERSION", "v4.44.6")
+	kubectl := def(env, "KUBECTL_VERSION", "v1.36.6")
+	k9s := def(env, "K9S_VERSION", "v0.51.0")
+	yq := def(env, "YQ_VERSION", "v4.54.3")
 	return []tool{
 		{"tofu", fmt.Sprintf("opentofu/%s/tofu_%s_linux_amd64.zip", tofu, tofu), "zip", "tofu"},
 		{"helm", fmt.Sprintf("helm/%s/helm-%s-linux-amd64.tar.gz", helm, helm), "targz", "helm"},
@@ -57,8 +57,8 @@ type Installer struct {
 	Digests map[string]string
 }
 
-// Last helm-diff whose plugin.yaml uses command/hooks; later ones need Helm 3.18.
-const helmDiffDefaultVersion = "v3.9.14"
+// helm-diff's plugin.yaml (platformCommand/platformHooks) needs Helm 3.18 or later.
+const helmDiffDefaultVersion = "v3.15.15"
 
 func helmDiffPath(version string) string {
 	return fmt.Sprintf("helm-diff/%s/helm-diff-linux-amd64.tgz", version)

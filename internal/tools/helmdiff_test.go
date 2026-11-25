@@ -63,7 +63,7 @@ func TestInstallHelmDiff(t *testing.T) {
 	})
 	var hits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/helm-diff/v3.9.14/helm-diff-linux-amd64.tgz" {
+		if r.URL.Path != "/helm-diff/v3.15.15/helm-diff-linux-amd64.tgz" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
