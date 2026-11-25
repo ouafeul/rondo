@@ -203,7 +203,7 @@ func (t *TofuStage) rke2Env(target *config.DownstreamTarget, rancherAccess, ranc
 	if t.dryRun {
 		return env, nil
 	}
-	arti, err := t.ws.ReadCA()
+	ca, err := t.ws.ReadCA()
 	if err != nil {
 		return nil, fmt.Errorf("mirror CA %s: %w", t.ws.CACert, err)
 	}
@@ -212,7 +212,7 @@ func (t *TofuStage) rke2Env(target *config.DownstreamTarget, rancherAccess, ranc
 		return nil, fmt.Errorf("management cluster CA (%s), exported with the Rancher token: %w",
 			t.ws.RancherCA(), err)
 	}
-	env["TF_VAR_mirror_ca_pem"] = string(arti)
+	env["TF_VAR_mirror_ca_pem"] = string(ca)
 	env["TF_VAR_cluster_ca_pem"] = string(cluster)
 	env["TF_VAR_rancher_ca_pem"] = string(cluster)
 	return env, nil

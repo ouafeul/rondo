@@ -145,8 +145,8 @@ func TestSiteConfigServesImagesFromTheStandIn(t *testing.T) {
 		bare.Targets.VSphere[0].Name != vsphereStub {
 		t.Errorf("no vSphere Target declared: %+v, want a stub for the management placement", bare.Targets.VSphere)
 	}
-	if env := cfg.Env(); env["REGISTRY_HOST"] != registryHost || env["INGRESS_BASE_DOMAIN"] != baseDomain {
-		t.Errorf("platform tokens: %v %v", env["REGISTRY_HOST"], env["INGRESS_BASE_DOMAIN"])
+	if env := cfg.Env(); env["OCI_REGISTRY"] != registryHost || env["INGRESS_BASE_DOMAIN"] != baseDomain {
+		t.Errorf("platform tokens: %v %v", env["OCI_REGISTRY"], env["INGRESS_BASE_DOMAIN"])
 	}
 	sb := &sandbox{site: st}
 	if sb.hasBase(st.Clusters[0]) || !sb.hasBase(st.Clusters[1]) {

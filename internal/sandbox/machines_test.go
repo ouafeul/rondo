@@ -27,10 +27,10 @@ spec:
       - name: db
         sizing: {cpu: 2, memoryMb: 2048, diskGb: 20}
     rpmRepos:
-      - {name: baseos, repo: "${ARTIFACTORY_RPM_REPO}", path: el9/baseos, gpgKey: file:///k}
+      - {name: baseos, repo: "${RPM_REPOSITORY}", path: el9/baseos, gpgKey: file:///k}
       - {name: again, repo: rondo-rpms-local, path: /el9/baseos/, gpgKey: file:///k}
     artifacts:
-      - {repo: "${ARTIFACTORY_GENERIC_REPO}", provenance: component, path: components/vm/1.0.0/payload.tar.gz}
+      - {repo: "${FILES_REPOSITORY}", provenance: component, path: components/vm/1.0.0/payload.tar.gz}
       - {repo: rondo-generic-local, path: tools/jq/1.7/jq}
     ansible: {repo: rondo-generic-local, path: components/vm/ansible.tar.gz, version: "2.0.0"}
     installer:
@@ -168,16 +168,16 @@ func TestVMSourcesNeedABuildOrAnUpstream(t *testing.T) {
 
 func TestRPMProxiesNeedAnUpstream(t *testing.T) {
 	tr := vmTree(t)
-	proxies, err := rpmProxies(tr, map[string]string{"${ARTIFACTORY_RPM_REPO}/el9/baseos/": "https://mirror.example/9/BaseOS"})
+	proxies, err := rpmProxies(tr, map[string]string{"${RPM_REPOSITORY}/el9/baseos/": "https://mirror.example/9/BaseOS"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(proxies) != 1 || proxies[0].Prefix != "/artifactory/rondo-rpms-local/el9/baseos/" ||
+	if len(proxies) != 1 || proxies[0].Prefix != "/files/rondo-rpms-local/el9/baseos/" ||
 		proxies[0].Upstream != "https://mirror.example/9/BaseOS/" {
 		t.Errorf("proxies = %+v", proxies)
 	}
 	conf := rpmConf(proxies)
-	for _, want := range []string{`location ~ ^/artifactory/rondo-rpms-local/el9/baseos/(.*)$`,
+	for _, want := range []string{`location ~ ^/files/rondo-rpms-local/el9/baseos/(.*)$`,
 		"proxy_pass https://mirror.example/9/BaseOS/$1;", "resolver 127.0.0.11"} {
 		if !strings.Contains(conf, want) {
 			t.Errorf("configuration without %q:\n%s", want, conf)

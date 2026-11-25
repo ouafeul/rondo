@@ -19,19 +19,19 @@ const (
 	DashboardPort = 80
 
 	CredentialsSecret    = "rondo-credentials"
-	ArtifactoryCACM      = "artifactory-ca"
+	MirrorCACM           = "mirror-ca"
 	VMSSHSecret          = "rondo-vm-ssh"
 	TofurcSecret         = "rondo-tofurc"
 	PlatformValuesSecret = "rondo-platform-values"
 )
 
 const (
-	CredentialsUserKey     = "ARTIFACTORY_USER"
-	CredentialsPasswordKey = "ARTIFACTORY_PASSWORD"
+	CredentialsUserKey     = "MIRROR_USER"
+	CredentialsPasswordKey = "MIRROR_PASSWORD"
 	// The keys of the s3 state backend in the credentials Secret, named as OpenTofu reads them.
 	StateAccessKeyEnv  = "AWS_ACCESS_KEY_ID"
 	StateSecretKeyEnv  = "AWS_SECRET_ACCESS_KEY"
-	ArtifactoryCAKey   = "ca.pem"
+	MirrorCAKey        = "ca.pem"
 	TofurcKey          = ".tofurc"
 	TofurcTokenKey     = "token"
 	KubeconfigKey      = "kubeconfig"
@@ -47,15 +47,15 @@ const (
 	EnvNamespace         = "RONDO_NAMESPACE"
 	EnvToolboxImage      = "RONDO_TOOLBOX_IMAGE"
 	EnvExecSA            = "RONDO_EXEC_SERVICE_ACCOUNT"
-	EnvCACM              = "RONDO_ARTIFACTORY_CA_CONFIGMAP"
-	EnvCredsSecret       = "RONDO_ARTIFACTORY_CREDS_SECRET"
+	EnvCACM              = "RONDO_MIRROR_CA_CONFIGMAP"
+	EnvCredsSecret       = "RONDO_MIRROR_CREDS_SECRET"
 	EnvTofuStateURL      = "RONDO_TOFU_STATE_URL"
 	EnvTofuStateS3       = "RONDO_TOFU_STATE_S3"
 	EnvTofuRCSecret      = "RONDO_TOFU_RC_SECRET"
 	EnvVMModuleURL       = "RONDO_VM_MODULE_URL"
 	EnvAnsibleContentURL = "RONDO_ANSIBLE_CONTENT_URL"
 	EnvVMSSHSecret       = "RONDO_VM_SSH_SECRET"
-	EnvArtifactoryURL    = "ARTIFACTORY_URL"
+	EnvMirrorFilesURL    = "MIRROR_FILES_URL"
 )
 
 const (

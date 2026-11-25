@@ -4,13 +4,13 @@ metadata:
   name: downstream-bootstrap
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/downstream-bootstrap
-    version: 0.2.2
+    oci: ${CHARTS_OCI}/downstream-bootstrap
+    version: 0.3.0
   dependsOn:
   - name: metallb
   - name: cert-manager
   namespace: kube-system
   values:
     ingressIP: ${target.values.ingressIP}
-    artifactoryCA:
-      pem: ${target.values.artifactoryCA}
+    mirrorCA:
+      pem: ${target.values.mirrorCA}

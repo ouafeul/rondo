@@ -11,7 +11,7 @@ kind: Component
 metadata: {name: grafana}
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/grafana
+    oci: ${CHARTS_OCI}/grafana
     version: 10.1.2
   namespace: monitoring
   releaseName: grafana                 # default: the Component's name (≤ 53 chars)

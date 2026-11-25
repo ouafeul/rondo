@@ -526,7 +526,7 @@ func (sb *sandbox) applySite(ctx context.Context) error {
 	values := map[string]string{
 		"ingressIP":     sb.cfg.Targets.Management.IngressLoadBalancerIP,
 		"imageRegistry": registryHost,
-		"artifactoryCA": string(ca),
+		"mirrorCA":      string(ca),
 		"storageClass":  kobj.DefaultStorageClass,
 	}
 	for k, v := range sb.site.Management.ComponentValues {
@@ -541,9 +541,9 @@ func (sb *sandbox) applySite(ctx context.Context) error {
 	objs := []kobj.Object{
 		kobj.Target(config.ManagementRole, roles, kobj.InClusterBackend(), values),
 		kobj.OpaqueSecret(kobj.PlatformValuesSecret, map[string]string{
-			"artifactoryUser":     mirror.Username,
-			"artifactoryPassword": mirror.Password,
-			"artifactoryAuthURL":  authURL,
+			"mirrorUser":     mirror.Username,
+			"mirrorPassword": mirror.Password,
+			"mirrorAuthURL":  authURL,
 		}),
 	}
 	for name, data := range sb.secrets() {

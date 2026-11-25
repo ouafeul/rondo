@@ -117,7 +117,7 @@ func TestHelmDeployOnAnAnonymousMirror(t *testing.T) {
 	if len(fake.Calls) != 1 || fake.Calls[0].String() != "/bin/helmfile --file /proj/helmfile.yaml sync" {
 		t.Fatalf("calls = %v, want helmfile sync alone", fake.Calls)
 	}
-	for _, k := range []string{"SSL_CERT_FILE", "ARTIFACTORY_CA_CERT_PATH"} {
+	for _, k := range []string{"SSL_CERT_FILE", "MIRROR_CA_CERT_PATH"} {
 		if v, set := fake.Calls[0].Env[k]; set {
 			t.Errorf("%s = %q without a CA", k, v)
 		}
@@ -157,16 +157,16 @@ func TestApplySiteWithoutCA(t *testing.T) {
 	if err := p.ApplySite(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if ca := nested(t, got.find(t, "ConfigMap", "artifactory-ca"), "data")["ca.pem"]; ca != "" {
+	if ca := nested(t, got.find(t, "ConfigMap", "mirror-ca"), "data")["ca.pem"]; ca != "" {
 		t.Errorf("CA ConfigMap = %q, want empty: the Jobs then use the system trust store", ca)
 	}
 	values := nested(t, got.find(t, "Target", "management"), "spec", "values")
-	if values["artifactoryCA"] != "" {
-		t.Errorf("artifactoryCA = %q, want empty", values["artifactoryCA"])
+	if values["mirrorCA"] != "" {
+		t.Errorf("mirrorCA = %q, want empty", values["mirrorCA"])
 	}
 	pv := nested(t, got.find(t, "Secret", "rondo-platform-values"), "stringData")
-	if pv["artifactoryAuthURL"] != "https://files.example.local" {
-		t.Errorf("artifactoryAuthURL = %q, want no userinfo", pv["artifactoryAuthURL"])
+	if pv["mirrorAuthURL"] != "https://files.example.local" {
+		t.Errorf("mirrorAuthURL = %q, want no userinfo", pv["mirrorAuthURL"])
 	}
 }
 
@@ -179,7 +179,7 @@ func TestApplyCredentialsCarriesTheS3Keys(t *testing.T) {
 	if sd["AWS_ACCESS_KEY_ID"] != "AK" || sd["AWS_SECRET_ACCESS_KEY"] != "SK" {
 		t.Errorf("credentials = %v, want the s3 keys", sd)
 	}
-	if sd["ARTIFACTORY_USER"] != "" || sd["ARTIFACTORY_PASSWORD"] != "" {
+	if sd["MIRROR_USER"] != "" || sd["MIRROR_PASSWORD"] != "" {
 		t.Errorf("credentials of an anonymous mirror = %v", sd)
 	}
 }

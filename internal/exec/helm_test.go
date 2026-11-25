@@ -257,22 +257,22 @@ func TestRefFromEnvValidates(t *testing.T) {
 	}
 }
 
-func TestArtifactoryCredsBothOrNeither(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "")
-	t.Setenv(EnvArtifactoryPassword, "")
-	if u, p, err := artifactoryCreds(); err != nil || u != "" || p != "" {
-		t.Errorf("anonymous mirror: artifactoryCreds = (%q, %q, %v)", u, p, err)
+func TestMirrorCredsBothOrNeither(t *testing.T) {
+	t.Setenv(EnvMirrorUser, "")
+	t.Setenv(EnvMirrorPassword, "")
+	if u, p, err := mirrorCreds(); err != nil || u != "" || p != "" {
+		t.Errorf("anonymous mirror: mirrorCreds = (%q, %q, %v)", u, p, err)
 	}
-	t.Setenv(EnvArtifactoryUser, "svc")
-	if _, _, err := artifactoryCreds(); err == nil {
+	t.Setenv(EnvMirrorUser, "svc")
+	if _, _, err := mirrorCreds(); err == nil {
 		t.Fatal("a username without a password accepted")
 	} else if !strings.Contains(err.Error(), "envFrom") {
 		t.Errorf("message = %q, want it to say where the credentials come from", err)
 	}
-	t.Setenv(EnvArtifactoryUser, "svc")
-	t.Setenv(EnvArtifactoryPassword, "pw")
-	if u, p, err := artifactoryCreds(); err != nil || u != "svc" || p != "pw" {
-		t.Errorf("artifactoryCreds = (%q, %q, %v)", u, p, err)
+	t.Setenv(EnvMirrorUser, "svc")
+	t.Setenv(EnvMirrorPassword, "pw")
+	if u, p, err := mirrorCreds(); err != nil || u != "svc" || p != "pw" {
+		t.Errorf("mirrorCreds = (%q, %q, %v)", u, p, err)
 	}
 }
 

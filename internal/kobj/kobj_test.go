@@ -115,14 +115,14 @@ func TestSecretAndConfigMapShapes(t *testing.T) {
 	}
 }
 
-func TestArtifactoryObjectsMatchWhatTheJobsRead(t *testing.T) {
-	c := ArtifactoryCredentials("u", "p", "", "")
+func TestMirrorObjectsMatchWhatTheJobsRead(t *testing.T) {
+	c := MirrorCredentials("u", "p", "", "")
 	sd := nested(t, c, "stringData").(Object)
-	if nested(t, c, "metadata", "name") != CredentialsSecret || sd["ARTIFACTORY_USER"] != "u" || sd["ARTIFACTORY_PASSWORD"] != "p" {
+	if nested(t, c, "metadata", "name") != CredentialsSecret || sd["MIRROR_USER"] != "u" || sd["MIRROR_PASSWORD"] != "p" {
 		t.Errorf("credentials = %v", c)
 	}
-	ca := ArtifactoryCA("PEM")
-	if nested(t, ca, "metadata", "name") != ArtifactoryCACM || nested(t, ca, "data").(Object)["ca.pem"] != "PEM" {
+	ca := MirrorCA("PEM")
+	if nested(t, ca, "metadata", "name") != MirrorCACM || nested(t, ca, "data").(Object)["ca.pem"] != "PEM" {
 		t.Errorf("CA = %v", ca)
 	}
 }

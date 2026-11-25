@@ -1,5 +1,5 @@
-{{ $helmRepo    := printf "%s/%s" (requiredEnv "REGISTRY_HOST") (env "ARTIFACTORY_HELM_REPO"    | default "rondo-helm-local") }}
-{{ $dockerRepo  := printf "%s/%s" (requiredEnv "REGISTRY_HOST") (env "ARTIFACTORY_DOCKER_REPO"  | default "rondo-docker-local") }}
+{{ $chartsOCI   := requiredEnv "CHARTS_OCI" }}
+{{ $dockerRepo  := printf "%s/%s" (requiredEnv "OCI_REGISTRY") (requiredEnv "IMAGES_REPOSITORY") }}
 {{ $ingressIP   := requiredEnv "INGRESS_IP" }}
 
 helmDefaults:
@@ -10,7 +10,7 @@ helmDefaults:
 releases:
   - name: metallb
     namespace: metallb-system
-    chart: oci://{{ $helmRepo }}/metallb
+    chart: {{ $chartsOCI }}/metallb
     version: {{ env "METALLB_VERSION" | default "0.14.9" }}
     values:
       - controller:
@@ -43,7 +43,7 @@ releases:
 
   - name: cert-manager
     namespace: cert-manager
-    chart: oci://{{ $helmRepo }}/cert-manager
+    chart: {{ $chartsOCI }}/cert-manager
     version: {{ env "CERT_MANAGER_VERSION" | default "v1.16.2" }}
     needs:
       - metallb-system/metallb
@@ -93,7 +93,7 @@ releases:
 
   - name: rancher
     namespace: cattle-system
-    chart: oci://{{ $helmRepo }}/rancher
+    chart: {{ $chartsOCI }}/rancher
     version: {{ env "RANCHER_VERSION" | default "2.14.0" }}
     needs:
       - metallb-system/metallb

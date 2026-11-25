@@ -15,7 +15,7 @@ import (
 )
 
 // sandboxFile is rondo-sandbox.yaml, at the component's root. targets and secrets are rondo.yaml's
-// keys, without what the workstation provides (Artifactory, vCenter, nodes, versions): the site
+// keys, without what the workstation provides (artifact mirror, vCenter, nodes, versions): the site
 // the sandbox stands for. The other keys are the component's, what its CI publishes and what the
 // workstation reaches. Every field is optional.
 type sandboxFile struct {

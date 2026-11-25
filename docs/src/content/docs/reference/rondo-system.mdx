@@ -9,10 +9,10 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
   <TabItem label="Secrets">
     | Name | Keys | Written by | Read by |
     |---|---|---|---|
-    | `rondo-credentials` | `ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD` | `rondo deploy` | every Job |
+    | `rondo-credentials` | `MIRROR_USER`, `MIRROR_PASSWORD` | `rondo deploy` | every Job |
     | `rondo-tofurc` | `.tofurc`, `token` | `rondo deploy` | `vm-*` Jobs (providers) |
     | `rondo-vm-ssh` | `ssh-privatekey`, `ssh-publickey` | `rondo deploy`, **once** | `vm-*` Jobs |
-    | `rondo-platform-values` | `artifactoryUser`, `artifactoryPassword`, `artifactoryAuthURL` | `rondo deploy` | components (`valuesFrom`) |
+    | `rondo-platform-values` | `mirrorUser`, `mirrorPassword`, `mirrorAuthURL` | `rondo deploy` | components (`valuesFrom`) |
     | `rondo-kubeconfig-<t>` | `kubeconfig` | `rondo deploy downstreams` | Target, Jobs, `rondo-probe` |
     | `rondo-vsphere-<n>` | `vsphere_user`, `vsphere_password` | `rondo deploy` | vSphere Target, `vm-*` Jobs |
     | `<secrets.components.x>` | those of `rondo.yaml` | `rondo deploy` | components (`valuesFrom`, `secretsFrom`) |
@@ -21,7 +21,7 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
   <TabItem label="ConfigMaps">
     | Name | Content | Written by |
     |---|---|---|
-    | `artifactory-ca` | `ca.pem` | `rondo deploy` |
+    | `mirror-ca` | `ca.pem` | `rondo deploy` |
     | `rondo-vsphere-<n>` | server, datacenter, cluster, datastore, network, folder, pool, gateway, DNS, CA | `rondo deploy` |
     | `rondo-component-<tree>` | `version`, `objects` (one `Kind/Name` per line) | the CLI, for each applied tree: `rondo`, `base-<t>`, `<component>` |
     | `kube-system/coredns-custom` | `rondo-ingress-wildcard.override` | `rondo deploy` |

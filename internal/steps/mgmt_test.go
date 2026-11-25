@@ -115,7 +115,7 @@ func TestHelmDeployArgvAndStdin(t *testing.T) {
 	if sync.String() != "/bin/helmfile --file /proj/helmfile.yaml sync" {
 		t.Errorf("sync: %q", sync.String())
 	}
-	for _, k := range []string{"KUBECONFIG", "PROJECT_DIR", "SSL_CERT_FILE", "ARTIFACTORY_CA_CERT_PATH"} {
+	for _, k := range []string{"KUBECONFIG", "PROJECT_DIR", "SSL_CERT_FILE", "MIRROR_CA_CERT_PATH"} {
 		if sync.Env[k] == "" {
 			t.Errorf("env %s missing", k)
 		}

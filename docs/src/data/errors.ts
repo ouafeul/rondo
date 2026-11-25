@@ -5,7 +5,7 @@ export type Entry = { where: Where; msg: string; cause: string; fix: string };
 
 export const errors: Entry[] = [
   // CLI
-  { where: 'CLI', msg: 'workstation prerequisites missing, install them before running again', cause: 'A tool is missing from the PATH; the list says what each one is for.', fix: 'Install bash, openssh-clients, sshpass (EPEL, or mirrored to Artifactory).' },
+  { where: 'CLI', msg: 'workstation prerequisites missing, install them before running again', cause: 'A tool is missing from the PATH; the list says what each one is for.', fix: 'Install bash, openssh-clients, sshpass (EPEL, or mirrored on the artifact mirror).' },
   { where: 'CLI', msg: 'invalid manifest: <detail>', cause: 'rondo.yaml fails validation (unknown key, invalid IP, even number of control planes…).', fix: 'Fix the key quoted; see the rondo.yaml reference.' },
   { where: 'CLI', msg: '<rondo.yaml> declares environment "<x>", the selected environment is "<y>"', cause: "The file's environmentName does not match the chosen environment.", fix: 'rondo env select <x>, or --env <x>, or fix environmentName.' },
   { where: 'CLI', msg: 'unknown environment "<n>", create it with: rondo init --env <n>', cause: 'No ~/.rondo/envs/<n>/rondo.yaml.', fix: 'rondo init --env <n>.' },
@@ -14,7 +14,7 @@ export const errors: Entry[] = [
   { where: 'CLI', msg: 'The plan for <x> DESTROYS <resources>. Apply? (y/N)', cause: 'An rondo.yaml change recreates VMs (size, template, IP…).', fix: 'Read the plan; answer N if it is not intended. --yes accepts in advance.' },
   { where: 'CLI', msg: 'cancelled', cause: 'A confirmation received something other than y.', fix: 'Run again, or --yes.' },
   { where: 'CLI', msg: '401 from the artifact mirror', cause: 'Expired password or token.', fix: 'secrets.mirrorPassword, secrets.mirrorToken, then rondo deploy.' },
-  { where: 'CLI', msg: 'unknown placeholders: ${<X>}; declare them in …', cause: 'The tree uses an unknown site token, or one whose value is empty in rondo.yaml (e.g. ${ARTIFACTORY_RPM_REPO} without an RPM repository).', fix: 'Fill in the rondo.yaml key, or pass the value through ${target.values.*}.' },
+  { where: 'CLI', msg: 'unknown placeholders: ${<X>}; declare them in …', cause: 'The tree uses an unknown site token, or one whose value is empty in rondo.yaml (e.g. ${RPM_REPOSITORY} without an RPM repository).', fix: 'Fill in the rondo.yaml key, or pass the value through ${target.values.*}.' },
   { where: 'CLI', msg: 'SHA-256 checksum mismatch: want <a>, got <b>', cause: 'Corrupt archive, or republished under the same version.', fix: 'Republish under a new version; empty the relevant ~/.rondo/cache/… directory.' },
   { where: 'CLI', msg: '… refused, a tree only carries Components and Enrollments', cause: 'The published tree contains another kind (a Target, a Secret…).', fix: 'Remove the object from the tree; Targets come from rondo.yaml, secrets from secrets.components.' },
   { where: 'CLI', msg: 'Rancher token in state is invalid (Rancher reprovisioned?), regenerating', cause: 'Warning: the token in rondo.state.json no longer works.', fix: 'Nothing, unless the admin login then fails: secrets.rancherBootstrapPassword must be the current admin password.' },

@@ -15,7 +15,7 @@ users:
 
 write_files:
 %{ if mirror_ca_pem != "" ~}
-  - path: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+  - path: /etc/pki/ca-trust/source/anchors/mirror-ca.pem
     permissions: "0644"
     content: |
       ${indent(6, mirror_ca_pem)}

@@ -105,12 +105,13 @@ class PlatformError(RuntimeError):
 
 
 _PLATFORM_PLACEHOLDERS = (
-    "${REGISTRY_HOST}",
-    "${ARTIFACTORY_URL}",
-    "${ARTIFACTORY_HELM_REPO}",
-    "${ARTIFACTORY_DOCKER_REPO}",
-    "${ARTIFACTORY_GENERIC_REPO}",
-    "${ARTIFACTORY_RPM_REPO}",
+    "${OCI_REGISTRY}",
+    "${FILES_URL}",
+    "${CHARTS_OCI}",
+    "${CHARTS_REPOSITORY}",
+    "${IMAGES_REPOSITORY}",
+    "${FILES_REPOSITORY}",
+    "${RPM_REPOSITORY}",
 )
 
 _RUNTIME_PLACEHOLDER = re.compile(r"\$\{(?:target\.values|secrets)\.([A-Za-z0-9_.-]+)\}")
@@ -120,7 +121,7 @@ _PIN_TAIL = re.compile(r"^/([A-Za-z0-9][-A-Za-z0-9_./]*?)(?::[^\s/]+)?$")
 
 _IMAGE_PREFIX_MARKERS = (
     "${target.values.imageRegistry}",
-    "${ARTIFACTORY_DOCKER_REPO}",
+    "${IMAGES_REPOSITORY}",
 )
 
 # Built and published by RONDO itself, never mirrored.
@@ -460,7 +461,7 @@ def _check_pins(job, rendered_refs, label):
         if pin not in paths and not is_own_image(pin):
             errors.append(
                 f"{label}: {where} pins image {pin!r} under "
-                f"${{ARTIFACTORY_DOCKER_REPO}}, but rendering this chart produces "
+                f"${{IMAGES_REPOSITORY}}, but rendering this chart produces "
                 f"no image at that path. Rendered paths: "
                 f"{', '.join(sorted(paths)) or '(none)'}. "
                 f"The mirror will not hold this path, and the pod will pull a 404."

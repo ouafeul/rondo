@@ -29,8 +29,8 @@ Every action on a target is an `rondo-toolbox exec <verb>` Job in `rondo-system`
 | identity | ServiceAccount `rondo-exec`, **cluster-admin** on the management cluster |
 | resources | 100m / 256 Mi requested, 2 CPU / 2 Gi at most |
 | security | non-root, seccomp RuntimeDefault, read-only root, no capabilities |
-| mounts | `/work` and `/tmp` (emptyDir), Artifactory CA in `/etc/rondo/ca` |
-| credentials | `envFrom` Secret `rondo-credentials` (`ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD`) |
+| mounts | `/work` and `/tmp` (emptyDir), mirror CA (ConfigMap `mirror-ca`) in `/etc/rondo/ca` |
+| credentials | `envFrom` Secret `rondo-credentials` (`MIRROR_USER`, `MIRROR_PASSWORD`) |
 
 The target's kubeconfig, the `valuesFrom` Secrets, the vSphere credentials, the SSH key and `.tofurc` are **read through the API** during the Job, never mounted.
 

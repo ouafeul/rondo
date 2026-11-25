@@ -312,12 +312,12 @@ func machineKey(s Settings) (priv, pub string, err error) {
 // tokens are the platform placeholders a machine spec may name, as the sandbox's site resolves
 // them (internal/subst, siteConfig).
 var tokens = strings.NewReplacer(
-	"${ARTIFACTORY_URL}", filesURL,
-	"${ARTIFACTORY_GENERIC_REPO}", genericRepo,
-	"${ARTIFACTORY_RPM_REPO}", rpmRepo,
+	"${FILES_URL}", filesURL,
+	"${FILES_REPOSITORY}", genericRepo,
+	"${RPM_REPOSITORY}", rpmRepo,
 )
 
-// artifactBuild is a file of a machine component that its CI publishes on Artifactory (an
+// artifactBuild is a file of a machine component that its CI publishes on the mirror (an
 // installer archive, a playbook), made here from its sources.
 type artifactBuild struct {
 	// the path the Component names (spec.vm.artifacts[].path, spec.vm.ansible.path)
@@ -394,7 +394,7 @@ func vmSources(tree *platform.Tree, builds []artifactBuild, deps *depsFile) ([]v
 }
 
 // rpmProxy sends a repository of a machine component to its upstream, under the path the
-// site's Artifactory serves it at.
+// site's mirror serves it at.
 type rpmProxy struct {
 	Prefix   string `json:"prefix"`
 	Upstream string `json:"upstream"`
@@ -432,7 +432,7 @@ func rpmProxies(tree *platform.Tree, upstreams map[string]string) ([]rpmProxy, e
 				continue
 			}
 			seen[key] = true
-			out = append(out, rpmProxy{Prefix: "/artifactory/" + key + "/", Upstream: strings.TrimRight(up, "/") + "/"})
+			out = append(out, rpmProxy{Prefix: filesPath + "/" + key + "/", Upstream: strings.TrimRight(up, "/") + "/"})
 		}
 	}
 	if len(missing) > 0 {

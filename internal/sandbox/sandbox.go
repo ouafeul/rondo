@@ -12,14 +12,15 @@ import "path/filepath"
 // The sandbox's fixed names: its artifact mirror (zot for OCI, nginx for the files, the RPM
 // repositories and the states, on one host), its domain, its repositories.
 const (
-	registryHost      = "artifactory.sandbox.test"
+	registryHost      = "mirror.sandbox.test"
 	baseDomain        = "sandbox.test"
 	helmRepo          = "rondo-helm-local"
 	dockerRepo        = "rondo-docker-local"
 	genericRepo       = "rondo-generic-local"
 	rpmRepo           = "rondo-rpms-local"
 	tofuStateRepo     = "rondo-tofu-state-local"
-	filesURL          = "https://" + registryHost + "/artifactory"
+	filesPath         = "/files"
+	filesURL          = "https://" + registryHost + filesPath
 	providerMirrorURL = filesURL + "/api/terraform/rondo-tofu-local/providers/"
 	clusterPrefix     = "rondo-sbx"
 	sandboxSecret     = "sandbox"

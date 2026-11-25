@@ -10,9 +10,9 @@
 #   rondo-sandbox deploy downstreams         # one k3d cluster per downstream
 #   rondo-sandbox component install ../acme # the component, and RONDO's verdict
 #
-# This script holds the infrastructure: Docker network, PKI, stand-in Artifactory
+# This script holds the infrastructure: Docker network, PKI, stand-in artifact mirror
 # (zot + nginx), k3d clusters, machines of machine components (containers), RONDO images
-# pulled from Artifactory (or built from an RONDO clone). What speaks RONDO is `rondo-sandbox engine`
+# pulled from their registry (or built from an RONDO clone). What speaks RONDO is `rondo-sandbox engine`
 # (internal/sandbox): the CLI's own code.
 #
 # Documentation: docs/src/content/docs/components/sandbox.mdx.
@@ -26,7 +26,7 @@ abspath() { realpath -m "$1" 2>/dev/null || case "$1" in /*) printf '%s\n' "$1" 
 STATE="$(abspath "${RONDO_SANDBOX_HOME:-${HOME}/.rondo-sandbox}")"
 
 # The deployed RONDO, which the binary resolves for deploy: its tree (the one it embeds, or an
-# RONDO clone), and its images (pulled from Artifactory, or built from the clone).
+# RONDO clone), and its images (pulled from their registry, or built from the clone).
 # The other commands read the one from the last deploy.
 RONDO_SOURCE="${RONDO_SANDBOX_RONDO_SOURCE:-}"
 RONDO_DIR="${RONDO_SANDBOX_RONDO_DIR:-$(cat "${STATE}/rondo-dir" 2>/dev/null || true)}"
@@ -41,11 +41,11 @@ FRONT_IMAGE="nginx:1.27-alpine"
 
 NETWORK="rondo-sandbox"
 ZOT="rondo-sandbox-zot"
-FRONT="rondo-sandbox-artifactory"
+FRONT="rondo-sandbox-mirror"
 PORTS="rondo-sandbox-ports"
 TOFU_STATE_REPO="rondo-tofu-state-local"
 BIND="${RONDO_SANDBOX_BIND:-127.0.0.1}"
-REGISTRY_HOST="artifactory.sandbox.test"
+MIRROR_HOST="mirror.sandbox.test"
 CLUSTER_PREFIX="rondo-sbx"
 
 # Fixed addresses below .128, Docker's own (k3d nodes) above: --ip-range keeps them apart.
@@ -79,10 +79,10 @@ Usage: rondo-sandbox <command> [options]   (rondo-sandbox --help: all commands)
       --max-failures <n>            Job failures tolerated per Enrollment (default 2)
   component uninstall <name>        uninstalls a component, its workloads and its machines
   destroy downstreams [target…]     removes downstreams and their clusters
-  destroy [--purge]                 deletes clusters, machines and Artifactory; --purge also empties the cache
+  destroy [--purge]                 deletes clusters, machines and the mirror; --purge also empties the cache
   logs <enrollment>                 log of an Enrollment's last Job
 
-Variables: RONDO_SANDBOX_RONDO_REGISTRY: the Artifactory registry of RONDO's images,
+Variables: RONDO_SANDBOX_RONDO_REGISTRY: the registry of RONDO's images,
            RONDO_SANDBOX_HOME (${STATE}), RONDO_SANDBOX_SUBNET (${SUBNET}),
            RONDO_SANDBOX_REGISTRY_PORT (${REGISTRY_PORT}), RONDO_SANDBOX_K3S_IMAGE (k3d's default),
            RONDO_SANDBOX_BIND (${BIND}): the workstation address the component's ports are published on
@@ -109,7 +109,7 @@ engine() {
     "${ENGINE}" engine --state "${STATE}" --rondo-dir "${RONDO_DIR}" "$@"
 }
 
-# --- stand-in Artifactory -----------------------------------------------------
+# --- stand-in artifact mirror -------------------------------------------------
 
 ensure_network() {
     docker network inspect "${NETWORK}" >/dev/null 2>&1 && return
@@ -125,11 +125,11 @@ ensure_pki() {
     openssl req -x509 -newkey rsa:3072 -nodes -days 3650 -subj "/CN=RONDO sandbox CA" \
         -keyout "${dir}/ca.key" -out "${dir}/ca.pem" \
         -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" 2>/dev/null
-    openssl req -newkey rsa:2048 -nodes -subj "/CN=${REGISTRY_HOST}" \
+    openssl req -newkey rsa:2048 -nodes -subj "/CN=${MIRROR_HOST}" \
         -keyout "${dir}/tls.key" -out "${dir}/tls.csr" 2>/dev/null
     openssl x509 -req -in "${dir}/tls.csr" -CA "${dir}/ca.pem" -CAkey "${dir}/ca.key" -CAcreateserial \
         -days 825 -out "${dir}/tls.crt" -extfile <(printf '%s\n' \
-            "subjectAltName=DNS:${REGISTRY_HOST},DNS:localhost,IP:127.0.0.1" \
+            "subjectAltName=DNS:${MIRROR_HOST},DNS:localhost,IP:127.0.0.1" \
             "basicConstraints=CA:FALSE" "keyUsage=digitalSignature,keyEncipherment" \
             "extendedKeyUsage=serverAuth") 2>/dev/null
     chmod 600 "${dir}"/*.key
@@ -192,7 +192,7 @@ EOF
         -v "${conf}/zot.json:/etc/zot/config.json:ro" -v "${ZOT}:/var/lib/registry" \
         "${ZOT_IMAGE}"
 
-    # The front end: a single host, like Artifactory — OCI to zot, the rest as files.
+    # The front end: a single host for the whole mirror — OCI to zot, the rest as files.
     # An on-demand sync of a large image takes minutes: long timeouts.
     changed=0
     write_if_changed "${conf}/nginx.conf" <<EOF && changed=1
@@ -201,7 +201,7 @@ events { worker_connections 512; }
 http {
   server {
     listen 443 ssl;
-    server_name ${REGISTRY_HOST};
+    server_name ${MIRROR_HOST};
     ssl_certificate     /etc/nginx/tls/tls.crt;
     ssl_certificate_key /etc/nginx/tls/tls.key;
     client_max_body_size 0;
@@ -213,12 +213,12 @@ http {
       proxy_set_header Host \$http_host;
       proxy_set_header X-Forwarded-Proto https;
     }
-    location /artifactory/ {
+    location /files/ {
       alias /srv/generic/;
       autoindex on;
     }
-    # The machines' tofu state (http backend): Artifactory accepts it via PUT, so does nginx.
-    location /artifactory/${TOFU_STATE_REPO}/ {
+    # The machines' tofu state (http backend), written with PUT: nginx takes it as WebDAV.
+    location /files/${TOFU_STATE_REPO}/ {
       alias /srv/state/;
       dav_methods PUT DELETE;
       create_full_put_path on;
@@ -231,7 +231,7 @@ EOF
     if [[ "$(docker inspect -f '{{index .Config.Labels "rondo-sandbox.front"}}' "${FRONT}" 2>/dev/null)" != 2 ]]; then
         docker rm -f "${FRONT}" >/dev/null 2>&1 || true
     fi
-    ensure_container "${FRONT}" "${changed}" --ip "${FRONT_IP}" --network-alias "${REGISTRY_HOST}" \
+    ensure_container "${FRONT}" "${changed}" --ip "${FRONT_IP}" --network-alias "${MIRROR_HOST}" \
         --label rondo-sandbox.front=2 --tmpfs /srv/state:mode=1777 \
         -v "${conf}/nginx.conf:/etc/nginx/nginx.conf:ro" \
         -v "${STATE}/pki/tls.crt:/etc/nginx/tls/tls.crt:ro" \
@@ -245,7 +245,7 @@ EOF
         [[ ${i} -eq 30 ]] && die "zot does not respond (docker logs ${ZOT})"
         sleep 1
     done
-    log_ok "sandbox Artifactory: https://${REGISTRY_HOST} (${FRONT_IP}), zot on 127.0.0.1:${REGISTRY_PORT}"
+    log_ok "sandbox mirror: https://${MIRROR_HOST} (${FRONT_IP}), zot on 127.0.0.1:${REGISTRY_PORT}"
 }
 
 # --- workstation ports --------------------------------------------------------
@@ -303,7 +303,7 @@ reconcile_machines() {
             continue
         fi
         docker run -d --name "${container}" --hostname "${name}" --restart unless-stopped \
-            --network "${NETWORK}" --ip "${ip}" --add-host "${REGISTRY_HOST}:${FRONT_IP}" \
+            --network "${NETWORK}" --ip "${ip}" --add-host "${MIRROR_HOST}:${FRONT_IP}" \
             --label "rondo-sandbox.machine=${ip}" --cpus "${cpus}" --memory "${mem}m" --memory-swap "${mem}m" \
             --cgroupns=private --tmpfs /run --tmpfs /run/lock \
             --cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt label=disable \
@@ -346,7 +346,7 @@ create_cluster() {
         --registry-config "${STATE}/registries.yaml"
         --volume "${STATE}/pki/ca.pem:/etc/rondo-sandbox/ca.pem@server:0"
         --volume "${STATE}/clusters/${name}/machine-id:/etc/machine-id@server:0"
-        --host-alias "${FRONT_IP}:${REGISTRY_HOST}"
+        --host-alias "${FRONT_IP}:${MIRROR_HOST}"
         --kubeconfig-update-default=false --kubeconfig-switch-context=false
         --wait --timeout 180s
     )
@@ -374,11 +374,11 @@ ensure_clusters() {
     mkdir -p "${STATE}/clusters"
     write_if_changed "${STATE}/registries.yaml" <<EOF || true
 mirrors:
-  ${REGISTRY_HOST}:
+  ${MIRROR_HOST}:
     endpoint:
-      - https://${REGISTRY_HOST}
+      - https://${MIRROR_HOST}
 configs:
-  ${REGISTRY_HOST}:
+  ${MIRROR_HOST}:
     tls:
       ca_file: /etc/rondo-sandbox/ca.pem
 EOF
@@ -404,7 +404,7 @@ rondo_images() {
     fi
 }
 
-# The controller and toolbox CI published for this version, copied from Artifactory to
+# The controller and toolbox CI published for this version, copied from their registry to
 # zot once and for all: a published version does not change.
 # The RONDO images the site asks for (engine site): the controller and the toolbox, and the
 # sandbox machine when it has a vSphere Target.
@@ -423,7 +423,7 @@ pull_rondo_images() {
         log_info "image ${src}"
         had="$(docker image inspect -f '{{.Id}}' "${src}" 2>/dev/null || true)"
         docker pull -q "${src}" >/dev/null 2>&1 \
-            || die "${src} not found or denied: docker login ${RONDO_REGISTRY%%/*} (Artifactory credentials), --rondo-version <published version>, or --rondo-from <RONDO clone> to build it"
+            || die "${src} not found or denied: docker login ${RONDO_REGISTRY%%/*} (registry credentials), --rondo-version <published version>, or --rondo-from <RONDO clone> to build it"
         docker tag "${src}" "${ref}"
         docker push -q "${ref}" >/dev/null || die "push of ${ref} failed"
         # The workstation keeps what it had: only the copy pulled here goes.

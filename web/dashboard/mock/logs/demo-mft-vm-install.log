@@ -9,7 +9,7 @@ TASK [Gathering Facts] *********************************************************
 ok: [mft-prod-01]
 ok: [mft-prod-02]
 
-TASK [bundle_install : Download bundle from Artifactory] ***********************
+TASK [bundle_install : Download bundle from the mirror] ***********************
 changed: [mft-prod-01]
 changed: [mft-prod-02]
 
@@ -57,7 +57,7 @@ PLAY [administration] **********************************************************
 TASK [Gathering Facts] *********************************************************
 ok: [mft-admin-01]
 
-TASK [bundle_install : Download bundle from Artifactory] ***********************
+TASK [bundle_install : Download bundle from the mirror] ***********************
 changed: [mft-admin-01]
 
 TASK [bundle_install : Verify bundle checksum] *********************************

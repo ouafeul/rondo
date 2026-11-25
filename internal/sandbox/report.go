@@ -484,7 +484,7 @@ func (sb *sandbox) checkImages(ctx context.Context) error {
 		log.Error("image outside ${target.values.imageRegistry}", "object", o)
 	}
 	if len(outside) > 0 {
-		return fmt.Errorf("%d image(s) pulled from outside the site's Artifactory: unreachable when air-gapped, "+
+		return fmt.Errorf("%d image(s) pulled from outside the site's mirror: unreachable when air-gapped, "+
 			"their registry must come from ${target.values.imageRegistry}", len(outside))
 	}
 	log.Info("all the component's images go through ${target.values.imageRegistry}")
@@ -501,7 +501,7 @@ func (sb *sandbox) reportMissing(missing []string) error {
 			continue
 		}
 		fatal++
-		log.Error("image not found on the sandbox's Artifactory", "object", m)
+		log.Error("image not found on the sandbox's mirror", "object", m)
 	}
 	if fatal > 0 {
 		return fmt.Errorf("%d image(s) nobody publishes: neither built by rondo-sandbox.yaml "+

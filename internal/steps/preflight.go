@@ -25,7 +25,7 @@ var hostToolsMgmtInfra = []hostTool{
 	{"ssh", "openssh-clients", "forming the HA k3s cluster on the management VMs"},
 	{"scp", "openssh-clients", "copying the k3s systemd unit and fetching the kubeconfig"},
 	{"sshpass", "sshpass", "SSH password authentication to fresh VMs " +
-		"(not in the RHEL base repositories: EPEL package, or mirrored on Artifactory)"},
+		"(not in the RHEL base repositories: EPEL package, or mirrored on the artifact mirror)"},
 }
 
 type PreflightStage struct {

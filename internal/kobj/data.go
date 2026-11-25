@@ -28,10 +28,10 @@ func configMap(name, ns string, data map[string]string) Object {
 	}
 }
 
-// ArtifactoryCredentials is read as env by every Job, through envFrom: the mirror's credentials,
+// MirrorCredentials is read as env by every Job, through envFrom: the mirror's credentials,
 // both empty for an anonymous mirror, and the keys of an s3 state backend when there is one,
 // under the names OpenTofu's s3 backend reads.
-func ArtifactoryCredentials(user, password, stateAccessKey, stateSecretKey string) Object {
+func MirrorCredentials(user, password, stateAccessKey, stateSecretKey string) Object {
 	data := map[string]string{
 		CredentialsUserKey:     user,
 		CredentialsPasswordKey: password,
@@ -43,9 +43,9 @@ func ArtifactoryCredentials(user, password, stateAccessKey, stateSecretKey strin
 	return OpaqueSecret(CredentialsSecret, data)
 }
 
-// ArtifactoryCA holds the CA bundle of the mirror, empty when the system trust store is used.
-func ArtifactoryCA(pem string) Object {
-	return configMap(ArtifactoryCACM, PlatformNamespace, map[string]string{ArtifactoryCAKey: pem})
+// MirrorCA holds the CA bundle of the mirror, empty when the system trust store is used.
+func MirrorCA(pem string) Object {
+	return configMap(MirrorCACM, PlatformNamespace, map[string]string{MirrorCAKey: pem})
 }
 
 // TofuMirror holds the .tofurc that points OpenTofu at the provider mirror (config.Mirror.TofuRC).

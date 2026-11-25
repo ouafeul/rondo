@@ -27,8 +27,8 @@ written here and published as OCI by CI (`deps-publish-apps`), like `downstream-
 `values.yaml` holds the **upstream** images (`docker.io/rancher/...`, `docker.io/library/...`), and
 that is a contract with `scripts/ci/extract-helm-images.py`: it renders this chart offline,
 neutralizes registry overrides and falls back on these values to list what must be mirrored.
-Pointing them at Artifactory would blind the mirror to its own source. The `Component` overrides
-them to Artifactory at deploy time.
+Pointing them at the artifact mirror would blind the mirror to its own source. The `Component`
+overrides them to the mirror at deploy time.
 
 The **helper pod** image needs special care. It normally lives inside a ConfigMap *string*
 (`helperPod.yaml`), invisible to a walk of YAML structures: it would be missing from the mirror

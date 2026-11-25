@@ -73,7 +73,7 @@ func TestPublishedBuildDeploysItsOwnRondo(t *testing.T) {
 	if len(crds) == 0 {
 		t.Error("extracted tree without CRDs")
 	}
-	want := []string{"RONDO_SANDBOX_RONDO_DIR=" + src.dir, "RONDO_SANDBOX_RONDO_SOURCE=artifactory",
+	want := []string{"RONDO_SANDBOX_RONDO_DIR=" + src.dir, "RONDO_SANDBOX_RONDO_SOURCE=registry",
 		"RONDO_SANDBOX_RONDO_REGISTRY=registry.example.test/rondo", "RONDO_SANDBOX_RONDO_VERSION=v1.2.3"}
 	if got := src.env(); !slices.Equal(got, want) {
 		t.Errorf("script environment: %q", got)
@@ -100,7 +100,7 @@ func TestPublishedBuildDeploysItsOwnRondo(t *testing.T) {
 	// The build's registry when the environment names none.
 	t.Setenv("RONDO_SANDBOX_RONDO_REGISTRY", "")
 	old := rondoRegistry
-	rondoRegistry = "artifactory.example.test/rondo-docker"
+	rondoRegistry = "registry.example.test/rondo"
 	t.Cleanup(func() { rondoRegistry = old })
 	if src, err := resolveRondo(); err != nil || src.registry != rondoRegistry {
 		t.Errorf("binary's registry: %+v %v", src, err)

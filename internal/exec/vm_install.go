@@ -52,7 +52,7 @@ func VMInstall(ctx context.Context, rt *Runtime) error {
 		return err
 	}
 
-	user, password, err := artifactoryCreds()
+	user, password, err := mirrorCreds()
 	if err != nil {
 		return err
 	}
@@ -61,12 +61,12 @@ func VMInstall(ctx context.Context, rt *Runtime) error {
 		return err
 	}
 	vars, err := BuildAnsibleVars(rv.component, rv.target,
-		os.Getenv(EnvArtifactoryURL), user, password, secrets,
+		os.Getenv(EnvMirrorFilesURL), user, password, secrets,
 		rv.release.Spec.Policy.TimeoutOr(0))
 	if err != nil {
 		return err
 	}
-	vars.ArtifactoryCAPath = machineCAPath()
+	vars.MirrorCAPath = machineCAPath()
 
 	env := rt.ansibleRunEnv(keyPath)
 	if u := rv.target.Spec.Values[v1alpha1.ValueSSHUser]; u != "" {
@@ -141,7 +141,7 @@ func (rt *Runtime) machineInventory(ctx context.Context, rv *releaseVM) (string,
 func (rt *Runtime) fetchAnsibleContent(ctx context.Context, rv *releaseVM) (string, error) {
 	url := os.Getenv(EnvAnsibleContentURL)
 	if a := rv.vm.Ansible; a != nil {
-		base := strings.TrimRight(os.Getenv(EnvArtifactoryURL), "/")
+		base := strings.TrimRight(os.Getenv(EnvMirrorFilesURL), "/")
 		url = base + "/" + strings.Trim(a.Repo, "/") + "/" + strings.TrimLeft(a.Path, "/")
 		log.Info("component Ansible content", "version", a.Version)
 	}

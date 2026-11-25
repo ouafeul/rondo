@@ -229,9 +229,13 @@ func checkComponentArtifact(obj Object, where, path string) []Finding {
 
 func unresolved(s string) bool { return strings.Contains(s, "${") }
 
+// chartNameFromOCI is the chart of an oci:// reference, or of one under ${CHARTS_OCI}.
 func chartNameFromOCI(oci string) string {
-	rest := strings.TrimPrefix(oci, "oci://")
-	if rest == oci {
+	rest, ok := strings.CutPrefix(oci, "oci://")
+	if !ok {
+		rest, ok = strings.CutPrefix(oci, "${CHARTS_OCI}")
+	}
+	if !ok {
 		return ""
 	}
 	idx := strings.LastIndex(rest, "/")

@@ -1,12 +1,12 @@
-# A component with a pod that downloads from Artifactory, credentials outside the URL: the
-# subject of TestArtifactoryDownloadInAChartIsAuthenticated.
+# A component with a pod that downloads from the mirror, credentials outside the URL: the
+# subject of TestMirrorDownloadInAChartIsAuthenticated.
 apiVersion: rondo.ouafeul.github.io/v1alpha1
 kind: Component
 metadata:
   name: guard
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/guard
+    oci: ${CHARTS_OCI}/guard
     published: true
     version: 0.1.0
   namespace: guard
@@ -15,14 +15,14 @@ spec:
       command:
       - -ec
       - |
-        curl -fsSL -u "$ARTIFACTORY_USER:$ARTIFACTORY_PASSWORD" -o /tmp/p.zip \
-          ${ARTIFACTORY_URL}/${ARTIFACTORY_GENERIC_REPO}/guard/plugin.zip
+        curl -fsSL -u "$MIRROR_USER:$MIRROR_PASSWORD" -o /tmp/p.zip \
+          ${FILES_URL}/${FILES_REPOSITORY}/guard/plugin.zip
     envRenderSecret:
-      ARTIFACTORY_PASSWORD: ${secrets.artifactoryPassword}
-      ARTIFACTORY_USER: ${secrets.artifactoryUser}
+      MIRROR_PASSWORD: ${secrets.mirrorPassword}
+      MIRROR_USER: ${secrets.mirrorUser}
   valuesFrom:
   - keys:
-    - artifactoryPassword
-    - artifactoryUser
+    - mirrorPassword
+    - mirrorUser
     secretRef:
       name: rondo-platform-values

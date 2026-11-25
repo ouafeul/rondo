@@ -9,7 +9,7 @@ type PlatformInstall struct {
 	TofuStateS3       string
 	VMModuleURL       string
 	AnsibleContentURL string
-	ArtifactoryURL    string
+	MirrorFilesURL    string
 
 	DashboardHostname string
 }

@@ -18,13 +18,30 @@ flowchart LR
 
 | | Tokens | Resolved by | Source | Unknown or empty |
 |---|---|---|---|---|
-| ① | `${REGISTRY_HOST}`, `${ARTIFACTORY_URL}`, `${ARTIFACTORY_HELM_REPO}`, `${ARTIFACTORY_DOCKER_REPO}`, `${ARTIFACTORY_GENERIC_REPO}`, `${ARTIFACTORY_RPM_REPO}`, `${INGRESS_BASE_DOMAIN}` | the CLI, in the tree's `.yaml/.yml/.json` files | `rondo.yaml` | the tree is refused: `unknown placeholders` |
+| ① | the [site tokens](#site-tokens): `${OCI_REGISTRY}`, `${CHARTS_OCI}`, `${FILES_URL}`… | the CLI, in the tree's `.yaml/.yml/.json` files | `rondo.yaml` | the tree is refused: `unknown placeholders` |
 | ② | `${target.name}`, `${target.server}`, `${target.values.<key>}` | the controller, for each Enrollment | the resolved Target | `unknown substitution token(s)`, with the list of available keys |
 | ③ | `${secrets.<key>}` | the Job, at the last moment | the Component's and Enrollment's `valuesFrom`, read in `rondo-system` | the Job fails |
 
 A secret is therefore never written to a Component, an Enrollment or a status: only to the pod's `/work/values.json` (0600), for the duration of `helm upgrade`.
 
 <TokenPlayground />
+
+## Site tokens
+
+The artifact mirror of `rondo.yaml` (`artifacts`), whatever its preset, resolves to these tokens; a component names the mirror only through them.
+
+| Token | Value | `preset: generic` | `preset: artifactory` |
+|---|---|---|---|
+| `${OCI_REGISTRY}` | registry authority, `host[:port]` | `oci.registry` | host of `artifactory.url` |
+| `${IMAGES_REPOSITORY}` | repository of the images: `${OCI_REGISTRY}/${IMAGES_REPOSITORY}/<image>` | `oci.repository` (`rondo`) | `artifactory.repositories.docker` (`rondo-docker-local`) |
+| `${CHARTS_REPOSITORY}` | repository of the Helm charts | `oci.chartsRepository` (`charts`) | `artifactory.repositories.helm` (`rondo-helm-local`) |
+| `${CHARTS_OCI}` | `oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}`: a chart is `${CHARTS_OCI}/<chart>` | derived | derived |
+| `${FILES_URL}` | root of the file server, without a trailing `/` | `files.url` | `artifactory.url` |
+| `${FILES_REPOSITORY}` | path of the files under the root: `${FILES_URL}/${FILES_REPOSITORY}/<path>` | `files.repository` (`rondo`) | `artifactory.repositories.generic` (`rondo-generic-local`) |
+| `${RPM_REPOSITORY}` | RPM repository of the site, under `${FILES_URL}`; empty without one, and a tree that uses it is refused | `rpm.repository` | `artifactory.repositories.rpm` |
+| `${INGRESS_BASE_DOMAIN}` | base domain of the ingresses | `ingressBaseDomain` | `ingressBaseDomain` |
+
+Defaults in parentheses. The same names, without `${}`, are in the environment of the tools the CLI runs (helmfile, OpenTofu).
 
 ## Target values
 
@@ -34,14 +51,14 @@ Every Target receives values computed by the CLI; `componentValues` in `rondo.ya
 |---|---|---|---|
 | `ingressIP` | `targets.management.ingressLoadBalancerIp` | `rke2.ingressLoadBalancerIp` | |
 | `imageRegistry` | images prefix of the mirror, e.g. `<oci.registry>/<oci.repository>` | `rke2.registryHost`, else the rke2 system registry of the mirror | |
-| `artifactoryCA` | PEM of `artifacts.caCertificateFile`, empty without one | same | |
+| `mirrorCA` | PEM of `artifacts.caCertificateFile`, empty without one | same | |
 | `storageClass` | `local-path` | `local-path` | |
 | `vmTemplate` | | | `targets.vsphere[].vmTemplate` |
 | `sshUser` | | | `rondo` |
 | `vmIPs.<component>.<group>` | | | to declare in `componentValues` |
 
 <Aside type="caution" title="Two registry forms">
-`imageRegistry` is a path on the management cluster (`artifactory.example.local/rondo-docker-local`) and a subdomain on rke2 (`rondo-docker-local.artifactory.example.local`). A chart must use it as is, without rebuilding the host.
+`imageRegistry` is a path on the management cluster (`registry.example.local/rondo`) and the rke2 system registry on rke2: the registry itself (`registry.example.local`, the nodes rewrite the paths), or with `preset: artifactory` a subdomain (`rondo-docker-local.artifactory.example.local`). A chart must use it as is, without rebuilding the host.
 </Aside>
 
 ## Merging values

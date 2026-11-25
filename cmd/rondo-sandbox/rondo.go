@@ -11,8 +11,8 @@ import (
 	"rondo/internal/version"
 )
 
-// rondoRegistry is where Artifactory serves RONDO's images: CI sets it at build time from
-// ARTIFACTORY_ONLINE_DOCKER_HOST, RONDO_SANDBOX_RONDO_REGISTRY overrides it.
+// rondoRegistry is the registry RONDO's images are published to: CI sets it at build time
+// (-X main.rondoRegistry), RONDO_SANDBOX_RONDO_REGISTRY overrides it.
 var rondoRegistry string
 
 var (
@@ -21,18 +21,18 @@ var (
 )
 
 // rondoSource is the RONDO a sandbox deploys: by default this binary's own YAML and the images
-// Artifactory publishes for its version; from a clone, its YAML and images built from it.
+// published for its version; from a clone, its YAML and images built from it.
 type rondoSource struct {
 	// CRDs, RONDO tree, first-party charts, dependencies manifest
 	dir   string
 	clone bool
-	// Artifactory's images: registry/rondo-controller:version
+	// the published images: registry/rondo-controller:version
 	registry, version string
 }
 
 // env hands the source to the embedded script.
 func (o rondoSource) env() []string {
-	source := "artifactory"
+	source := "registry"
 	if o.clone {
 		source = "clone"
 	}

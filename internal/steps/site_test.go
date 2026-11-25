@@ -22,7 +22,7 @@ type applied struct {
 func capture(t *testing.T, cfg *config.Config) (*PlatformStage, *applied, *runner.Fake) {
 	t.Helper()
 	proj := t.TempDir()
-	caPath := filepath.Join(proj, "artifactory-ca.pem")
+	caPath := filepath.Join(proj, "mirror-ca.pem")
 	if err := os.WriteFile(caPath, []byte("-----BEGIN CERTIFICATE-----\narti\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestApplySiteProjectsEverything(t *testing.T) {
 		t.Error("the vCenter password is in the ConfigMap")
 	}
 	if !strings.Contains(data["mirror_ca_pem"].(string), "BEGIN CERTIFICATE") {
-		t.Errorf("Artifactory CA not projected: %v", data["mirror_ca_pem"])
+		t.Errorf("mirror CA not projected: %v", data["mirror_ca_pem"])
 	}
 	creds := nested(t, got.find(t, "Secret", "rondo-vsphere-dc1"), "stringData")
 	if creds["vsphere_user"] != "administrator@vsphere.local" || creds["vsphere_password"] != "CHANGEME" {
@@ -182,7 +182,7 @@ func TestApplySiteProjectsEverything(t *testing.T) {
 	}
 
 	sd := nested(t, got.find(t, "Secret", kobj.PlatformValuesSecret), "stringData")
-	if sd["artifactoryPassword"] != "CHANGEME" || sd["artifactoryUser"] != "svc-rondo" {
+	if sd["mirrorPassword"] != "CHANGEME" || sd["mirrorUser"] != "svc-rondo" {
 		t.Errorf("secret values = %v", sd)
 	}
 
@@ -267,14 +267,14 @@ func TestEnsureVMSSHKeyNeverRotates(t *testing.T) {
 	}
 }
 
-func TestApplySiteFailsWithoutArtifactoryCA(t *testing.T) {
+func TestApplySiteFailsWithoutMirrorCA(t *testing.T) {
 	p, _, _ := capture(t, siteCfg())
 	p.ws.CACert = filepath.Join(t.TempDir(), "missing.pem")
 	err := p.ApplySite(t.Context())
 	if err == nil {
 		t.Fatal("missing CA accepted")
 	}
-	if !strings.Contains(err.Error(), "Artifactory CA") {
+	if !strings.Contains(err.Error(), "mirror CA") {
 		t.Errorf("message = %q", err)
 	}
 }
@@ -306,13 +306,13 @@ func TestApplyCredentialsKeysAreEnvNames(t *testing.T) {
 	creds := got.find(t, "Secret", "rondo-credentials")
 	sd := nested(t, creds, "stringData")
 	for _, k := range []string{
-		"ARTIFACTORY_USER", "ARTIFACTORY_PASSWORD",
+		"MIRROR_USER", "MIRROR_PASSWORD",
 	} {
 		if sd[k] == nil || sd[k] == "" {
 			t.Errorf("key %q missing or empty: the Jobs would receive an empty variable", k)
 		}
 	}
-	ca := got.find(t, "ConfigMap", "artifactory-ca")
+	ca := got.find(t, "ConfigMap", "mirror-ca")
 	if !strings.Contains(nested(t, ca, "data")["ca.pem"].(string), "BEGIN CERTIFICATE") {
 		t.Error("CA not projected")
 	}
@@ -341,7 +341,7 @@ func (m *recordingMinter) RevokeToken(_ context.Context, token string) error {
 func TestApplyMirrorTokenRotates(t *testing.T) {
 	p, got, fk := capture(t, siteCfg())
 	m := &recordingMinter{next: "tok-new"}
-	p.arti = m
+	p.minter = m
 	fk.Outputs[filepath.Join(p.ws.BinDir, "kubectl")+
 		" get secret rondo-tofurc -n rondo-system -o jsonpath={.data.token}"] = "dG9rLW9sZA=="
 
@@ -369,7 +369,7 @@ func TestApplyMirrorTokenOverrideIsNotPersisted(t *testing.T) {
 	cfg.Secrets.MirrorToken = "  tok-manual  "
 	p, got, _ := capture(t, cfg)
 	m := &recordingMinter{}
-	p.arti = m
+	p.minter = m
 
 	if err := p.ApplyMirrorToken(t.Context()); err != nil {
 		t.Fatalf("ApplyMirrorToken: %v", err)
@@ -388,7 +388,7 @@ func TestApplyMirrorTokenOverrideIsNotPersisted(t *testing.T) {
 
 func TestApplyMirrorTokenRefusesWithoutMinter(t *testing.T) {
 	p, _, _ := capture(t, siteCfg())
-	p.arti = nil
+	p.minter = nil
 	if err := p.ApplyMirrorToken(t.Context()); err == nil {
 		t.Fatal("no minter and no override accepted")
 	}
@@ -406,7 +406,7 @@ func TestApplyMirrorTokenOnAGenericMirror(t *testing.T) {
 			cfg := genericCfg()
 			cfg.Secrets.MirrorToken = tc.token
 			p, got, _ := capture(t, cfg)
-			p.arti = nil
+			p.minter = nil
 			if err := p.ApplyMirrorToken(t.Context()); err != nil {
 				t.Fatalf("ApplyMirrorToken: %v", err)
 			}
@@ -432,7 +432,7 @@ func TestApplyMirrorTokenOnAGenericMirror(t *testing.T) {
 func TestApplyMirrorTokenNeverMintsNorRevokesOnAGenericMirror(t *testing.T) {
 	p, got, fk := capture(t, genericCfg())
 	m := &recordingMinter{next: "tok"}
-	p.arti = m
+	p.minter = m
 	fk.Outputs[filepath.Join(p.ws.BinDir, "kubectl")+
 		" get secret rondo-tofurc -n rondo-system -o jsonpath={.data.token}"] = "dG9rLW9sZA=="
 	if err := p.ApplyMirrorToken(t.Context()); err != nil {
@@ -449,7 +449,7 @@ func TestApplyMirrorTokenNeverMintsNorRevokesOnAGenericMirror(t *testing.T) {
 func TestApplyMirrorTokenRevokesOrphan(t *testing.T) {
 	p, _, fk := capture(t, siteCfg())
 	m := &recordingMinter{next: "tok-orphan"}
-	p.arti = m
+	p.minter = m
 	fk.Errs[filepath.Join(p.ws.BinDir, "kubectl")+" apply -f -"] = errApply{}
 
 	if err := p.ApplyMirrorToken(t.Context()); err == nil {

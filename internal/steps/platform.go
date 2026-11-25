@@ -24,7 +24,7 @@ type PlatformStage struct {
 	cfg     *config.Config
 	ws      Workspace
 	kube    *KubeClient
-	arti    MirrorTokenMinter
+	minter  MirrorTokenMinter
 	dryRun  bool
 	version string
 	Out     io.Writer
@@ -36,8 +36,8 @@ type MirrorTokenMinter interface {
 }
 
 func NewPlatformStage(cfg *config.Config, ws Workspace, kube *KubeClient,
-	arti MirrorTokenMinter, version string, dryRun bool) *PlatformStage {
-	return &PlatformStage{cfg: cfg, ws: ws, kube: kube, arti: arti, version: version, dryRun: dryRun}
+	minter MirrorTokenMinter, version string, dryRun bool) *PlatformStage {
+	return &PlatformStage{cfg: cfg, ws: ws, kube: kube, minter: minter, version: version, dryRun: dryRun}
 }
 
 func (p *PlatformStage) Install(ctx context.Context) error {
@@ -77,7 +77,7 @@ const rolloutTimeout = 10 * time.Minute
 func (p *PlatformStage) waitRollout(ctx context.Context) error {
 	deploys := p.platformDeployments()
 	log.Info("waiting for the operator's services to start; on the first deployment "+
-		"each pod pulls its image from Artifactory, which can take several minutes",
+		"each pod pulls its image from the mirror, which can take several minutes",
 		"deployments", strings.Join(deploys, ", "), "timeout", rolloutTimeout.String())
 	for _, name := range deploys {
 		log.Info("waiting for the deployment", "deployment", name)
@@ -152,8 +152,8 @@ func (p *PlatformStage) ApplyCredentials(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reading the mirror CA (%s): %w", p.ws.CACert, err)
 	}
-	if err := p.applyObject(ctx, kobj.ArtifactoryCA(string(ca))); err != nil {
-		return fmt.Errorf("configmap %s: %w", kobj.ArtifactoryCACM, err)
+	if err := p.applyObject(ctx, kobj.MirrorCA(string(ca))); err != nil {
+		return fmt.Errorf("configmap %s: %w", kobj.MirrorCACM, err)
 	}
 	return nil
 }
@@ -162,9 +162,9 @@ func (p *PlatformStage) ApplyCredentials(ctx context.Context) error {
 // state backend.
 func platformCredentials(m config.Mirror) kobj.Object {
 	if m.StateBackend == tofustate.S3 {
-		return kobj.ArtifactoryCredentials(m.Username, m.Password, m.StateAccessKey, m.StateSecretKey)
+		return kobj.MirrorCredentials(m.Username, m.Password, m.StateAccessKey, m.StateSecretKey)
 	}
-	return kobj.ArtifactoryCredentials(m.Username, m.Password, "", "")
+	return kobj.MirrorCredentials(m.Username, m.Password, "", "")
 }
 
 func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
@@ -181,10 +181,10 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 	// Only an Artifactory mints tokens; another mirror takes secrets.mirrorToken, or serves the
 	// providers without one.
 	if token == "" && m.IsArtifactory() {
-		if p.arti == nil {
+		if p.minter == nil {
 			return fmt.Errorf("no token minter and secrets.mirrorToken is empty")
 		}
-		t, err := p.arti.MintDurableToken(ctx)
+		t, err := p.minter.MintDurableToken(ctx)
 		if err != nil {
 			return fmt.Errorf("mirror token: %w", err)
 		}
@@ -194,15 +194,15 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 	secret := kobj.TofuMirror(m.TofuRC(token), token, minted)
 	if err := p.applyObject(ctx, secret); err != nil {
 		if minted {
-			if rerr := p.arti.RevokeToken(ctx, token); rerr != nil {
+			if rerr := p.minter.RevokeToken(ctx, token); rerr != nil {
 				log.Warn("revoking the orphan token failed", "err", rerr)
 			}
 		}
 		return fmt.Errorf("secret %s: %w", kobj.TofurcSecret, err)
 	}
 	// A token kept in the Secret was minted by an Artifactory: only one revokes it.
-	if prior != "" && prior != token && p.arti != nil && m.IsArtifactory() {
-		if err := p.arti.RevokeToken(ctx, prior); err != nil {
+	if prior != "" && prior != token && p.minter != nil && m.IsArtifactory() {
+		if err := p.minter.RevokeToken(ctx, prior); err != nil {
 			log.Warn("revoking the previous mirror token failed (non-blocking)", "err", err)
 		}
 	}

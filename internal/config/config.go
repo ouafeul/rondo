@@ -233,9 +233,6 @@ func Parse(raw []byte) (*Config, error) { return parse(raw, "rondo.yaml") }
 func parse(raw []byte, name string) (*Config, error) {
 	var c Config
 	if err := yaml.UnmarshalStrict(raw, &c); err != nil {
-		if hint := unknownKeyHint(raw); hint != "" {
-			return nil, fmt.Errorf("parsing %s: %s", name, hint)
-		}
 		return nil, fmt.Errorf("parsing %s: %w", name, err)
 	}
 	if err := c.Validate(); err != nil {

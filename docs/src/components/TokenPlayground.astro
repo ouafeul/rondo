@@ -7,11 +7,11 @@ image:
 persistence:
   storageClassName: \${target.values.storageClass}
 adminPassword: \${secrets.grafanaAdminPassword}`;
-const site = `REGISTRY_HOST=artifactory.example.local
+const site = `OCI_REGISTRY=registry.example.local
 INGRESS_BASE_DOMAIN=cluster.example.local
-ARTIFACTORY_HELM_REPO=rondo-helm-local`;
+CHARTS_OCI=oci://registry.example.local/charts`;
 const target = `name=rke2-a
-values.imageRegistry=artifactory.example.local/rondo-docker-local
+values.imageRegistry=registry.example.local/rondo
 values.storageClass=local-path
 values.ingressIP=10.0.0.50`;
 const secrets = `grafanaAdminPassword=s3cr3t`;
@@ -60,7 +60,7 @@ const secrets = `grafanaAdminPassword=s3cr3t`;
       s.split('\n').map((l) => l.trim()).filter((l) => l && l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]),
     );
   const TOKEN = /\$\{([^}]*)\}/g;
-  const SITE = ['REGISTRY_HOST', 'ARTIFACTORY_URL', 'ARTIFACTORY_HELM_REPO', 'ARTIFACTORY_DOCKER_REPO', 'ARTIFACTORY_GENERIC_REPO', 'ARTIFACTORY_RPM_REPO', 'INGRESS_BASE_DOMAIN'];
+  const SITE = ['OCI_REGISTRY', 'CHARTS_OCI', 'FILES_URL', 'CHARTS_REPOSITORY', 'IMAGES_REPOSITORY', 'FILES_REPOSITORY', 'RPM_REPOSITORY', 'INGRESS_BASE_DOMAIN'];
 
   // Replaces matching tokens; returns plain text and an HTML rendering with the substitutions marked.
   function pass(text: string, cls: string, pick: (name: string) => string | undefined | null, owns: (name: string) => boolean) {

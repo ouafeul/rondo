@@ -28,7 +28,7 @@ func (h *HelmStage) env() map[string]string {
 	}
 	if h.ws.CACert != "" {
 		env["SSL_CERT_FILE"] = h.ws.CACert
-		env["ARTIFACTORY_CA_CERT_PATH"] = h.ws.CACert
+		env["MIRROR_CA_CERT_PATH"] = h.ws.CACert
 	}
 	return env
 }

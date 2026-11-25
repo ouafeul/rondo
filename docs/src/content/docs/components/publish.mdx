@@ -1,6 +1,6 @@
 ---
 title: Publish
-description: What a component's CI uploads to Artifactory, and what the CLI does with it.
+description: What a component's CI uploads to the artifact mirror, and what the CLI does with it.
 ---
 
 import { Aside, FileTree } from '@astrojs/starlight/components';
@@ -26,7 +26,7 @@ flowchart LR
     I["rondo component install hello"] --> R["latest.json → version"]
     R --> D["download, check sha256"] --> S["site tokens"] --> A["apply + prune"]
   end
-  P -. Artifactory .-> R
+  P -. artifact mirror .-> R
 ```
 
 `latest.json` comes last so that a site never sees a version whose archive is missing. Another channel (`--channel rc`) reads `<channel>.json`; `--version` bypasses the pointer.

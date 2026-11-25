@@ -39,7 +39,7 @@ func TestApplyCoreDNSHosts(t *testing.T) {
 		t.Errorf("must NOT emit a second hosts plugin (conflicts with k3s NodeHosts)\n%s", s)
 	}
 	if strings.Contains(s, `^.+[.]cluster[.]example`) {
-		t.Errorf("must NOT hijack the whole base domain (Artifactory may live there)\n%s", s)
+		t.Errorf("must NOT hijack the whole base domain (the mirror may live there)\n%s", s)
 	}
 	if !strings.Contains(cmds.String(), "rollout restart deployment coredns") {
 		t.Errorf("want a CoreDNS restart when the ConfigMap changes\n%s", cmds.String())

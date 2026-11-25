@@ -1,5 +1,5 @@
-{{- if .Values.artifactoryCA.pem }}
-{{- range .Values.artifactoryCA.namespaces }}
+{{- if .Values.mirrorCA.pem }}
+{{- range .Values.mirrorCA.namespaces }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -9,11 +9,11 @@ metadata:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: {{ $.Values.artifactoryCA.secretName }}
+  name: {{ $.Values.mirrorCA.secretName }}
   namespace: {{ . }}
 type: Opaque
 stringData:
   ca.crt: |
-{{ $.Values.artifactoryCA.pem | indent 4 }}
+{{ $.Values.mirrorCA.pem | indent 4 }}
 {{- end }}
 {{- end }}

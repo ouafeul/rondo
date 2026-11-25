@@ -1,6 +1,6 @@
 # Archetype A, first-party chart: apps/__NAME__-web, which the component's CI publishes with its
-# image (build/__NAME__-web). Tokens: ${REGISTRY_HOST}, ${ARTIFACTORY_*} and
-# ${INGRESS_BASE_DOMAIN} come from the site; ${target.values.*} from the Target; ${secrets.*} from
+# image (build/__NAME__-web). Tokens: ${CHARTS_OCI}, ${OCI_REGISTRY}, ${IMAGES_REPOSITORY}, the other
+# mirror tokens and ${INGRESS_BASE_DOMAIN} come from the site; ${target.values.*} from the Target; ${secrets.*} from
 # the Secrets the site declares (secrets.components in rondo.yaml).
 apiVersion: rondo.ouafeul.github.io/v1alpha1
 kind: Component
@@ -8,7 +8,7 @@ metadata:
   name: __NAME__-web
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/__NAME__-web
+    oci: ${CHARTS_OCI}/__NAME__-web
     version: 0.1.0                      # the one in apps/__NAME__-web/Chart.yaml
     published: true                     # published by the component's CI, not mirrored
   namespace: __NAME__

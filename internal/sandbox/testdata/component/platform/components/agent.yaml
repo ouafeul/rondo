@@ -4,7 +4,7 @@ metadata:
   name: agent
 spec:
   chart:
-    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/fluent-bit
+    oci: ${CHARTS_OCI}/fluent-bit
     version: 0.57.2
   namespace: logging
   releaseName: fluent-bit

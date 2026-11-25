@@ -9,12 +9,12 @@ import (
 
 func testSite() map[string]string {
 	return map[string]string{
-		"REGISTRY_HOST":            "arti.local",
-		"ARTIFACTORY_URL":          "https://arti.local/artifactory",
-		"ARTIFACTORY_HELM_REPO":    "rondo-helm-local",
-		"ARTIFACTORY_DOCKER_REPO":  "rondo-docker-local",
-		"ARTIFACTORY_GENERIC_REPO": "rondo-generic-local",
-		"ARTIFACTORY_RPM_REPO":     "rondo-rpms-multi-local",
+		"OCI_REGISTRY":      "arti.local",
+		"FILES_URL":         "https://files.example.local/files",
+		"CHARTS_REPOSITORY": "rondo-helm-local",
+		"IMAGES_REPOSITORY": "rondo-docker-local",
+		"FILES_REPOSITORY":  "rondo-generic-local",
+		"RPM_REPOSITORY":    "rondo-rpms-multi-local",
 	}
 }
 
@@ -24,7 +24,7 @@ func lookupIn(site map[string]string) func(string) string {
 
 func TestSubstituteConcretizesPlatformVars(t *testing.T) {
 	values := Values(lookupIn(testSite()))
-	in := "oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/metallb\n"
+	in := "oci: oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/metallb\n"
 	out, changed, err := substitute(in, values)
 	if err != nil {
 		t.Fatalf("substitute: %v", err)
@@ -39,16 +39,16 @@ func TestSubstituteConcretizesPlatformVars(t *testing.T) {
 
 func TestSubstituteBuildsDownloadURLWithoutHardcodedContextPath(t *testing.T) {
 	values := Values(lookupIn(testSite()))
-	in := "baseurl: ${ARTIFACTORY_URL}/${ARTIFACTORY_RPM_REPO}/mft\n"
+	in := "baseurl: ${FILES_URL}/${RPM_REPOSITORY}/mft\n"
 	out, _, err := substitute(in, values)
 	if err != nil {
 		t.Fatalf("substitute: %v", err)
 	}
-	const want = "https://arti.local/artifactory/rondo-rpms-multi-local/mft"
+	const want = "https://files.example.local/files/rondo-rpms-multi-local/mft"
 	if !strings.Contains(out, want) {
 		t.Errorf("output = %q, must contain %q", out, want)
 	}
-	if strings.Contains(out, "artifactory//") {
+	if strings.Contains(out, "files//") {
 		t.Errorf("double slash in %q, the site URL must be normalised at load time", out)
 	}
 }
@@ -84,7 +84,7 @@ func TestSubstituteRejectsGrafanaDatasourceShape(t *testing.T) {
 	_, _, err := substitute("datasource: ${DS_PROMETHEUS}\n", values)
 	if err == nil {
 		t.Fatal("${DS_PROMETHEUS} accepted: the shape check was loosened, and " +
-			"a misspelled ${ARTIFACTORY_URLL} would pass with it")
+			"a misspelled ${FILES_URLL} would pass with it")
 	}
 	if !strings.Contains(err.Error(), "DS_PROMETHEUS") {
 		t.Errorf("message = %q, must name the faulty token", err)
@@ -100,30 +100,30 @@ func TestSubstituteRejectsGrafanaDatasourceShape(t *testing.T) {
 
 func TestValuesOmitsUnsetVars(t *testing.T) {
 	values := Values(lookupIn(map[string]string{
-		"REGISTRY_HOST":         "arti.local",
-		"ARTIFACTORY_HELM_REPO": "",
-		"ARTIFACTORY_RPM_REPO":  "   ",
+		"OCI_REGISTRY":      "arti.local",
+		"CHARTS_REPOSITORY": "",
+		"RPM_REPOSITORY":    "   ",
 	}))
 	for _, absent := range []string{
-		"${ARTIFACTORY_HELM_REPO}", "${ARTIFACTORY_DOCKER_REPO}", "${ARTIFACTORY_RPM_REPO}",
+		"${CHARTS_REPOSITORY}", "${IMAGES_REPOSITORY}", "${RPM_REPOSITORY}",
 	} {
 		if _, ok := values[absent]; ok {
 			t.Errorf("empty %s must NOT enter the values (it would substitute the empty string)", absent)
 		}
 	}
-	if values["${REGISTRY_HOST}"] != "arti.local" {
-		t.Errorf("${REGISTRY_HOST} = %q, want arti.local", values["${REGISTRY_HOST}"])
+	if values["${OCI_REGISTRY}"] != "arti.local" {
+		t.Errorf("${OCI_REGISTRY} = %q, want arti.local", values["${OCI_REGISTRY}"])
 	}
 }
 
 func TestApplyFailsOnReferencedUnsetVar(t *testing.T) {
 	site := testSite()
-	site["ARTIFACTORY_RPM_REPO"] = ""
+	site["RPM_REPOSITORY"] = ""
 	values := Values(lookupIn(site))
 
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "ok.yaml"),
-		[]byte("oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/x\n"), 0o600); err != nil {
+		[]byte("oci: oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Apply(dir, values); err != nil {
@@ -131,14 +131,14 @@ func TestApplyFailsOnReferencedUnsetVar(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "bad.yaml"),
-		[]byte("baseurl: https://h/artifactory/${ARTIFACTORY_RPM_REPO}/mft\n"), 0o600); err != nil {
+		[]byte("baseurl: https://h/files/${RPM_REPOSITORY}/mft\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := Apply(dir, values)
 	if err == nil {
 		t.Fatal("referenced placeholder without a variable: must FAIL")
 	}
-	for _, want := range []string{"bad.yaml", "ARTIFACTORY_RPM_REPO"} {
+	for _, want := range []string{"bad.yaml", "RPM_REPOSITORY"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("message = %q, must name %s", err, want)
 		}
@@ -149,10 +149,10 @@ func TestApplySkipsGitAndNonManifests(t *testing.T) {
 	values := Values(lookupIn(testSite()))
 	root := t.TempDir()
 	files := map[string]string{
-		"platform/components/a.yaml": "oci: oci://${REGISTRY_HOST}/x/a\n",
-		"README.md":                  "see ${REGISTRY_HOST}\n",
-		".git/config":                "url = ${REGISTRY_HOST}\n",
-		".git/refs/keep.yaml":        "url = ${REGISTRY_HOST}\n",
+		"platform/components/a.yaml": "oci: oci://${OCI_REGISTRY}/x/a\n",
+		"README.md":                  "see ${OCI_REGISTRY}\n",
+		".git/config":                "url = ${OCI_REGISTRY}\n",
+		".git/refs/keep.yaml":        "url = ${OCI_REGISTRY}\n",
 	}
 	for rel, body := range files {
 		path := filepath.Join(root, rel)
@@ -182,7 +182,7 @@ func TestApplySkipsGitAndNonManifests(t *testing.T) {
 		if rerr != nil {
 			t.Fatal(rerr)
 		}
-		if !strings.Contains(string(raw), "${REGISTRY_HOST}") {
+		if !strings.Contains(string(raw), "${OCI_REGISTRY}") {
 			t.Errorf("%s was substituted although it must not be: %s", rel, raw)
 		}
 	}
@@ -190,11 +190,11 @@ func TestApplySkipsGitAndNonManifests(t *testing.T) {
 
 func TestCheckDetectsWithoutWriting(t *testing.T) {
 	site := testSite()
-	site["ARTIFACTORY_RPM_REPO"] = ""
+	site["RPM_REPOSITORY"] = ""
 	values := Values(lookupIn(site))
 
 	root := t.TempDir()
-	const ok = "oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/x\n"
+	const ok = "oci: oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}/x\n"
 	okPath := filepath.Join(root, "ok.yaml")
 	if err := os.WriteFile(okPath, []byte(ok), 0o600); err != nil {
 		t.Fatal(err)
@@ -211,7 +211,7 @@ func TestCheckDetectsWithoutWriting(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(root, "bad.yaml"),
-		[]byte("baseurl: ${ARTIFACTORY_RPM_REPO}/mft\n"), 0o600); err != nil {
+		[]byte("baseurl: ${RPM_REPOSITORY}/mft\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	err = Check(root, values)

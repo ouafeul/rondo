@@ -62,8 +62,8 @@ func findCall(t *testing.T, calls []runner.Cmd, first string) runner.Cmd {
 }
 
 func TestHelmApplyCommandLine(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "svc")
-	t.Setenv(EnvArtifactoryPassword, "pw")
+	t.Setenv(EnvMirrorUser, "svc")
+	t.Setenv(EnvMirrorPassword, "pw")
 	t.Setenv(EnvCAFile, "/etc/ssl/arti-ca.pem")
 
 	rel := chartRelease(func(r *v1alpha1.Enrollment) {
@@ -117,8 +117,8 @@ func TestHelmApplyCommandLine(t *testing.T) {
 }
 
 func TestHelmApplyDefaultsOff(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "u")
-	t.Setenv(EnvArtifactoryPassword, "p")
+	t.Setenv(EnvMirrorUser, "u")
+	t.Setenv(EnvMirrorPassword, "p")
 	rel := chartRelease(func(r *v1alpha1.Enrollment) {
 		r.Spec.Policy.CreateNamespace = v1alpha1.Bool(false)
 		r.Spec.Policy.Wait = v1alpha1.Bool(false)
@@ -142,8 +142,8 @@ func TestHelmApplyDefaultsOff(t *testing.T) {
 }
 
 func TestHelmApplyUsesReleaseName(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "u")
-	t.Setenv(EnvArtifactoryPassword, "p")
+	t.Setenv(EnvMirrorUser, "u")
+	t.Setenv(EnvMirrorPassword, "p")
 	comp := chartComponent(func(c *v1alpha1.Component) { c.Spec.ReleaseName = "vlogs" })
 	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), comp, inClusterTarget())
@@ -157,8 +157,8 @@ func TestHelmApplyUsesReleaseName(t *testing.T) {
 }
 
 func TestHelmApplyWritesValuesFile(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "u")
-	t.Setenv(EnvArtifactoryPassword, "p")
+	t.Setenv(EnvMirrorUser, "u")
+	t.Setenv(EnvMirrorPassword, "p")
 	rel := chartRelease(func(r *v1alpha1.Enrollment) {
 		r.Spec.Values = &apiextensionsv1.JSON{
 			Raw: []byte(`{"server":{"persistentVolume":{"storageClass":"longhorn"}}}`),
@@ -228,8 +228,8 @@ func TestHelmApplyMissingTarget(t *testing.T) {
 }
 
 func TestHelmApplyRefusesHalfCredentials(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "svc")
-	t.Setenv(EnvArtifactoryPassword, "")
+	t.Setenv(EnvMirrorUser, "svc")
+	t.Setenv(EnvMirrorPassword, "")
 	rt, _ := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())
 	if err := HelmApply(t.Context(), rt); err == nil {
@@ -238,8 +238,8 @@ func TestHelmApplyRefusesHalfCredentials(t *testing.T) {
 }
 
 func TestHelmApplyOnAnAnonymousMirrorDoesNotLogIn(t *testing.T) {
-	t.Setenv(EnvArtifactoryUser, "")
-	t.Setenv(EnvArtifactoryPassword, "")
+	t.Setenv(EnvMirrorUser, "")
+	t.Setenv(EnvMirrorPassword, "")
 	t.Setenv(EnvCAFile, "")
 	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())

@@ -121,14 +121,15 @@ func (c *Config) Env() map[string]string {
 	vs := c.VSphereNamed(m.VSphereTarget)
 	mr := c.Mirror()
 	e := map[string]string{
-		"ARTIFACTORY_URL":            mr.FilesBase,
-		"ARTIFACTORY_USER":           mr.Username,
-		"ARTIFACTORY_PASSWORD":       mr.Password,
-		"ARTIFACTORY_GENERIC_REPO":   mr.FilesRepo,
-		"ARTIFACTORY_RPM_REPO":       mr.RPMRepo,
-		"ARTIFACTORY_DOCKER_REPO":    mr.ImagesRepo,
-		"ARTIFACTORY_HELM_REPO":      mr.ChartsRepo,
-		"REGISTRY_HOST":              mr.OCIRegistry,
+		"FILES_URL":                  mr.FilesBase,
+		"MIRROR_USER":                mr.Username,
+		"MIRROR_PASSWORD":            mr.Password,
+		"FILES_REPOSITORY":           mr.FilesRepo,
+		"RPM_REPOSITORY":             mr.RPMRepo,
+		"IMAGES_REPOSITORY":          mr.ImagesRepo,
+		"CHARTS_REPOSITORY":          mr.ChartsRepo,
+		"OCI_REGISTRY":               mr.OCIRegistry,
+		"CHARTS_OCI":                 mr.ChartsOCI,
 		"INGRESS_BASE_DOMAIN":        c.IngressBaseDomain,
 		"INGRESS_IP":                 m.IngressLoadBalancerIP,
 		"RANCHER_HOSTNAME":           c.RancherHostname(),

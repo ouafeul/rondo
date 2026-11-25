@@ -79,7 +79,7 @@ flowchart LR
     S["state/<br/>kubeconfig, Rancher token"]
     B["bin/ · cache/"]
   end
-  subgraph arti["Artifactory"]
+  subgraph arti["Artifact mirror"]
     TS["tofu states<br/>#lt;env#gt;/k3s · #lt;env#gt;/#lt;rke2#gt; · #lt;env#gt;/vm/#lt;enr#gt;"]
     G["bundles, published trees"]
   end
