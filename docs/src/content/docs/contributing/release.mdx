@@ -52,7 +52,7 @@ A site has no Internet access: RONDO and everything it installs must be copied i
 | file server | any HTTP server accepting `PUT` (nginx with WebDAV, Artifactory, Nexus raw), an S3-compatible bucket (`s3://bucket/prefix`, needs `boto3`, optional), or a directory | `--files-url` | `MIRROR_FILES_URL` |
 | RPM repository server | same as the file server | `--rpm-url` | `MIRROR_RPM_URL` |
 
-Credentials are `MIRROR_USER` / `MIRROR_PASSWORD`, and `MIRROR_CA_CERT` is the path of the PEM file of the CA that signs the mirror. OpenTofu providers go to a static network mirror under `--provider-mirror` (`MIRROR_PROVIDER_URL`, default `<files-url>/providers`). A file already on the server is not sent again: every upload is followed by a `<file>.sha256` sidecar, and a file whose sidecar matches is skipped.
+Helm charts go to `<oci-registry>/charts`; `--charts-oci host/path` (`MIRROR_CHARTS_OCI`) sends them elsewhere, for example to a separate Helm repository of the registry (with the `artifactory` preset, `<host>/<repositories.helm>`). Credentials are `MIRROR_USER` / `MIRROR_PASSWORD`, and `MIRROR_CA_CERT` is the path of the PEM file of the CA that signs the mirror. OpenTofu providers go to a static network mirror under `--provider-mirror` (`MIRROR_PROVIDER_URL`, default `<files-url>/providers`). A file already on the server is not sent again: every upload is followed by a `<file>.sha256` sidecar, and a file whose sidecar matches is skipped.
 
 ### A release
 

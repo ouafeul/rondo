@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The Secret `mirror-ca` (key `ca.crt`) always exists in the namespaces the downstream base layer lists, empty when the mirror's certificate is publicly trusted, so components can mount it unconditionally.
+- `--charts-oci` / `MIRROR_CHARTS_OCI` in the mirror scripts and `scripts/mirror-release.sh`: Helm charts can go to a repository other than `<oci-registry>/charts`.
 - Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset.
 - **Vendor-neutral air-gap mirror.** The mirror scripts write to any OCI registry
   (`--oci-registry`), any HTTP file server or S3-compatible bucket (`--files-url`), any RPM

@@ -57,6 +57,8 @@ Every Target receives values computed by the CLI; `componentValues` in `rondo.ya
 | `sshUser` | | | `rondo` |
 | `vmIPs.<component>.<group>` | | | to declare in `componentValues` |
 
+The downstream base layer also puts the mirror CA in the Secret `mirror-ca` (key `ca.crt`) of each namespace listed in its `mirrorCA.namespaces`. The Secret always exists, so a component can mount it unconditionally; `ca.crt` is empty when the mirror's certificate is publicly trusted, so test that it is non-empty (`[ -s … ]`) before passing it to a client.
+
 <Aside type="caution" title="Two registry forms">
 `imageRegistry` is a path on the management cluster (`registry.example.local/rondo`) and the rke2 system registry on rke2: the registry itself (`registry.example.local`, the nodes rewrite the paths), or with `preset: artifactory` a subdomain (`rondo-docker-local.artifactory.example.local`). A chart must use it as is, without rebuilding the host.
 </Aside>

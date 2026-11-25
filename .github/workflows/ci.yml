@@ -214,7 +214,7 @@ jobs:
       - name: Chart schemas (downstream-bootstrap)
         run: |
           scripts/ci/check-chart-schemas.sh apps/downstream-bootstrap \
-            'Certificate:cert-manager.io/v1=1,ClusterIssuer:cert-manager.io/v1=2,IPAddressPool:metallb.io/v1beta1=1,L2Advertisement:metallb.io/v1beta1=1' \
+            'Certificate:cert-manager.io/v1=1,ClusterIssuer:cert-manager.io/v1=2,IPAddressPool:metallb.io/v1beta1=1,L2Advertisement:metallb.io/v1beta1=1,Namespace:v1=1,Secret:v1=1' \
             --set ingressIP=10.0.0.50
           scripts/ci/check-chart-schemas.sh apps/downstream-bootstrap \
             'Certificate:cert-manager.io/v1=1,ClusterIssuer:cert-manager.io/v1=2,IPAddressPool:metallb.io/v1beta1=1,L2Advertisement:metallb.io/v1beta1=1,Namespace:v1=1,Secret:v1=1' \

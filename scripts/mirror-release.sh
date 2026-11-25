@@ -5,13 +5,14 @@
 #
 #   scripts/mirror-release.sh --version v1.0.0 \
 #       --registry registry.site/rondo --files-url https://files.site/mirror \
-#       [--rpm-url https://rpm.site/rondo] [--channel stable] [--dry-run]
+#       [--charts-oci registry.site/helm] [--rpm-url https://rpm.site/rondo] [--channel stable]
+#       [--dry-run]
 #
 # Copies:
 #   images   ghcr.io/ouafeul/rondo-{controller,toolbox,component-toolbox,sandbox-machine}:<tag>
 #            -> <registry>/rondo-<name>:<tag>                                   (skopeo)
 #   charts   oci://ghcr.io/ouafeul/charts/<chart>, every apps/ chart at <tag>
-#            -> oci://<registry>/charts/<chart>                                  (helm pull/push)
+#            -> oci://<registry>/charts/<chart>, or oci://<charts-oci>/<chart>     (helm pull/push)
 #   files    the release assets, checked against SHA256SUMS
 #            -> <files-url>/rondo/<tag>/<asset>, plus vm.tar.gz under tofu-modules/vm/<tag>/
 #               and rondo-ansible.tar.gz under ansible/rondo/<tag>/
@@ -42,6 +43,7 @@ usage() {
 }
 
 version="" registry="${MIRROR_REGISTRY:-}" files_url="${MIRROR_FILES_URL:-}"
+charts_oci="${MIRROR_CHARTS_OCI:-}"
 rpm_url="${MIRROR_RPM_URL:-}" channel="" dry_run=0
 
 while [ $# -gt 0 ]; do
@@ -49,6 +51,7 @@ while [ $# -gt 0 ]; do
     --version)   version="${2:?--version needs a value}"; shift 2 ;;
     --registry)  registry="${2:?--registry needs a value}"; shift 2 ;;
     --files-url) files_url="${2:?--files-url needs a value}"; shift 2 ;;
+    --charts-oci) charts_oci="${2:?--charts-oci needs a value}"; shift 2 ;;
     --rpm-url)   rpm_url="${2:?--rpm-url needs a value}"; shift 2 ;;
     --channel)   channel="${2:?--channel needs a value}"; shift 2 ;;
     --dry-run)   dry_run=1; shift ;;
@@ -68,6 +71,9 @@ if [ -n "${channel}" ]; then
 fi
 registry="${registry#https://}"; registry="${registry#http://}"; registry="${registry%/}"
 registry_host="${registry%%/*}"
+# Helm charts: --charts-oci (e.g. a separate Helm repository), else <registry>/charts.
+charts_oci="${charts_oci#oci://}"; charts_oci="${charts_oci#https://}"; charts_oci="${charts_oci%/}"
+charts_ref="${charts_oci:-${registry}/charts}"
 files_url="${files_url%/}"
 rpm_url="${rpm_url%/}"
 
@@ -197,8 +203,8 @@ for image in "${IMAGES[@]}"; do
     "${registry}" "${image}" "${version}"
 done
 for entry in ${charts[@]+"${charts[@]}"}; do
-  printf 'PLAN chart: oci://%s/charts/%s %s -> oci://%s/charts/%s\n' "${SOURCE_REGISTRY}" \
-    "${entry% *}" "${entry#* }" "${registry}" "${entry% *}"
+  printf 'PLAN chart: oci://%s/charts/%s %s -> oci://%s/%s\n' "${SOURCE_REGISTRY}" \
+    "${entry% *}" "${entry#* }" "${charts_ref}" "${entry% *}"
 done
 for entry in ${plan_files[@]+"${plan_files[@]}"}; do
   printf 'PLAN file: %s -> %s\n' "${entry%%|*}" "${entry#*|}"
@@ -227,6 +233,10 @@ if [ -n "${MIRROR_USER:-}" ] && [ -n "${MIRROR_PASSWORD:-}" ]; then
   [ -n "${MIRROR_CA_CERT:-}" ] && helm_tls=(--ca-file "${MIRROR_CA_CERT}")
   printf '%s' "${MIRROR_PASSWORD}" | helm registry login ${helm_tls[@]+"${helm_tls[@]}"} \
     --username "${MIRROR_USER}" --password-stdin "${registry_host}"
+  if [ "${charts_ref%%/*}" != "${registry_host}" ]; then
+    printf '%s' "${MIRROR_PASSWORD}" | helm registry login ${helm_tls[@]+"${helm_tls[@]}"} \
+      --username "${MIRROR_USER}" --password-stdin "${charts_ref%%/*}"
+  fi
 fi
 
 copy_tls=()
@@ -244,13 +254,13 @@ helm_tls=()
 mkdir -p "${work}/charts"
 for entry in ${charts[@]+"${charts[@]}"}; do
   name="${entry% *}"; chart_version="${entry#* }"
-  if helm show chart "oci://${registry}/charts/${name}" --version "${chart_version}" ${helm_tls[@]+"${helm_tls[@]}"} >/dev/null 2>&1; then
+  if helm show chart "oci://${charts_ref}/${name}" --version "${chart_version}" ${helm_tls[@]+"${helm_tls[@]}"} >/dev/null 2>&1; then
     log "skip chart ${name} ${chart_version} (already in the registry)"
     continue
   fi
   log "chart ${name} ${chart_version}"
   helm pull "oci://${SOURCE_REGISTRY}/charts/${name}" --version "${chart_version}" -d "${work}/charts"
-  helm push "${work}/charts/${name}-${chart_version}.tgz" "oci://${registry}/charts" ${helm_tls[@]+"${helm_tls[@]}"}
+  helm push "${work}/charts/${name}-${chart_version}.tgz" "oci://${charts_ref}" ${helm_tls[@]+"${helm_tls[@]}"}
 done
 
 for entry in "${assets[@]}"; do

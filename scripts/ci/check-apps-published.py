@@ -190,6 +190,9 @@ def main() -> None:
     parser.add_argument("--oci-registry", default=os.environ.get("MIRROR_REGISTRY", ""),
                         help="OCI registry, host[/prefix] (env MIRROR_REGISTRY); a scheme is "
                              "kept, https:// is assumed otherwise")
+    parser.add_argument("--charts-oci", default=os.environ.get("MIRROR_CHARTS_OCI", ""),
+                        help="host/path that holds the charts when they are not under the "
+                             "registry (env MIRROR_CHARTS_OCI); overrides --charts-path")
     parser.add_argument("--charts-path", default="charts",
                         help="path under the registry prefix that holds the charts "
                              "(default: charts, where download-deps.py and "
@@ -224,7 +227,8 @@ def main() -> None:
         for pin in pins:
             key = (pin.chart, pin.version)
             if key not in seen:
-                seen[key] = published(args.oci_registry, args.charts_path, pin.chart,
+                seen[key] = published(args.charts_oci or args.oci_registry,
+                                      "" if args.charts_oci else args.charts_path, pin.chart,
                                        pin.version)
             if seen[key]:
                 print(f"    OK      {pin.chart} {pin.version}, published")

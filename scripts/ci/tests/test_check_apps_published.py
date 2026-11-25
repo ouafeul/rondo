@@ -247,3 +247,11 @@ def test_charts_live_under_the_registry_prefix(tmp_path, registry):
     assert registry["paths"] == ["site/mirror/charts/hello-world"]
     result = run(tmp_path, registry["url"], "--charts-path", "helm")
     assert registry["paths"][-1] == "helm/hello-world"
+
+
+def test_charts_oci_overrides_the_registry_layout(tmp_path, registry):
+    make_tree(tmp_path, {"hello-world": "0.1.2"}, {"hello-world": ("hello-world", "0.1.2")})
+    registry["published"].add(("hello-world", "0.1.2"))
+    result = run(tmp_path, registry["url"] + "/images", "--charts-oci", registry["url"] + "/helm-local")
+    assert result.returncode == 0, result.stderr
+    assert registry["paths"][-1] == "helm-local/hello-world"
