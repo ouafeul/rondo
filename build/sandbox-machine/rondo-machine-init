@@ -21,6 +21,10 @@ id "${user}" >/dev/null 2>&1 || useradd -m -G wheel -s /bin/bash "${user}"
 install -d -m 0700 -o "${user}" -g "${user}" "/home/${user}/.ssh"
 install -m 0600 -o "${user}" -g "${user}" "${seed}/authorized_key" "/home/${user}/.ssh/authorized_keys"
 printf '%s ALL=(ALL) NOPASSWD:ALL\n' "${user}" > "/etc/sudoers.d/${user}"
+# EL ships /etc/shadow mode 0000 and relies on CAP_DAC_OVERRIDE for root to read it. Some
+# container runtimes drop that capability, and PAM then refuses every SSH login ("could not
+# obtain user info"); owner-readable keeps the file private either way.
+chmod 0400 /etc/shadow /etc/gshadow
 chmod 0440 "/etc/sudoers.d/${user}"
 
 if [ -n "${RONDO_COMPONENT:-}" ]; then

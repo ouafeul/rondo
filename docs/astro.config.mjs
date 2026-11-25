@@ -73,6 +73,7 @@ export default defineConfig({
           label: 'Operate',
           items: [
             { slug: 'operations/prerequisites' },
+            { slug: 'operations/artifact-mirrors' },
             { slug: 'operations/environments' },
             { slug: 'operations/day-to-day' },
             { slug: 'operations/troubleshooting' },

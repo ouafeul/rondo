@@ -168,7 +168,7 @@ func platformCredentials(m config.Mirror) kobj.Object {
 }
 
 func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
-	log.Step("network_mirror token")
+	log.Step("OpenTofu provider mirror")
 	if p.dryRun {
 		log.Info("DRY-RUN Secret " + kobj.TofurcSecret)
 		return nil

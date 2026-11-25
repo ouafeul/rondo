@@ -121,8 +121,9 @@ fails in CI.
 
 ```
 Docker network rondo-sandbox (172.28.0.0/24)
-  mirror.sandbox.test        nginx: /v2/ → zot, /files/ → files, RPMs, tofu states
-  zot                        pushed charts and images; the rest pulled from the Internet on
+  mirror.sandbox.test        nginx: /v2/ → zot, /files/ → files, RPMs, tofu states (http backend)
+  zot                        pushed charts, images and OpenTofu providers (OCI provider mirror);
+                             the rest pulled from the Internet on
                              demand (docker.io, quay.io, registry.k8s.io, ghcr.io) and kept
   k3d rondo-sbx               management (.100): rondo-controller, rondo-probe, dashboard;
                              if it carries roles (targets.management.roles), the base layer
@@ -133,7 +134,7 @@ Docker network rondo-sandbox (172.28.0.0/24)
 
 | On a site | In the sandbox |
 |---|---|
-| artifact mirror (`artifacts`) | zot + nginx, a single host: `mirror.sandbox.test` |
+| artifact mirror (`artifacts`) | zot + nginx, a single host: `mirror.sandbox.test`, declared as `preset: generic` with `tofu.providerOCI` and `tofu.state.http` (see [Artifact mirrors](/operations/artifact-mirrors/)) |
 | `rondo deploy` (k3s on vSphere) | k3d `rondo-sbx`, Target `management` (`inCluster`); it also carries `targets.management.roles`, which a site does not |
 | `rondo deploy downstreams` (rke2) | k3d `rondo-sbx-<target>`, Target `<target>` (kubeconfig), one per `targets.downstreams` |
 | rke2 base layer | the same, on each downstream; on the management cluster only if it carries other roles |
@@ -142,7 +143,7 @@ Docker network rondo-sandbox (172.28.0.0/24)
 | `rondo component install <name>` | the same `ApplyTree`, on the component's tree |
 | published rondo-controller, rondo-toolbox | the same, copied from the registry into zot; built from the clone with `--rondo-from` |
 | rondo.yaml's vSphere Targets, their `vmIPs.*` | one Target per `targets.vsphere`, one IP per machine set at `component install` |
-| VM cloned from the template by `vm-apply` (`terraform/vm`) | container `rondo-sbx-machine-<name>` started by the sandbox; `vm-apply` runs a module with the same variables and outputs, without vSphere |
+| VM cloned from the template by `vm-apply` (`terraform/vm`) | container `rondo-sbx-machine-<name>` started by the sandbox; `vm-apply` runs a module with the same terraform block, variables, outputs and cloud-init, without vSphere |
 | `vm-install` (RONDO playbook, SSH, `rpmRepos`, artifacts) | the same, on the containers |
 
 The engine (`internal/sandbox`) reuses the CLI's code (`internal/steps`) rather than
@@ -334,7 +335,7 @@ follows a site's path, controller Jobs included; only vSphere and the VM are rep
 | Site step | In the sandbox |
 |---|---|
 | vSphere Target of `rondo.yaml`, machine IPs (`vmIPs.<component>.<group>`) | the `targets.vsphere` Target that carries the Enrollment's role; `component install` sets one IP per machine on it, from `.10` to `.99` of the sandbox network, kept from one install to the next |
-| `vm-apply`: `tofu apply` of `terraform/vm`, template clone | the same Job, the same `tofu`, the state on the sandbox's mirror; its module (`vm.tar.gz`) keeps the variables, outputs and inventory of `terraform/vm`, without vSphere: the machines are already there |
+| `vm-apply`: `tofu apply` of `terraform/vm`, template clone | the same Job, the same `tofu`: the providers of `terraform/vm` (`hashicorp/vsphere`, `hashicorp/cloudinit`, at the versions of `dependencies.yaml`) installed from the sandbox's OCI provider mirror, the state written to its http backend; its module (`vm.tar.gz`) keeps the terraform block, variables, outputs, inventory and cloud-init rendering of `terraform/vm`, without vSphere: the machines are already there |
 | the VM, after cloud-init | an `rondo-sbx-machine-<name>` container, named and addressed like the VM (`<component>-<group>-<n>`), with `--cpus` and `--memory` from its size |
 | `vm-install`: RONDO's (or the component's) playbook, repositories, artifacts, configuration, secrets, phases | the same Job, the same playbook, over SSH |
 

@@ -36,7 +36,7 @@ CONFIG="${RONDO_SANDBOX_CONFIG:-}"
 SUBNET="${RONDO_SANDBOX_SUBNET:-172.28.0.0/24}"
 REGISTRY_PORT="${RONDO_SANDBOX_REGISTRY_PORT:-5100}"
 K3S_IMAGE="${RONDO_SANDBOX_K3S_IMAGE:-}"
-ZOT_IMAGE="ghcr.io/project-zot/zot-linux-amd64:v2.1.8"
+ZOT_IMAGE="ghcr.io/project-zot/zot:v2.1.8"
 FRONT_IMAGE="nginx:1.27-alpine"
 
 NETWORK="rondo-sandbox"
@@ -254,7 +254,7 @@ EOF
 # sandbox network (engine plan writes its configuration). Docker does not change a container's
 # ports: another list, or another configuration, recreates it.
 ensure_ports() {
-    local dir="${STATE}/ports" wanted signature current p args=()
+    local dir="${STATE}/ports" wanted signature current p publish=()
     wanted="$(cat "${dir}/ports.txt" 2>/dev/null || true)"
     if [[ -z "${wanted}" ]]; then
         docker rm -f "${PORTS}" >/dev/null 2>&1 || true
@@ -268,10 +268,10 @@ ensure_ports() {
     fi
     docker rm -f "${PORTS}" >/dev/null 2>&1 || true
     for p in ${wanted}; do
-        args+=(-p "${BIND}:${p%/*}:${p}")
+        publish+=(-p "${BIND}:${p%/*}:${p}")
     done
     docker run -d --name "${PORTS}" --restart unless-stopped --network "${NETWORK}" \
-        --label "rondo-sandbox.ports=${signature}" "${args[@]}" \
+        --label "rondo-sandbox.ports=${signature}" ${publish[@]+"${publish[@]}"} \
         -v "${dir}/nginx.conf:/etc/nginx/nginx.conf:ro" "${FRONT_IMAGE}" >/dev/null \
         || die "workstation ports ($(echo "${wanted}" | xargs)): is one already taken? (ss -ltnu)"
     log_ok "workstation ports published on ${BIND}: $(echo "${wanted}" | xargs)"
@@ -285,12 +285,14 @@ ensure_ports() {
 # components (machines.txt). A machine keeps what was installed on it as long as its IP does not
 # change, like a VM; component install --fresh recreates the component's machines blank.
 reconcile_machines() {
-    local fresh="${1:-}" image container name ip cpus mem comp group current wanted=" "
+    local fresh="${1:-}" image container name ip cpus mem comp group current wanted=" " max
     image="127.0.0.1:${REGISTRY_PORT}/rondo-docker-local/rondo-sandbox-machine:${RONDO_VERSION}"
+    # Docker refuses --cpus above its own CPUs, fewer than the workstation's in a Docker VM.
+    max="$(docker info -f '{{.NCPU}}' 2>/dev/null || echo 1)"
     while read -r container name ip cpus mem comp group; do
         [[ -n "${container}" ]] || continue
         wanted+="${container} "
-        (( cpus > $(nproc) )) && cpus="$(nproc)"
+        (( cpus > max )) && cpus="${max}"
         current="$(docker inspect -f '{{index .Config.Labels "rondo-sandbox.machine"}}' "${container}" 2>/dev/null || true)"
         if [[ -n "${current}" && ( "${fresh}" == "${comp}" || "${current}" != "${ip}" ) ]]; then
             docker rm -f "${container}" >/dev/null
@@ -489,7 +491,8 @@ drop_pushed_images() {
 check_disk() {
     local root used
     root="$(docker info -f '{{.DockerRootDir}}' 2>/dev/null)" || return 0
-    used="$(df --output=pcent "${root}" 2>/dev/null | tail -1 | tr -dc '0-9')"
+    # GNU df only; elsewhere (macOS, where Docker's disk is inside its VM anyway) no check.
+    used="$( (df --output=pcent "${root}" 2>/dev/null || true) | tail -1 | tr -dc '0-9')"
     [[ -n "${used}" ]] || return 0
     local hint="docker builder prune (build cache), docker image prune, rondo-sandbox destroy --purge (sandbox cache)"
     if (( used >= 85 )); then
@@ -557,9 +560,11 @@ cmd_component_install() {
     ensure_registry
     ensure_ports
     reconcile_machines "${fresh:+${name}}"
-    engine publish "${name}" --registry "127.0.0.1:${REGISTRY_PORT}" "${publish_opts[@]}"
+    # ${a[@]+"${a[@]}"}: an empty array is unbound under set -u before bash 4.4 (macOS's bash 3.2).
+    engine publish "${name}" --registry "127.0.0.1:${REGISTRY_PORT}" ${publish_opts[@]+"${publish_opts[@]}"}
     drop_pushed_images
-    engine install "${name}" --timeout "${timeout}" --max-failures "${max_failures}" "${install_opts[@]}"
+    engine install "${name}" --timeout "${timeout}" --max-failures "${max_failures}" \
+        ${install_opts[@]+"${install_opts[@]}"}
 }
 
 cmd_component_uninstall() {

@@ -158,8 +158,9 @@ func (sb *sandbox) planSecrets() []map[string]map[string]string {
 
 // siteConfig is the rondo.yaml of the sandbox: the management cluster, each downstream deployed,
 // the vSphere Targets of rondo-sandbox.yaml with the machine IPs of the installed components, the
-// stand-in as a generic mirror. Images come from the stand-in's root on every target, where a site
-// uses <registry>/<repository> on the management and its rke2 system registry elsewhere.
+// stand-in as a generic mirror, with an OCI provider mirror and an http state. Images come from
+// the stand-in's root on every target, where a site uses <registry>/<repository> on the
+// management and its rke2 system registry elsewhere.
 func siteConfig(st *site, plans []*plan) *config.Config {
 	cfg := &config.Config{
 		IngressBaseDomain: baseDomain,
@@ -169,12 +170,11 @@ func siteConfig(st *site, plans []*plan) *config.Config {
 			OCI:      config.OCIEndpoint{Registry: registryHost, Repository: dockerRepo, ChartsRepository: helmRepo},
 			Files:    config.FilesEndpoint{URL: filesURL, Repository: genericRepo},
 			RPM:      config.RPMEndpoint{URL: filesURL, Repository: rpmRepo},
-			Tofu: config.TofuEndpoints{ProviderMirror: providerMirrorURL,
+			Tofu: config.TofuEndpoints{ProviderOCI: registryHost + "/" + providerRepo,
 				State: config.TofuState{HTTP: &config.HTTPState{URL: filesURL + "/" + tofuStateRepo}}},
 		},
 		Secrets: config.Secrets{
 			MirrorPassword:           sandboxSecret,
-			MirrorToken:              sandboxSecret,
 			RancherBootstrapPassword: sandboxSecret,
 			K3sClusterToken:          sandboxSecret,
 			VCenterPasswords:         map[string]string{},
@@ -556,6 +556,9 @@ func (sb *sandbox) applySite(ctx context.Context) error {
 	if err := sb.apply(ctx, append(objs, vsphere...)); err != nil {
 		return err
 	}
+	if err := sb.applyTofuMirror(ctx); err != nil {
+		return err
+	}
 	log.Info("Target applied", "target", config.ManagementRole, "roles", strings.Join(roles, ","))
 	for _, t := range sb.site.VSphere {
 		log.Info("Target applied", "target", t.Name, "roles", strings.Join(t.Roles, ","), "machines", "containers")
@@ -590,7 +593,10 @@ func (sb *sandbox) applyVSphere(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return sb.apply(ctx, objs)
+	if err := sb.apply(ctx, objs); err != nil {
+		return err
+	}
+	return sb.applyTofuMirror(ctx)
 }
 
 func (sb *sandbox) apply(ctx context.Context, objs []kobj.Object) error {
@@ -608,14 +614,11 @@ func (sb *sandbox) apply(ctx context.Context, objs []kobj.Object) error {
 
 // vsphereObjects are what `rondo deploy` applies for each vSphere Target of rondo-sandbox.yaml
 // (internal/steps, applyVSphereTarget), plus the machines' key, which the sandbox made before
-// starting them, and tofu's provider mirror, with the fixed token of a site that sets
-// secrets.mirrorToken: the sandbox's machine module needs no provider. None without a
-// vSphere Target.
+// starting them. None without a vSphere Target.
 func (sb *sandbox) vsphereObjects(ca string) ([]kobj.Object, error) {
 	if len(sb.site.VSphere) == 0 {
 		return nil, nil
 	}
-	mirror := sb.cfg.Mirror()
 	var objs []kobj.Object
 	for _, declared := range sb.site.VSphere {
 		t := sb.cfg.VSphereNamed(declared.Name)
@@ -637,8 +640,16 @@ func (sb *sandbox) vsphereObjects(ca string) ([]kobj.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(objs, kobj.VMSSHKey(priv, pub),
-		kobj.TofuMirror(mirror.TofuRC(mirror.MirrorToken), mirror.MirrorToken, false)), nil
+	return append(objs, kobj.VMSSHKey(priv, pub)), nil
+}
+
+// applyTofuMirror is `rondo deploy`'s own step: the .tofurc of the machine Jobs, which install
+// the machine module's providers from the sandbox's OCI provider mirror.
+func (sb *sandbox) applyTofuMirror(ctx context.Context) error {
+	if len(sb.site.VSphere) == 0 {
+		return nil
+	}
+	return steps.NewPlatformStage(sb.cfg, sb.ws, sb.kube, nil, sb.version, false).ApplyMirrorToken(ctx)
 }
 
 // install is `rondo component install <name> --from <tree>`. A redeploy also clears the

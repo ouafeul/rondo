@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Secret `mirror-ca` (key `ca.crt`) always exists in the namespaces the downstream base layer lists, empty when the mirror's certificate is publicly trusted, so components can mount it unconditionally.
 - `--charts-oci` / `MIRROR_CHARTS_OCI` in the mirror scripts and `scripts/mirror-release.sh`: Helm charts can go to a repository other than `<oci-registry>/charts`.
 - Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset.
+- Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset. With `generic`, Helm charts default to `<oci.repository>/charts`, where the mirror scripts push them.
 - **Vendor-neutral air-gap mirror.** The mirror scripts write to any OCI registry
   (`--oci-registry`), any HTTP file server or S3-compatible bucket (`--files-url`), any RPM
   repository server (`--rpm-url`), with `MIRROR_USER`, `MIRROR_PASSWORD` and `MIRROR_CA_CERT`.
@@ -25,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - S3 state backend: `artifacts.tofu.state.s3` (MinIO, Ceph, AWS; lock file next to the state), or `artifacts.tofu.state.http`; keys in `secrets.mirrorStateAccessKey` and `secrets.mirrorStateSecretKey`.
 - Nodes pull public and rke2 system images through registry mirrors that rewrite them under `<oci.registry>/<oci.repository>`; k3s nodes check the file server by downloading k3s.
 - Component contract uses neutral names: site tokens `${OCI_REGISTRY}`, `${IMAGES_REPOSITORY}`, `${CHARTS_REPOSITORY}`, `${CHARTS_OCI}` (a chart is `${CHARTS_OCI}/<chart>`), `${FILES_URL}`, `${FILES_REPOSITORY}`, `${RPM_REPOSITORY}`; Target value `mirrorCA`; `rondo-platform-values` keys `mirrorUser`, `mirrorPassword`, `mirrorAuthURL`; ConfigMap `mirror-ca`; Job environment `MIRROR_USER`, `MIRROR_PASSWORD`, `MIRROR_FILES_URL`; Ansible variables `rondo_mirror_*`.
+- **End-to-end workflow** `e2e.yml` (weekly, by hand, and on pull requests labelled `e2e`): the sandbox, with RONDO built from the sources, installs the test component (charts, images, a machine) through a generic mirror; `scripts/ci/e2e-sandbox.sh` runs the same scenario on a workstation.
+- The sandbox's machine Jobs install `terraform/vm`'s providers from an OpenTofu OCI provider mirror on its registry (`artifacts.tofu.providerOCI`, versions of `dependencies.yaml`), render the machines' cloud-init with them, and keep their state on its http backend.
+- Documentation: [Artifact mirrors](https://ouafeul.github.io/rondo/operations/artifact-mirrors/), what a site mirror serves, generic (Zot or Harbor with nginx, MinIO for the state) and artifactory configurations, how to fill and check it.
+
+### Fixed
+- `rondo-sandbox` runs on macOS and ARM workstations: the disk check is skipped without GNU `df`, `component install` runs under bash 3.2, a machine gets at most Docker's CPUs, the registry and machine images follow the workstation's architecture.
 
 ### Security
 - Platform on supported releases: Rancher 2.15.3 on k3s 1.36.6, rke2 1.36.5 clusters, cert-manager 1.21.3, MetalLB 0.16.2 (layer 2, no FRR images), Traefik 3.7.20 (chart 42.4.3), local-path-provisioner 0.0.37; tools OpenTofu 1.13.10, kubectl 1.36.6, Helm 3.22.1, helmfile 1.8.5 (`helmfile.yaml.gotmpl`), helm-diff 3.15.15, k9s 0.51.0, yq 4.54.3, ansible-core 2.22.0; providers rancher2 15.3.0, vsphere 2.18.0, cloudinit 2.4.1; images on Go 1.27.4, Debian 13, distroless Debian 13, Python 3.14 and Rocky Linux 9.9, OS packages upgraded at build. HIGH and CRITICAL findings drop across the mirrored images and binaries.

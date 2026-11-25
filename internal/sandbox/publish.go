@@ -31,6 +31,7 @@ type depsFile struct {
 	} `json:"helm_charts"`
 	GrafanaPlugins []genericDep `json:"grafana_plugins"`
 	Binaries       []genericDep `json:"binaries"`
+	TofuProviders  []genericDep `json:"tofu_providers"`
 }
 
 type genericDep struct {
@@ -132,6 +133,18 @@ func RunPublishRondo(ctx context.Context, s Settings, registry, rondoVersion str
 		if err := pub.chart(ctx, c, rondoApps, rondoDeps, nil); err != nil {
 			return err
 		}
+	}
+	log.Step("RONDO providers")
+	block, err := terraformBlock(s.RondoDir)
+	if err != nil {
+		return err
+	}
+	platform, err := pub.jobPlatform(ctx)
+	if err != nil {
+		return err
+	}
+	if err := pub.providers(ctx, providerRepo, requiredProviders(block), rondoDeps, platform); err != nil {
+		return err
 	}
 	return rondoMachineFiles(s, rondoVersion)
 }

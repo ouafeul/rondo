@@ -1,0 +1,299 @@
+---
+title: Artifact mirrors
+description: What a site's artifact mirror serves, how to declare it with the generic or artifactory preset, how to fill it from a connected network, and how to check it before the first rondo deploy.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+A site has no Internet access: everything RONDO installs comes from an artifact mirror inside the
+site, declared under `artifacts:` in `rondo.yaml`. RONDO does not depend on a product: any OCI
+registry and any HTTP file server will do (`preset: generic`), and a JFrog Artifactory can stand
+for all of them at once (`preset: artifactory`). This page says what the mirror must serve, gives
+worked configurations, and shows how to fill and check it. The keys themselves are in the
+[rondo.yaml reference](/reference/rondo-yaml/#artifact-mirror-presets).
+
+## What the mirror serves
+
+| Endpoint | Holds | Read by | Written by |
+|---|---|---|---|
+| OCI registry | images (RONDO's, those of every chart, the rke2 and Rancher system images), Helm charts, optionally OpenTofu providers | the workstation (`helm`), the management cluster's Jobs, every node (containerd) | the mirror scripts, the components' CI |
+| file server | RONDO release files (CLI, IaC bundle, `stable.json`, machine module, Ansible content), tools with their `<file>.sha256`, k3s binaries, optionally an OpenTofu network mirror tree | the workstation, the Jobs, the k3s nodes and component machines (`curl`) | the mirror scripts, the components' CI |
+| RPM repositories (optional) | `rondo` packages, OS repositories of component machines (`rpmRepos`) | component machines (`dnf`), the workstation | `mirror-rpms.py`, `mirror-release.sh` |
+| OpenTofu providers | a network mirror tree, or one OCI repository per provider | `tofu init` on the workstation and in the machine Jobs | `download-deps.py` (network mirror), `oras` (OCI) |
+| state backend | the OpenTofu states of the management cluster, the rke2 clusters and the machine stacks | `tofu` on the workstation and in the machine Jobs | the same, `PUT` (http) or the S3 API |
+
+Under each endpoint, paths are fixed; only the roots are the site's:
+
+| Content | Path |
+|---|---|
+| RONDO images | `<oci.registry>/<oci.repository>/rondo-controller:<tag>`, `rondo-toolbox`… |
+| third-party images | `<oci.registry>/<oci.repository>/<upstream path>`, e.g. `…/rancher/mirrored-coredns-coredns` |
+| Helm charts | `oci://<oci.registry>/<oci.chartsRepository>/<chart>`; `chartsRepository` is `<oci.repository>/charts` by default, where the scripts push them |
+| RONDO release | `<files.url>/<files.repository>/rondo/<tag>/…`, `…/tofu-modules/vm/<tag>/vm.tar.gz`, `…/ansible/rondo/<tag>/rondo-ansible.tar.gz`, `…/rondo/stable.json` |
+| tools, k3s | `<files.url>/<files.repository>/<path of dependencies.yaml>`, e.g. `…/k3s/v1.31.4+k3s1/k3s` |
+| providers, network mirror | `<tofu.providerMirror>registry.opentofu.org/<namespace>/<type>/index.json`, `<version>.json`, the zips |
+| providers, OCI mirror | `<tofu.providerOCI>/<namespace>/<type>:<version>` |
+| states | `<tofu.state.http.url>/<environmentName>/{k3s, <target>, vm/<enrollment>}/terraform.tfstate`, or the same keys in the S3 bucket |
+
+The nodes pull public images (`docker.io/rancher/…`, `registry.k8s.io/…`, `quay.io/…`) through
+registry mirrors that rewrite them under `<oci.registry>/<oci.repository>`: the mirror needs no
+copy of each upstream registry, only one repository tree.
+
+## Generic preset
+
+### Zot and nginx
+
+A small site, or a lab: [Zot](https://zotregistry.dev) for OCI (images, charts, providers) and
+nginx for files and states, behind one internal CA.
+
+```json title="/etc/zot/config.json"
+{
+  "distSpecVersion": "1.1.1",
+  "storage": {"rootDirectory": "/var/lib/registry"},
+  "http": {
+    "address": "0.0.0.0", "port": "443",
+    "tls": {"cert": "/etc/zot/tls.crt", "key": "/etc/zot/tls.key"},
+    "auth": {"htpasswd": {"path": "/etc/zot/htpasswd"}},
+    "accessControl": {"repositories": {"**": {
+      "anonymousPolicy": ["read"],
+      "policies": [{"users": ["svc-mirror"], "actions": ["read", "create", "update"]}]
+    }}}
+  }
+}
+```
+
+```nginx title="/etc/nginx/conf.d/files.conf"
+server {
+  listen 443 ssl;
+  server_name files.site.local;
+  ssl_certificate     /etc/nginx/tls/tls.crt;
+  ssl_certificate_key /etc/nginx/tls/tls.key;
+  client_max_body_size 0;
+
+  # Read by everyone; written by the mirror scripts (PUT) with the service account.
+  location /rondo/ {
+    root /srv/files;
+    autoindex on;
+    dav_methods PUT;
+    create_full_put_path on;
+    limit_except GET HEAD { auth_basic "mirror"; auth_basic_user_file /etc/nginx/htpasswd; }
+  }
+  # OpenTofu states: the http backend reads with GET, writes with PUT, deletes with DELETE.
+  location /tofu-state/ {
+    root /srv;
+    dav_methods PUT DELETE;
+    create_full_put_path on;
+    auth_basic "state"; auth_basic_user_file /etc/nginx/htpasswd;
+  }
+}
+```
+
+```yaml title="rondo.yaml (excerpt)"
+artifacts:
+  preset: generic
+  username: svc-rondo                 # read access everywhere, write on /tofu-state/
+  caCertificateFile: ./certs/site-ca.pem
+  oci:
+    registry: registry.site.local
+    repository: rondo                 # images: registry.site.local/rondo/<path>
+                                      # charts: oci://registry.site.local/rondo/charts
+  files:
+    url: https://files.site.local
+    repository: rondo                 # RONDO's files and tools under /rondo/
+  tofu:
+    providerOCI: registry.site.local/opentofu-providers
+    state:
+      http:
+        url: https://files.site.local/tofu-state
+secrets:
+  mirrorPassword: …
+```
+
+nginx's WebDAV module has no `LOCK`: RONDO's http backend does not lock, so two `tofu apply` of the
+same stack must not run at once (RONDO serialises its own). Use the S3 backend when the state
+must be locked.
+
+### Harbor and nginx
+
+[Harbor](https://goharbor.io) serves images, charts and providers from projects; a robot account
+reads them. nginx serves files and states as above.
+
+<Steps>
+
+1. Create a project `rondo` (images, and charts under `rondo/charts`) and a project
+   `opentofu-providers`; private projects need the robot account, public ones are read
+   anonymously.
+2. Create a robot account with pull on both projects, and push for the account the mirror
+   scripts use.
+3. Declare them:
+
+   ```yaml
+   artifacts:
+     preset: generic
+     username: robot$rondo-reader
+     oci:
+       registry: harbor.site.local
+       repository: rondo
+     files:
+       url: https://files.site.local
+       repository: rondo
+     tofu:
+       providerOCI: harbor.site.local/opentofu-providers
+       state:
+         http:
+           url: https://files.site.local/tofu-state
+   ```
+
+</Steps>
+
+Nexus works the same way: a docker hosted repository on its own connector port for OCI, a raw
+hosted repository for files and states.
+
+### MinIO for the state
+
+The S3 backend locks the state with a lock file next to it. With [MinIO](https://min.io), or
+Ceph RGW:
+
+```bash
+mc alias set site https://minio.site.local:9000 <admin> <password>
+mc mb site/rondo-states
+mc admin user add site rondo-state <secret>
+mc admin policy attach site readwrite --user rondo-state
+```
+
+```yaml
+artifacts:
+  tofu:
+    state:
+      s3:
+        bucket: rondo-states
+        endpoint: https://minio.site.local:9000
+        usePathStyle: true
+secrets:
+  mirrorStateAccessKey: rondo-state
+  mirrorStateSecretKey: …
+```
+
+### Providers: network mirror or OCI
+
+| | `tofu.providerMirror` | `tofu.providerOCI` |
+|---|---|---|
+| served by | the file server: a static tree | the OCI registry: one repository per provider |
+| filled by | `download-deps.py --type tofu_providers` (`mirror.yml`) | `oras`, per OpenTofu's [provider mirror in OCI registries](https://opentofu.org/docs/cli/oci_registries/provider-mirror/) |
+| credentials | `secrets.mirrorToken` (Bearer), or none | the service account (`oci_credentials`), or none |
+
+To push a provider to an OCI mirror, one platform manifest per zip, then the version's index:
+
+```bash
+oras push --artifact-type application/vnd.opentofu.provider-target \
+  --artifact-platform linux/amd64 --oci-layout layout:linux_amd64 \
+  terraform-provider-vsphere_2.9.3_linux_amd64.zip:archive/zip
+oras manifest index create --artifact-type application/vnd.opentofu.provider \
+  --oci-layout layout:2.9.3 linux_amd64
+oras cp --from-oci-layout layout:2.9.3 registry.site.local/opentofu-providers/hashicorp/vsphere:2.9.3
+```
+
+The providers and versions are the `tofu_providers` of `manifests/dependencies.yaml`.
+
+## Artifactory preset
+
+A JFrog Artifactory derives every endpoint from one URL and repository names:
+
+```yaml
+artifacts:
+  preset: artifactory
+  username: svc-rondo
+  caCertificateFile: ./certs/site-ca.pem
+  artifactory:
+    url: https://artifactory.site.local/artifactory
+    repositories:              # defaults shown
+      docker: rondo-docker-local
+      helm: rondo-helm-local
+      generic: rondo-generic-local
+      tofu: rondo-tofu-local          # a Terraform provider repository
+      tofuState: rondo-tofu-state-local
+      rpm: rondo-rpms-local           # optional
+```
+
+The docker repository is also reached at its subdomain (`rondo-docker-local.artifactory.site.local`)
+by the rke2 nodes. When `secrets.mirrorToken` is empty, `rondo deploy` mints the providers' token
+with the service account (an admin account for a token without expiry).
+
+## Fill the mirror
+
+Two copies, from a machine that reaches both the Internet and the mirror. The scripts take the
+roots of the generic preset; for Artifactory, give the URLs of its repositories.
+
+| Script flag | Environment | `rondo.yaml` |
+|---|---|---|
+| `--registry` (`mirror-release.sh`), `--oci-registry` | `MIRROR_REGISTRY` | `<oci.registry>/<oci.repository>` |
+| `--files-url` | `MIRROR_FILES_URL` | `<files.url>/<files.repository>` |
+| `--rpm-url` | `MIRROR_RPM_URL` | `<rpm.url>/<rpm.repository>` |
+| `--provider-mirror` (default `<files-url>/providers`) | `MIRROR_PROVIDER_URL` | `tofu.providerMirror` |
+| — | `MIRROR_USER`, `MIRROR_PASSWORD`, `MIRROR_CA_CERT` | a write account, the site's CA |
+
+<Tabs>
+  <TabItem label="A RONDO release">
+
+  `scripts/mirror-release.sh`, a release asset, copies the release's images, charts, files,
+  packages and channel file:
+
+  ```bash
+  export MIRROR_USER=svc-mirror MIRROR_PASSWORD=… MIRROR_CA_CERT=./site-ca.pem
+  scripts/mirror-release.sh --version v1.0.0 \
+    --registry registry.site.local/rondo \
+    --files-url https://files.site.local/rondo \
+    --rpm-url https://files.site.local/rpms --channel stable
+  ```
+
+  `--dry-run` prints the copy list. `skopeo`, `helm`, `curl` and `git` are needed;
+  `createrepo_c` builds the RPM `repodata/`.
+
+  </TabItem>
+  <TabItem label="Third-party dependencies">
+
+  `.github/workflows/mirror.yml` copies `manifests/dependencies.yaml` (tools, providers, charts,
+  images, RPMs) and the Rancher and rke2 image lists, scanned with ClamAV and Trivy. Set the
+  repository secrets `MIRROR_REGISTRY`, `MIRROR_FILES_URL`, `MIRROR_RPM_URL`, `MIRROR_USER`,
+  `MIRROR_PASSWORD` and `MIRROR_CA_CERT` on a runner that reaches the mirror, then run the
+  workflow by hand. Run the same scripts elsewhere with the same variables:
+
+  ```bash
+  python3 scripts/ci/download-deps.py --type binaries
+  python3 scripts/ci/download-deps.py --type tofu_providers
+  python3 scripts/ci/download-deps.py --type helm_charts
+  python3 scripts/ci/mirror-images.py
+  ```
+
+  </TabItem>
+</Tabs>
+
+See [Air-gap mirror](/contributing/release/#air-gap-mirror) for what each script copies.
+
+## Check it
+
+Before the first `rondo deploy`, from the workstation, with the service account:
+
+```bash
+REG=registry.site.local FILES=https://files.site.local/rondo V=v1.0.0
+curl -fsS --cacert certs/site-ca.pem -u svc-rondo "https://${REG}/v2/" -o /dev/null -w '%{http_code}\n'
+curl -fsS --cacert certs/site-ca.pem -u svc-rondo "https://${REG}/v2/rondo/rondo-controller/tags/list"
+helm show chart "oci://${REG}/rondo/charts/downstream-bootstrap" --ca-file certs/site-ca.pem
+curl -fsS --cacert certs/site-ca.pem "${FILES}/rondo/stable.json"
+curl -fsS --cacert certs/site-ca.pem "${FILES}/tofu-modules/vm/${V}/vm.tar.gz.sha256"
+# providers: one of
+curl -fsS --cacert certs/site-ca.pem "https://${REG}/v2/opentofu-providers/hashicorp/vsphere/tags/list"
+curl -fsS --cacert certs/site-ca.pem "${FILES}/providers/registry.opentofu.org/hashicorp/vsphere/index.json"
+# state: a write, a read, a delete
+echo '{}' | curl -fsS --cacert certs/site-ca.pem -u svc-rondo -T - https://files.site.local/tofu-state/check
+curl -fsS --cacert certs/site-ca.pem -u svc-rondo -X DELETE https://files.site.local/tofu-state/check
+```
+
+Then `rondo deploy --dry-run` prints the commands it would run, with the endpoints it derives
+from `rondo.yaml` (see [Simulation mode](/reference/cli/#simulation-mode)). During the deploy, the machine Jobs log `oci_mirror registry reachable` or
+`network_mirror reachable and credentials accepted` before `tofu init`.
+
+<Aside type="tip">`rondo-sandbox` runs the generic preset on the workstation: a Zot registry (images,
+charts, an OCI provider mirror) and nginx (files, http state) stand in for the site's mirror,
+and the end-to-end workflow (`.github/workflows/e2e.yml`) installs a component through them.
+See [Test in the sandbox](/components/sandbox/).</Aside>

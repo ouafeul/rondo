@@ -187,3 +187,27 @@ def test_mirror_copies_the_rancher_and_rke2_image_lists(workflows):
     step = step_named(workflows["mirror.yml"], "mirror", "Upstream image lists (Rancher, rke2)")["run"]
     assert "rancher/rancher/releases/download/v${rancher_version#v}/rancher-images.txt" in step
     assert "rancher/rke2/releases/download/${rke2_version}/rke2-images.linux-amd64.txt" in step
+
+
+def test_e2e_runs_weekly_by_hand_and_on_labelled_pull_requests(workflows):
+    wf = workflows["e2e.yml"]
+    on = wf["on"]
+    assert set(on) == {"workflow_dispatch", "schedule", "pull_request"}
+    assert on["pull_request"] == {"types": ["labeled", "synchronize"]}
+    job = wf["jobs"]["sandbox"]
+    assert "contains(github.event.pull_request.labels.*.name, 'e2e')" in job["if"]
+    assert job["timeout-minutes"] <= 45
+    run = "\n".join(s.get("run", "") for _, s in steps(wf))
+    assert "scripts/ci/e2e-sandbox.sh run" in run
+    upload = [s for _, s in steps(wf) if s.get("uses", "").startswith("actions/upload-artifact@")]
+    assert upload and all(s.get("if") == "failure()" for s in upload)
+
+
+def test_e2e_tools_are_those_of_dependencies():
+    script = (ROOT / "scripts" / "ci" / "e2e-sandbox.sh").read_text()
+    deps = yaml.safe_load((ROOT / "manifests" / "dependencies.yaml").read_text())
+    binaries = {b["name"]: b for b in deps["binaries"]}
+    for name in ("kubectl", "helm"):
+        key = name.upper()
+        assert f'{key}_VERSION="{binaries[name]["version"]}"' in script, name
+        assert f'{key}_SHA256="{binaries[name]["sha256"]}"' in script, name

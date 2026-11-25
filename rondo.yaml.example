@@ -11,7 +11,7 @@ artifacts:
   oci:
     registry: registry.example.local
     repository: rondo
-    chartsRepository: charts
+    chartsRepository: rondo/charts
   files:
     url: https://files.example.local
     repository: rondo

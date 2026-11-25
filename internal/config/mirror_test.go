@@ -204,7 +204,7 @@ func TestGenericPresetResolvesTheDeclaredEndpoints(t *testing.T) {
 		"files.auth":         "https://svc-rondo:CHANGEME@files.example.local",
 		"oci.registry":       "registry.example.local",
 		"oci.images":         "registry.example.local/rondo",
-		"oci.charts":         "oci://registry.example.local/charts",
+		"oci.charts":         "oci://registry.example.local/rondo/charts",
 		"rpm.base":           "https://files.example.local",
 		"rpm.repo":           "rpms",
 		"rke2.registry":      "registry.example.local",
@@ -225,8 +225,8 @@ func TestGenericPresetResolvesTheDeclaredEndpoints(t *testing.T) {
 		"env.FILES_REPOSITORY":               "rondo",
 		"env.RPM_REPOSITORY":                 "rpms",
 		"env.IMAGES_REPOSITORY":              "rondo",
-		"env.CHARTS_REPOSITORY":              "charts",
-		"env.CHARTS_OCI":                     "oci://registry.example.local/charts",
+		"env.CHARTS_REPOSITORY":              "rondo/charts",
+		"env.CHARTS_OCI":                     "oci://registry.example.local/rondo/charts",
 		"env.OCI_REGISTRY":                   "registry.example.local",
 		"env.TF_VAR_mirror_files_url":        "https://files.example.local/rondo",
 		"env.TF_VAR_mirror_registry":         "registry.example.local",
@@ -239,7 +239,7 @@ func TestGenericPresetResolvesTheDeclaredEndpoints(t *testing.T) {
 func TestGenericPresetDefaults(t *testing.T) {
 	c, err := load(t, func(s string) string {
 		s = strings.Replace(s, "  preset: generic\n", "", 1)
-		s = strings.Replace(s, "    repository: rondo\n    chartsRepository: charts\n", "", 1)
+		s = strings.Replace(s, "    repository: rondo\n    chartsRepository: rondo/charts\n", "", 1)
 		s = strings.Replace(s, "    repository: rondo\n", "", 1)
 		return strings.Replace(s, "  rpm:\n    url: https://files.example.local\n    repository: \"\"\n", "", 1)
 	})
@@ -248,7 +248,7 @@ func TestGenericPresetDefaults(t *testing.T) {
 	}
 	m := c.Mirror()
 	if m.Preset != PresetGeneric || m.OCIRepository != "registry.example.local/rondo" ||
-		m.ChartsOCI != "oci://registry.example.local/charts" ||
+		m.ChartsOCI != "oci://registry.example.local/rondo/charts" ||
 		m.FilesRepoURL() != "https://files.example.local/rondo" ||
 		m.RPMBase != "https://files.example.local" || m.RPMRepo != "" {
 		t.Errorf("defaults not applied: %+v", m)
