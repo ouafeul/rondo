@@ -52,8 +52,10 @@ printf 'apiVersion: v2\\nname: controller-chart\\nversion: 0.1.2\\n' > "$dir/app
 printf 'name: "dashboard"\\nversion: "0.2.0"\\n' > "$dir/apps/dashboard/Chart.yaml"''')
     stub_bin("skopeo", 'echo "skopeo $*" >> "$CALLS"')
     stub_bin("helm", 'echo "helm $*" >> "$CALLS"\n[ "$1" = "show" ] && exit 1\nexit 0')
-    createrepo = stub_bin("createrepo_c", 'echo "createrepo_c $*" >> "$CALLS"\nmkdir -p "${@: -1}/repodata"\n'
-                             'echo md > "${@: -1}/repodata/repomd.xml"; echo p > "${@: -1}/repodata/primary.xml.gz"')
+    # POSIX sh (dash on Linux): the last argument via a loop, not ${@: -1}.
+    createrepo = stub_bin("createrepo_c", 'echo "createrepo_c $*" >> "$CALLS"\nfor last; do :; done\n'
+                             'mkdir -p "$last/repodata"\n'
+                             'echo md > "$last/repodata/repomd.xml"; echo p > "$last/repodata/primary.xml.gz"')
     site = tmp_path / "site"
 
     def run(*args, env=None, check=True):
