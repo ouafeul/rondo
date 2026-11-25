@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.26.x"
-  NFPM_VERSION: v2.41.1
+  GO_VERSION: "1.27.x"
+  NFPM_VERSION: v2.49.0
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:

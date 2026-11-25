@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  GO_VERSION: "1.26.x"
+  GO_VERSION: "1.27.x"
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
-  SETUP_ENVTEST_VERSION: v0.24.1
-  KUBECONFORM_VERSION: v0.6.7
+  PYTHON_VERSION: "3.14"
+  SETUP_ENVTEST_VERSION: v0.25.3
+  KUBECONFORM_VERSION: v0.8.0
 
 jobs:
   changes:
@@ -131,7 +131,7 @@ jobs:
         run: python3 scripts/ci/check-coverage.py cover.out
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
           "$(go env GOPATH)/bin/govulncheck" ./...
       - name: Build binaries
         run: |
@@ -244,7 +244,7 @@ jobs:
           version: ${{ steps.versions.outputs.helm }}
       - name: Render charts and resolve dependencies
         run: |
-          pip install --quiet pyyaml==6.0.2 requests==2.34.2
+          pip install --quiet pyyaml==6.0.4 requests==2.34.2
           python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml.gotmpl \
             --platform platform --apps apps --update-manifest --emit-gvks rendered-gvks.txt
           python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
@@ -263,7 +263,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install linters
         run: >-
-          pip install --quiet pytest==9.1.1 ruff==0.15.22 shellcheck-py==0.11.0.1 pyyaml==6.0.2
+          pip install --quiet pytest==9.1.1 ruff==0.15.22 shellcheck-py==0.11.0.1 pyyaml==6.0.4
           requests==2.34.2 jinja2==3.1.6 ansible-lint==26.9.0
       - run: ruff check scripts/ci
       - run: shellcheck scripts/ci/*.sh scripts/*.sh .githooks/pre-commit .githooks/pre-push cmd/rondo-sandbox/rondo-sandbox.sh install.sh

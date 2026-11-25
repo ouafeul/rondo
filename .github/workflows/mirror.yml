@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Mirror CA
         run: |
           if [ -n "${MIRROR_CA_CERT_PEM}" ]; then
@@ -60,7 +60,7 @@ jobs:
       - name: Tools
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
-          pip install --quiet pyyaml==6.0.2 requests==2.34.2 certifi
+          pip install --quiet pyyaml==6.0.4 requests==2.34.2 certifi
           helm_version="$(grep -A2 'name: helm$' manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}')"
           curl -fsSL "https://get.helm.sh/helm-${helm_version}-linux-amd64.tar.gz" | tar xz -C /tmp
           sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
