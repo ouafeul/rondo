@@ -123,6 +123,28 @@ cmd_collect() {
     for c in $(docker ps -a --format '{{.Names}}' | grep '^rondo-sandbox\|^rondo-sbx-machine' || true); do
         docker logs --tail 500 "${c}" > "${dir}/docker.${c}.log" 2>&1 || true
     done
+    docker ps -a --format '{{.Names}}\t{{.Status}}\t{{.Networks}}' > "${dir}/docker.ps.txt" 2>&1 || true
+    # Machines: is systemd up, is sshd listening, and can the network reach port 22?
+    local m ip
+    for m in $(docker ps -a --format '{{.Names}}' | grep '^rondo-sbx-machine' || true); do
+        ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${m}" 2>/dev/null)"
+        {
+            docker inspect -f 'state={{.State.Status}} restarts={{.RestartCount}} exit={{.State.ExitCode}} err={{.State.Error}}' "${m}"
+            docker exec "${m}" systemctl is-system-running
+            docker exec "${m}" systemctl --no-pager --failed
+            docker exec "${m}" systemctl --no-pager status sshd
+            docker exec "${m}" sh -c 'ss -ltnp 2>/dev/null || netstat -ltnp'
+            docker exec "${m}" ls -l /var/lib/rondo-cloud-init-done /home/rondo/.ssh/authorized_keys
+            docker exec "${m}" journalctl --no-pager -n 100
+            echo "--- probe ${ip}:22 from the sandbox network"
+            docker run --rm --network rondo-sandbox busybox:1.38.0 nc -zv -w 5 "${ip}" 22
+            local node
+            for node in $(docker ps --format '{{.Names}}' | grep '^k3d-.*server-0$' || true); do
+                echo "--- probe ${ip}:22 from ${node}"
+                docker exec "${node}" sh -c "nc -zv -w 5 ${ip} 22 || wget -T 5 -O- http://${ip}:22"
+            done
+        } > "${dir}/machine.${m}.txt" 2>&1 || true
+    done
 }
 
 cmd_cleanup() {
