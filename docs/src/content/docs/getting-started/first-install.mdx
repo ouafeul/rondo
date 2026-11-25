@@ -51,7 +51,7 @@ flowchart LR
    rondo init --env staging            # or a named environment
    ```
 
-   Fill in the artifact mirror, the vSphere Target(s), the management cluster, the downstreams and the secrets. Each key is explained in the [rondo.yaml reference](/reference/rondo-yaml/). The template declares a `generic` mirror (any OCI registry and HTTP file server: `artifacts.oci`, `artifacts.files`, `artifacts.rpm`, `artifacts.tofu`); `rondo init --preset artifactory` writes one for a JFrog Artifactory instead, every endpoint derived from `artifacts.artifactory.url`. Put the mirror's CA at the path `artifacts.caCertificateFile`.
+   Fill in the artifact mirror, the vSphere Target(s), the management cluster, the downstreams and the secrets. Each key is explained in the [rondo.yaml reference](/reference/rondo-yaml/). The template declares a `generic` mirror (any OCI registry and HTTP file server: `artifacts.oci`, `artifacts.files`, `artifacts.rpm`, `artifacts.tofu`); `rondo init --preset artifactory` writes one for a JFrog Artifactory instead, every endpoint derived from `artifacts.artifactory.url`. Put the mirror's CA at the path `artifacts.caCertificateFile`, or remove the key when its certificates are publicly trusted; remove `artifacts.username` and `secrets.mirrorPassword` for a mirror read anonymously.
 
 3. **Check the plan, then deploy the management cluster.**
 

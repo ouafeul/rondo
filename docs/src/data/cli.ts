@@ -28,7 +28,7 @@ export type Command = {
 const tools: Step = {
   name: 'tool download',
   tool: 'http',
-  does: 'tofu, helm, helmfile, kubectl, k9s, yq and the helm-diff plugin into ~/.rondo/bin, at the bundle versions (manifests/dependencies.yaml). A tool already present is not downloaded again.',
+  does: 'tofu, helm, helmfile, kubectl, k9s, yq and the helm-diff plugin into ~/.rondo/bin, at the bundle versions (manifests/dependencies.yaml), each checked against the sha256 pinned there and the <file>.sha256 the mirror serves, a mismatch refused. A tool already present is not downloaded again.',
   dry: 'prints the URLs',
 };
 const registry: Step = {
