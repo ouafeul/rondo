@@ -190,6 +190,9 @@ jobs:
           go install "github.com/yannh/kubeconform/cmd/kubeconform@${KUBECONFORM_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Chart versions
+        env:
+          # Pull requests compare with their base, pushes with the previous tip of the branch.
+          CHART_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
         run: scripts/ci/check-chart-versions.sh
       - name: CRDs and deepcopy up to date
         run: scripts/ci/gen-crds.sh --check

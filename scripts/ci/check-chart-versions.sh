@@ -8,6 +8,10 @@ if [ "${1:-}" = "--staged" ]; then
   BASE="HEAD"
 fi
 echo "==> Chart version guard (base = ${BASE})"
+if ! git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null; then
+  echo "    no base commit to compare with (first commit or new branch), nothing to check"
+  exit 0
+fi
 fail=0
 
 for chart in apps/*/; do
