@@ -34,7 +34,7 @@ The artifact mirror of `rondo.yaml` (`artifacts`), whatever its preset, resolves
 |---|---|---|---|
 | `${OCI_REGISTRY}` | registry authority, `host[:port]` | `oci.registry` | host of `artifactory.url` |
 | `${IMAGES_REPOSITORY}` | repository of the images: `${OCI_REGISTRY}/${IMAGES_REPOSITORY}/<image>` | `oci.repository` (`rondo`) | `artifactory.repositories.docker` (`rondo-docker-local`) |
-| `${CHARTS_REPOSITORY}` | repository of the Helm charts | `oci.chartsRepository` (`charts`) | `artifactory.repositories.helm` (`rondo-helm-local`) |
+| `${CHARTS_REPOSITORY}` | repository of the Helm charts | `oci.chartsRepository` (`<oci.repository>/charts`) | `artifactory.repositories.helm` (`rondo-helm-local`) |
 | `${CHARTS_OCI}` | `oci://${OCI_REGISTRY}/${CHARTS_REPOSITORY}`: a chart is `${CHARTS_OCI}/<chart>` | derived | derived |
 | `${FILES_URL}` | root of the file server, without a trailing `/` | `files.url` | `artifactory.url` |
 | `${FILES_REPOSITORY}` | path of the files under the root: `${FILES_URL}/${FILES_REPOSITORY}/<path>` | `files.repository` (`rondo`) | `artifactory.repositories.generic` (`rondo-generic-local`) |

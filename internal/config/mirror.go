@@ -10,8 +10,11 @@ import (
 
 // Defaults of the repositories a manifest leaves out.
 const (
-	DefaultRepository       = "rondo"
-	DefaultChartsRepository = "charts"
+	DefaultRepository = "rondo"
+	// DefaultChartsSubpath is where the charts sit under the images repository when
+	// oci.chartsRepository is left out: <repository>/charts, where the mirror scripts push them
+	// (their registry is <oci.registry>/<oci.repository>).
+	DefaultChartsSubpath = "charts"
 
 	DefaultArtifactoryDocker    = "rondo-docker-local"
 	DefaultArtifactoryHelm      = "rondo-helm-local"
@@ -112,7 +115,7 @@ func (c *Config) Mirror() Mirror {
 		m.FilesBase, m.FilesRepo = trimURL(a.Files.URL), or(a.Files.Repository, DefaultRepository)
 		m.OCIRegistry = strings.TrimRight(a.OCI.Registry, "/")
 		m.ImagesRepo = or(a.OCI.Repository, DefaultRepository)
-		m.ChartsRepo = or(a.OCI.ChartsRepository, DefaultChartsRepository)
+		m.ChartsRepo = or(a.OCI.ChartsRepository, m.ImagesRepo+"/"+DefaultChartsSubpath)
 		m.RPMBase, m.RPMRepo = or(trimURL(a.RPM.URL), m.FilesBase), repo(a.RPM.Repository)
 		m.RKE2SystemRegistry = m.OCIRegistry
 		m.RegistryRewrite = m.ImagesRepo

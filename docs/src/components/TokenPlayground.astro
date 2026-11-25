@@ -9,7 +9,7 @@ persistence:
 adminPassword: \${secrets.grafanaAdminPassword}`;
 const site = `OCI_REGISTRY=registry.example.local
 INGRESS_BASE_DOMAIN=cluster.example.local
-CHARTS_OCI=oci://registry.example.local/charts`;
+CHARTS_OCI=oci://registry.example.local/rondo/charts`;
 const target = `name=rke2-a
 values.imageRegistry=registry.example.local/rondo
 values.storageClass=local-path

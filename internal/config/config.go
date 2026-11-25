@@ -50,7 +50,8 @@ type Artifacts struct {
 }
 
 // OCIEndpoint is the registry of the images (<registry>/<repository>/<image>) and of the Helm
-// charts (oci://<registry>/<chartsRepository>/<chart>).
+// charts (oci://<registry>/<chartsRepository>/<chart>, chartsRepository <repository>/charts by
+// default).
 type OCIEndpoint struct {
 	// Registry is host[:port], without a scheme.
 	Registry         string `json:"registry,omitempty"`
