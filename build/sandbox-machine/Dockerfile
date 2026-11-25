@@ -13,14 +13,14 @@ ARG ROCKY_REPOS=https://dl.rockylinux.org/pub/rocky/9.9
 # curl-minimal), and what a template has. udev and logind have nothing to manage in a container.
 # A site's machines see no Internet repository: only the component's rpmRepos.
 RUN dnf -y --disablerepo='*' \
-      --repofrompath=pinned-baseos,${ROCKY_REPOS}/BaseOS/x86_64/os/ \
-      --repofrompath=pinned-appstream,${ROCKY_REPOS}/AppStream/x86_64/os/ \
+      --repofrompath=pinned-baseos,${ROCKY_REPOS}/BaseOS/$(uname -m)/os/ \
+      --repofrompath=pinned-appstream,${ROCKY_REPOS}/AppStream/$(uname -m)/os/ \
       --setopt=pinned-baseos.gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 \
       --setopt=pinned-appstream.gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 \
       upgrade \
  && dnf -y --disablerepo='*' \
-      --repofrompath=pinned-baseos,${ROCKY_REPOS}/BaseOS/x86_64/os/ \
-      --repofrompath=pinned-appstream,${ROCKY_REPOS}/AppStream/x86_64/os/ \
+      --repofrompath=pinned-baseos,${ROCKY_REPOS}/BaseOS/$(uname -m)/os/ \
+      --repofrompath=pinned-appstream,${ROCKY_REPOS}/AppStream/$(uname -m)/os/ \
       --setopt=pinned-baseos.gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 \
       --setopt=pinned-appstream.gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 \
       install systemd openssh-server sudo python3 tar \
