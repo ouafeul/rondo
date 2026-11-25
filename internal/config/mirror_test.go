@@ -341,15 +341,9 @@ func TestArtifactsValidationNamesTheKey(t *testing.T) {
 		"unknown preset": {func(s string) string {
 			return strings.Replace(s, "preset: generic", "preset: nexus", 1)
 		}, "Preset"},
-		"top-level artifactory": {func(s string) string {
-			return strings.Replace(s, "artifacts:\n", "artifactory:\n  url: https://a.example.local\nartifacts:\n", 1)
-		}, `unknown field "artifactory": the artifact mirror is declared under artifacts:`},
-		"secrets.artifactoryPassword": {func(s string) string {
-			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "  artifactoryPassword: CHANGEME\n", 1)
-		}, "secrets.mirrorPassword"},
-		"secrets.artifactoryMirrorToken": {func(s string) string {
-			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "  mirrorPassword: CHANGEME\n  artifactoryMirrorToken: x\n", 1)
-		}, "secrets.mirrorToken"},
+		"unknown top-level key": {func(s string) string {
+			return strings.Replace(s, "artifacts:\n", "registry:\n  url: https://a.example.local\nartifacts:\n", 1)
+		}, `unknown field "registry"`},
 	}
 	for name, tc := range generic {
 		t.Run(name, func(t *testing.T) {

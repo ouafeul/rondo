@@ -5,8 +5,6 @@ import (
 	"path"
 	"strings"
 
-	"sigs.k8s.io/yaml"
-
 	"rondo/internal/tofustate"
 )
 
@@ -335,28 +333,4 @@ func (c *Config) validateState() error {
 			"and mirrorStateSecretKey, or artifacts.username and secrets.mirrorPassword")
 	}
 	return nil
-}
-
-// unknownKeyHint says where a key the manifest no longer reads went, empty for any other key.
-func unknownKeyHint(raw []byte) string {
-	var doc struct {
-		Artifactory any `json:"artifactory"`
-		Secrets     struct {
-			Password any `json:"artifactoryPassword"`
-			Token    any `json:"artifactoryMirrorToken"`
-		} `json:"secrets"`
-	}
-	if yaml.Unmarshal(raw, &doc) != nil {
-		return ""
-	}
-	switch {
-	case doc.Artifactory != nil:
-		return `unknown field "artifactory": the artifact mirror is declared under artifacts:, ` +
-			`with artifacts.preset: artifactory and artifacts.artifactory.url for a JFrog Artifactory`
-	case doc.Secrets.Password != nil:
-		return `unknown field "artifactoryPassword": the password of the mirror is secrets.mirrorPassword`
-	case doc.Secrets.Token != nil:
-		return `unknown field "artifactoryMirrorToken": the token of the provider mirror is secrets.mirrorToken`
-	}
-	return ""
 }
