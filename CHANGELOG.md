@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: [Artifact mirrors](https://ouafeul.github.io/rondo/operations/artifact-mirrors/), what a site mirror serves, generic (Zot or Harbor with nginx, MinIO for the state) and artifactory configurations, how to fill and check it.
 
 ### Fixed
-- `rondo-sandbox` runs on macOS and ARM workstations: the disk check is skipped without GNU `df`, a machine gets at most Docker's CPUs, the registry and machine images follow the workstation's architecture.
+- `rondo-sandbox` runs on macOS and ARM workstations: the disk check is skipped without GNU `df`, `component install` runs under bash 3.2, a machine gets at most Docker's CPUs, the registry and machine images follow the workstation's architecture.
 
 ### Security
 - Platform on supported releases: Rancher 2.15.3 on k3s 1.36.6, rke2 1.36.5 clusters, cert-manager 1.21.3, MetalLB 0.16.2 (layer 2, no FRR images), Traefik 3.7.20 (chart 42.4.3), local-path-provisioner 0.0.37; tools OpenTofu 1.13.10, kubectl 1.36.6, Helm 3.22.1, helmfile 1.8.5 (`helmfile.yaml.gotmpl`), helm-diff 3.15.15, k9s 0.51.0, yq 4.54.3, ansible-core 2.22.0; providers rancher2 15.3.0, vsphere 2.18.0, cloudinit 2.4.1; images on Go 1.27.4, Debian 13, distroless Debian 13, Python 3.14 and Rocky Linux 9.9, OS packages upgraded at build. HIGH and CRITICAL findings drop across the mirrored images and binaries.
