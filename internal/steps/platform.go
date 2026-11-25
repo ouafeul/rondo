@@ -17,6 +17,7 @@ import (
 	"rondo/internal/kobj"
 	"rondo/internal/log"
 	"rondo/internal/synth"
+	"rondo/internal/tofustate"
 )
 
 type PlatformStage struct {
@@ -141,20 +142,29 @@ func (p *PlatformStage) ApplyCredentials(ctx context.Context) error {
 		log.Info("DRY-RUN Secret " + kobj.CredentialsSecret)
 		return nil
 	}
-	m := p.cfg.Mirror()
-	creds := kobj.ArtifactoryCredentials(m.Username, m.Password)
+	creds := platformCredentials(p.cfg.Mirror())
 	if err := p.applyObject(ctx, creds); err != nil {
 		return fmt.Errorf("secret %s: %w", kobj.CredentialsSecret, err)
 	}
 
-	ca, err := os.ReadFile(p.ws.CACert) //nolint:gosec // config path, not user input
+	// An empty CA still makes the ConfigMap the Jobs mount: they then use the system trust store.
+	ca, err := p.ws.ReadCA()
 	if err != nil {
-		return fmt.Errorf("reading the Artifactory CA (%s): %w", p.ws.CACert, err)
+		return fmt.Errorf("reading the mirror CA (%s): %w", p.ws.CACert, err)
 	}
 	if err := p.applyObject(ctx, kobj.ArtifactoryCA(string(ca))); err != nil {
 		return fmt.Errorf("configmap %s: %w", kobj.ArtifactoryCACM, err)
 	}
 	return nil
+}
+
+// platformCredentials is the credentials Secret of the Jobs: the mirror's, and the keys of an s3
+// state backend.
+func platformCredentials(m config.Mirror) kobj.Object {
+	if m.StateBackend == tofustate.S3 {
+		return kobj.ArtifactoryCredentials(m.Username, m.Password, m.StateAccessKey, m.StateSecretKey)
+	}
+	return kobj.ArtifactoryCredentials(m.Username, m.Password, "", "")
 }
 
 func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
@@ -181,7 +191,7 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 		token, minted = t, true
 	}
 
-	secret := kobj.TofuMirror(m.ProviderMirrorURL, m.ProviderMirrorHost(), token, minted)
+	secret := kobj.TofuMirror(m.TofuRC(token), token, minted)
 	if err := p.applyObject(ctx, secret); err != nil {
 		if minted {
 			if rerr := p.arti.RevokeToken(ctx, token); rerr != nil {
@@ -190,7 +200,8 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 		}
 		return fmt.Errorf("secret %s: %w", kobj.TofurcSecret, err)
 	}
-	if prior != "" && prior != token && p.arti != nil {
+	// A token kept in the Secret was minted by an Artifactory: only one revokes it.
+	if prior != "" && prior != token && p.arti != nil && m.IsArtifactory() {
 		if err := p.arti.RevokeToken(ctx, prior); err != nil {
 			log.Warn("revoking the previous mirror token failed (non-blocking)", "err", err)
 		}

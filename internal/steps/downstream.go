@@ -144,11 +144,15 @@ func (b *RancherBootstrap) exportClusterCA(ctx context.Context) error {
 
 func (b *RancherBootstrap) EnsureRegcred(ctx context.Context) error {
 	log.Step("secret regcred (fleet-default)")
+	m := b.cfg.Mirror()
+	if m.Anonymous() {
+		log.Info("anonymous mirror: the rke2 nodes pull without credentials, no regcred")
+		return nil
+	}
 	if b.dryRun {
 		log.Info("DRY-RUN create secret regcred (fleet-default)")
 		return nil
 	}
-	m := b.cfg.Mirror()
 	secret := kobj.Regcred(m.Username, m.Password)
 	raw, err := yaml.Marshal(secret)
 	if err != nil {

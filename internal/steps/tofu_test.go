@@ -35,7 +35,7 @@ func TestConfigureRegistryOnAGenericMirror(t *testing.T) {
 				OCI:   config.OCIEndpoint{Registry: "registry.example.local"},
 				Files: config.FilesEndpoint{URL: "https://files.example.local"},
 				Tofu: config.TofuEndpoints{ProviderMirror: "https://tofu-mirror.example.local/providers/",
-					StateURL: "https://files.example.local/state"}},
+					State: config.TofuState{HTTP: &config.HTTPState{URL: "https://files.example.local/state"}}}},
 				Secrets: config.Secrets{MirrorPassword: "p", MirrorToken: token}}
 			st := NewTofuStage(cfg, Workspace{ProjectDir: dir, StateDir: dir, CACert: "/ca.pem"},
 				&runner.Fake{}, StaticToken(cfg.Mirror().MirrorToken), false)
@@ -153,7 +153,7 @@ func TestApplyManagementSequence(t *testing.T) {
 		if c.Dir != stack {
 			t.Errorf("call %d dir = %q, want %q", i, c.Dir, stack)
 		}
-		if c.Env["TF_VAR_artifactory_ca_cert"] != "PEMPEM" {
+		if c.Env["TF_VAR_mirror_ca"] != "PEMPEM" {
 			t.Errorf("call %d: CA not exported", i)
 		}
 	}

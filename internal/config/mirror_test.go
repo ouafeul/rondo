@@ -45,8 +45,11 @@ func resolved(t *testing.T, c *Config) map[string]string {
 		"rpm.base":           m.RPMBase,
 		"rpm.repo":           m.RPMRepo,
 		"rke2.registry":      c.RegistryHostFor(&c.Targets.Downstreams[0].RKE2),
+		"registry.rewrite":   m.RegistryRewrite,
 		"tofu.mirror":        m.ProviderMirrorURL,
+		"tofu.oci":           m.ProviderOCI,
 		"tofu.mirrorHost":    m.ProviderMirrorHost(),
+		"tofu.stateBackend":  m.StateBackend,
 		"tofu.stateBase":     m.StateBaseURL(),
 		"tofu.state.k3s":     m.StateURL("k3s"),
 		"artifactory.api":    m.ArtifactoryURL,
@@ -54,7 +57,7 @@ func resolved(t *testing.T, c *Config) map[string]string {
 		"credentials.secret": m.Password,
 	}
 	for k, v := range c.Env() {
-		if strings.HasPrefix(k, "ARTIFACTORY_") || k == "REGISTRY_HOST" || strings.HasPrefix(k, "TF_VAR_artifactory_") {
+		if strings.HasPrefix(k, "ARTIFACTORY_") || k == "REGISTRY_HOST" || strings.HasPrefix(k, "TF_VAR_mirror_") {
 			out["env."+k] = v
 		}
 	}
@@ -105,27 +108,30 @@ func TestArtifactoryPresetResolvesAsBefore(t *testing.T) {
 				"rpm.base":           "https://artifactory.example.local/artifactory",
 				"rpm.repo":           "rondo-rpms-local",
 				"rke2.registry":      "rondo-docker-local.artifactory.example.local",
+				"registry.rewrite":   "",
 				"tofu.mirror":        "https://artifactory.example.local/artifactory/api/terraform/rondo-tofu-local/providers/",
+				"tofu.oci":           "",
 				"tofu.mirrorHost":    "artifactory.example.local",
+				"tofu.stateBackend":  "http",
 				"tofu.stateBase":     "https://artifactory.example.local/artifactory/rondo-tofu-state-local/prod",
 				"tofu.state.k3s":     "https://artifactory.example.local/artifactory/rondo-tofu-state-local/prod/k3s/terraform.tfstate",
 				"artifactory.api":    "https://artifactory.example.local/artifactory",
 				"credentials.user":   "svc-rondo",
 				"credentials.secret": "CHANGEME",
 
-				"env.ARTIFACTORY_URL":                 "https://artifactory.example.local/artifactory",
-				"env.ARTIFACTORY_USER":                "svc-rondo",
-				"env.ARTIFACTORY_PASSWORD":            "CHANGEME",
-				"env.ARTIFACTORY_GENERIC_REPO":        "rondo-generic-local",
-				"env.ARTIFACTORY_RPM_REPO":            "rondo-rpms-local",
-				"env.ARTIFACTORY_DOCKER_REPO":         "rondo-docker-local",
-				"env.ARTIFACTORY_HELM_REPO":           "rondo-helm-local",
-				"env.REGISTRY_HOST":                   "artifactory.example.local",
-				"env.TF_VAR_artifactory_url":          "https://artifactory.example.local/artifactory",
-				"env.TF_VAR_artifactory_user":         "svc-rondo",
-				"env.TF_VAR_artifactory_pass":         "CHANGEME",
-				"env.TF_VAR_artifactory_generic_repo": "rondo-generic-local",
-				"env.TF_VAR_artifactory_docker_repo":  "rondo-docker-local",
+				"env.ARTIFACTORY_URL":                "https://artifactory.example.local/artifactory",
+				"env.ARTIFACTORY_USER":               "svc-rondo",
+				"env.ARTIFACTORY_PASSWORD":           "CHANGEME",
+				"env.ARTIFACTORY_GENERIC_REPO":       "rondo-generic-local",
+				"env.ARTIFACTORY_RPM_REPO":           "rondo-rpms-local",
+				"env.ARTIFACTORY_DOCKER_REPO":        "rondo-docker-local",
+				"env.ARTIFACTORY_HELM_REPO":          "rondo-helm-local",
+				"env.REGISTRY_HOST":                  "artifactory.example.local",
+				"env.TF_VAR_mirror_files_url":        "https://artifactory.example.local/artifactory/rondo-generic-local",
+				"env.TF_VAR_mirror_registry":         "artifactory.example.local",
+				"env.TF_VAR_mirror_registry_rewrite": "",
+				"env.TF_VAR_mirror_username":         "svc-rondo",
+				"env.TF_VAR_mirror_password":         "CHANGEME",
 			})
 		})
 	}
@@ -194,27 +200,30 @@ func TestGenericPresetResolvesTheDeclaredEndpoints(t *testing.T) {
 		"rpm.base":           "https://files.example.local",
 		"rpm.repo":           "rpms",
 		"rke2.registry":      "registry.example.local",
+		"registry.rewrite":   "rondo",
 		"tofu.mirror":        "https://files.example.local/tofu-providers/",
+		"tofu.oci":           "",
 		"tofu.mirrorHost":    "files.example.local",
+		"tofu.stateBackend":  "http",
 		"tofu.stateBase":     "https://files.example.local/tofu-state/prod",
 		"tofu.state.k3s":     "https://files.example.local/tofu-state/prod/k3s/terraform.tfstate",
 		"artifactory.api":    "",
 		"credentials.user":   "svc-rondo",
 		"credentials.secret": "CHANGEME",
 
-		"env.ARTIFACTORY_URL":                 "https://files.example.local",
-		"env.ARTIFACTORY_USER":                "svc-rondo",
-		"env.ARTIFACTORY_PASSWORD":            "CHANGEME",
-		"env.ARTIFACTORY_GENERIC_REPO":        "rondo",
-		"env.ARTIFACTORY_RPM_REPO":            "rpms",
-		"env.ARTIFACTORY_DOCKER_REPO":         "rondo",
-		"env.ARTIFACTORY_HELM_REPO":           "charts",
-		"env.REGISTRY_HOST":                   "registry.example.local",
-		"env.TF_VAR_artifactory_url":          "https://files.example.local",
-		"env.TF_VAR_artifactory_user":         "svc-rondo",
-		"env.TF_VAR_artifactory_pass":         "CHANGEME",
-		"env.TF_VAR_artifactory_generic_repo": "rondo",
-		"env.TF_VAR_artifactory_docker_repo":  "rondo",
+		"env.ARTIFACTORY_URL":                "https://files.example.local",
+		"env.ARTIFACTORY_USER":               "svc-rondo",
+		"env.ARTIFACTORY_PASSWORD":           "CHANGEME",
+		"env.ARTIFACTORY_GENERIC_REPO":       "rondo",
+		"env.ARTIFACTORY_RPM_REPO":           "rpms",
+		"env.ARTIFACTORY_DOCKER_REPO":        "rondo",
+		"env.ARTIFACTORY_HELM_REPO":          "charts",
+		"env.REGISTRY_HOST":                  "registry.example.local",
+		"env.TF_VAR_mirror_files_url":        "https://files.example.local/rondo",
+		"env.TF_VAR_mirror_registry":         "registry.example.local",
+		"env.TF_VAR_mirror_registry_rewrite": "rondo",
+		"env.TF_VAR_mirror_username":         "svc-rondo",
+		"env.TF_VAR_mirror_password":         "CHANGEME",
 	})
 }
 
@@ -255,12 +264,59 @@ func TestArtifactsValidationNamesTheKey(t *testing.T) {
 		"no files URL": {func(s string) string {
 			return strings.Replace(s, "  files:\n    url: https://files.example.local\n", "  files:\n", 1)
 		}, "artifacts.files.url is required"},
-		"no provider mirror": {func(s string) string {
+		"no provider source": {func(s string) string {
 			return strings.Replace(s, "    providerMirror: https://files.example.local/tofu-providers/\n", "", 1)
-		}, "artifacts.tofu.providerMirror is required"},
-		"no state URL": {func(s string) string {
-			return strings.Replace(s, "    stateURL: https://files.example.local/tofu-state\n", "", 1)
-		}, "artifacts.tofu.stateURL is required"},
+		}, "artifacts.tofu.providerMirror (a network mirror) or artifacts.tofu.providerOCI"},
+		"two provider sources": {func(s string) string {
+			return strings.Replace(s, "    providerMirror:", "    providerOCI: registry.example.local/providers\n    providerMirror:", 1)
+		}, "are exclusive"},
+		"OCI providers without a repository": {func(s string) string {
+			return strings.Replace(s, "    providerMirror: https://files.example.local/tofu-providers/\n",
+				"    providerOCI: registry.example.local\n", 1)
+		}, "must be <registry>/<repository>"},
+		"OCI providers with a scheme": {func(s string) string {
+			return strings.Replace(s, "    providerMirror: https://files.example.local/tofu-providers/\n",
+				"    providerOCI: https://registry.example.local/providers\n", 1)
+		}, "without a scheme"},
+		"OCI providers and a mirror token": {func(s string) string {
+			s = strings.Replace(s, "    providerMirror: https://files.example.local/tofu-providers/\n",
+				"    providerOCI: registry.example.local/providers\n", 1)
+			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "  mirrorPassword: CHANGEME\n  mirrorToken: t\n", 1)
+		}, "secrets.mirrorToken authenticates on artifacts.tofu.providerMirror"},
+		"no state backend": {func(s string) string {
+			return strings.Replace(s, "    state:\n      http:\n        url: https://files.example.local/tofu-state\n", "", 1)
+		}, "artifacts.tofu.state.http or artifacts.tofu.state.s3 is required"},
+		"two state backends": {func(s string) string {
+			return strings.Replace(s, "    state:\n", "    state:\n      s3: {bucket: b}\n", 1)
+		}, "are exclusive"},
+		"http state without URL": {func(s string) string {
+			return strings.Replace(s, "        url: https://files.example.local/tofu-state\n", "        url: \"\"\n", 1)
+		}, "URL"},
+		"s3 state without bucket": {func(s string) string {
+			return strings.Replace(s, "      http:\n        url: https://files.example.local/tofu-state\n",
+				"      s3:\n        endpoint: https://s3.example.local\n", 1)
+		}, "Bucket"},
+		"s3 state without credentials": {func(s string) string {
+			s = strings.Replace(s, "      http:\n        url: https://files.example.local/tofu-state\n",
+				"      s3:\n        bucket: b\n", 1)
+			s = strings.Replace(s, "  username: svc-rondo\n", "", 1)
+			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "", 1)
+		}, "artifacts.tofu.state.s3 needs credentials"},
+		"s3 access key alone": {func(s string) string {
+			s = strings.Replace(s, "      http:\n        url: https://files.example.local/tofu-state\n",
+				"      s3:\n        bucket: b\n", 1)
+			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "  mirrorPassword: CHANGEME\n  mirrorStateAccessKey: a\n", 1)
+		}, "go together"},
+		"s3 keys with an http state": {func(s string) string {
+			return strings.Replace(s, "  mirrorPassword: CHANGEME\n",
+				"  mirrorPassword: CHANGEME\n  mirrorStateAccessKey: a\n  mirrorStateSecretKey: b\n", 1)
+		}, "only read with artifacts.tofu.state.s3"},
+		"username without password": {func(s string) string {
+			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "", 1)
+		}, "artifacts.username and secrets.mirrorPassword go together"},
+		"password without username": {func(s string) string {
+			return strings.Replace(s, "  username: svc-rondo\n", "", 1)
+		}, "artifacts.username and secrets.mirrorPassword go together"},
 		"registry with a scheme": {func(s string) string {
 			return strings.Replace(s, "registry: registry.example.local", "registry: https://registry.example.local", 1)
 		}, "artifacts.oci.registry"},
@@ -276,9 +332,6 @@ func TestArtifactsValidationNamesTheKey(t *testing.T) {
 		"unknown preset": {func(s string) string {
 			return strings.Replace(s, "preset: generic", "preset: nexus", 1)
 		}, "Preset"},
-		"no password": {func(s string) string {
-			return strings.Replace(s, "  mirrorPassword: CHANGEME\n", "", 1)
-		}, "MirrorPassword"},
 		"top-level artifactory": {func(s string) string {
 			return strings.Replace(s, "artifacts:\n", "artifactory:\n  url: https://a.example.local\nartifacts:\n", 1)
 		}, `unknown field "artifactory": the artifact mirror is declared under artifacts:`},
@@ -311,8 +364,12 @@ func TestArtifactsValidationNamesTheKey(t *testing.T) {
 			return strings.Replace(s, "  artifactory:\n", "  oci:\n    registry: r.example.local\n  artifactory:\n", 1)
 		}, "artifacts.oci is not read with artifacts.preset: artifactory"},
 		"tofu endpoint": {func(s string) string {
-			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    stateURL: https://s.example.local\n  artifactory:\n", 1)
+			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    providerOCI: r.example.local/p\n  artifactory:\n", 1)
 		}, "artifacts.tofu is not read"},
+		"s3 state keys": {func(s string) string {
+			return strings.Replace(s, "  mirrorPassword: CHANGEME\n",
+				"  mirrorPassword: CHANGEME\n  mirrorStateAccessKey: a\n  mirrorStateSecretKey: b\n", 1)
+		}, "only read with artifacts.tofu.state.s3"},
 		"token lifetime": {func(s string) string {
 			return strings.Replace(s, `mirrorTokenLifetimeSeconds: ""`, "mirrorTokenLifetimeSeconds: a year", 1)
 		}, "MirrorTokenLifetimeSeconds"},

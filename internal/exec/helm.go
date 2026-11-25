@@ -109,6 +109,10 @@ func (rc *releaseContext) login(ctx context.Context, rt *Runtime) error {
 	if err != nil {
 		return err
 	}
+	if user == "" {
+		log.Info("anonymous mirror, no registry login", "registry", host)
+		return nil
+	}
 	args := []string{"registry", "login", host, "--username", user, "--password-stdin"}
 	if ca := os.Getenv(EnvCAFile); ca != "" {
 		args = append(args, "--ca-file", ca)

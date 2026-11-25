@@ -75,6 +75,7 @@ func (p PlatformInstall) controllerDeployment(ns string) Object {
 			envVar(EnvCACM, ArtifactoryCACM),
 			envVar(EnvCredsSecret, CredentialsSecret),
 			envVar(EnvTofuStateURL, p.TofuStateBaseURL),
+			envVar(EnvTofuStateS3, p.TofuStateS3),
 			envVar(EnvTofuRCSecret, TofurcSecret),
 			envVar(EnvVMModuleURL, p.VMModuleURL),
 			envVar(EnvAnsibleContentURL, p.AnsibleContentURL),

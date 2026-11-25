@@ -128,42 +128,49 @@ variable "ssh_password" {
   sensitive   = true
 }
 
-variable "artifactory_url" {
-  description = "Artifactory base URL (e.g. https://host/artifactory)"
+variable "mirror_files_url" {
+  description = "Root of RONDO's files on the mirror's file server (e.g. https://files.example.local/rondo); the k3s binary and airgap images are under k3s/<version>/"
   type        = string
   validation {
-    condition     = can(regex("^https?://", var.artifactory_url))
-    error_message = "artifactory_url must start with http:// or https://"
+    condition     = can(regex("^https?://", var.mirror_files_url))
+    error_message = "mirror_files_url must start with http:// or https://"
   }
 }
 
-variable "artifactory_user" {
-  description = "Artifactory username"
+variable "mirror_registry" {
+  description = "OCI registry of the mirror, host[:port]"
   type        = string
 }
 
-variable "artifactory_pass" {
-  description = "Artifactory password"
+variable "mirror_registry_rewrite" {
+  description = "Repository of the mirror's images: a public image (docker.io/rancher/x) is pulled as <mirror_registry>/<mirror_registry_rewrite>/rancher/x. Empty, the nodes keep pulling public images from their own registries."
+  type        = string
+  default     = ""
+}
+
+variable "mirror_upstream_registries" {
+  description = "Public registries whose images the nodes pull from the mirror, with mirror_registry_rewrite"
+  type        = list(string)
+  default     = ["docker.io", "registry.k8s.io", "quay.io", "ghcr.io", "gcr.io"]
+}
+
+variable "mirror_username" {
+  description = "Username on the mirror; empty, it is read anonymously"
+  type        = string
+  default     = ""
+}
+
+variable "mirror_password" {
+  description = "Password on the mirror; empty with mirror_username"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
-variable "artifactory_ca_cert" {
-  description = "Artifactory CA certificate content (PEM)"
+variable "mirror_ca" {
+  description = "CA bundle (PEM) of the mirror; empty, the nodes trust it through their system store"
   type        = string
-  sensitive   = true
-}
-
-variable "artifactory_generic_repo" {
-  description = "Artifactory generic repository name"
-  type        = string
-  default     = "rondo-generic-local"
-}
-
-variable "artifactory_docker_repo" {
-  description = "Artifactory Docker repository name"
-  type        = string
-  default     = "rondo-docker-local"
+  default     = ""
 }
 
 variable "k3s_version" {

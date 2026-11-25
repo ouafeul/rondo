@@ -31,7 +31,38 @@ data "vsphere_resource_pool" "pool" {
 locals {
   resource_pool_id = var.vsphere_resource_pool != "" ? data.vsphere_resource_pool.pool[0].id : data.vsphere_compute_cluster.cluster.resource_pool_id
 
-  artifactory_host = regex("https?://([^/]+)", var.artifactory_url)[0]
+  mirror_ca_path = "/etc/pki/ca-trust/source/anchors/mirror-ca.pem"
+
+  # curl's options on the file server: its CA and credentials, when the mirror has them.
+  curl_opts = join(" ", compact([
+    var.mirror_ca != "" ? "--cacert ${local.mirror_ca_path}" : "",
+    var.mirror_username != "" ? "-u \"${var.mirror_username}:${var.mirror_password}\"" : "",
+  ]))
+
+  # /etc/rancher/k3s/registries.yaml: public images pulled from the mirror under its repository,
+  # and the mirror's credentials and CA when it has them.
+  registry_config = {
+    for k, v in {
+      auth = { username = var.mirror_username, password = var.mirror_password }
+      tls  = { ca_file = local.mirror_ca_path }
+    } : k => v if(k == "auth" ? var.mirror_username != "" : var.mirror_ca != "")
+  }
+  registries = merge(
+    {
+      for k, v in {
+        mirrors = {
+          for upstream in var.mirror_upstream_registries : upstream => {
+            endpoint = ["https://${var.mirror_registry}"]
+            rewrite  = { "^(.*)$" = "${var.mirror_registry_rewrite}/$1" }
+          }
+        }
+      } : k => v if var.mirror_registry_rewrite != ""
+    },
+    {
+      for k, v in { configs = { (var.mirror_registry) = local.registry_config } } :
+      k => v if length(local.registry_config) > 0
+    },
+  )
 
   fqdn_suffix = var.network_domain != "" ? ".${var.network_domain}" : ""
 
@@ -68,13 +99,11 @@ data "cloudinit_config" "vm" {
       gateway          = var.network_gateway
       dns_servers      = join(";", var.network_dns)
       domain           = var.network_domain
-      ca_cert          = var.artifactory_ca_cert
-      artifactory_url  = var.artifactory_url
-      artifactory_host = local.artifactory_host
-      artifactory_user = var.artifactory_user
-      artifactory_pass = var.artifactory_pass
-      generic_repo     = var.artifactory_generic_repo
-      docker_repo      = var.artifactory_docker_repo
+      mirror_ca        = var.mirror_ca
+      mirror_ca_path   = local.mirror_ca_path
+      mirror_files_url = var.mirror_files_url
+      registries       = trimspace(yamlencode(local.registries))
+      curl_opts        = local.curl_opts
       k3s_version      = var.k3s_version
       ingress_ip       = var.ingress_ip
     })

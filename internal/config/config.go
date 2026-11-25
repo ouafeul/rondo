@@ -33,10 +33,12 @@ const (
 type Artifacts struct {
 	// Preset is generic when empty.
 	Preset string `json:"preset,omitempty" validate:"omitempty,oneof=generic artifactory"`
-	// Username and secrets.mirrorPassword authenticate against every endpoint.
-	Username string `json:"username" validate:"required"`
-	// CACertificateFile is the PEM bundle trusted for every endpoint.
-	CACertificateFile string `json:"caCertificateFile" validate:"required"`
+	// Username and secrets.mirrorPassword authenticate against every endpoint; both empty, the
+	// mirror is read anonymously.
+	Username string `json:"username,omitempty"`
+	// CACertificateFile is the PEM bundle trusted for every endpoint; empty, the system trust
+	// store is.
+	CACertificateFile string `json:"caCertificateFile,omitempty"`
 	ReleaseChannel    string `json:"releaseChannel,omitempty"`
 
 	OCI   OCIEndpoint   `json:"oci,omitempty"`
@@ -68,10 +70,39 @@ type RPMEndpoint struct {
 	Repository string `json:"repository,omitempty"`
 }
 
-// TofuEndpoints are the OpenTofu provider network mirror and the base of the http state backend.
+// TofuEndpoints are where OpenTofu installs its providers from, ProviderMirror (a network
+// mirror) or ProviderOCI (an OCI mirror), and where it keeps its states.
 type TofuEndpoints struct {
 	ProviderMirror string `json:"providerMirror,omitempty" validate:"omitempty,url"`
-	StateURL       string `json:"stateURL,omitempty" validate:"omitempty,url"`
+	// ProviderOCI is <registry>/<repository>: provider <namespace>/<type> is the OCI repository
+	// <registry>/<repository>/<namespace>/<type>, one tag per version.
+	ProviderOCI string    `json:"providerOCI,omitempty"`
+	State       TofuState `json:"state,omitempty"`
+}
+
+// TofuState is the state backend: http or s3, exactly one.
+type TofuState struct {
+	HTTP *HTTPState `json:"http,omitempty"`
+	S3   *S3State   `json:"s3,omitempty"`
+}
+
+// HTTPState is the base URL of the http backend: a state is read, written and deleted (GET, PUT,
+// DELETE) at <url>/<environment>/<stack>/terraform.tfstate, with the mirror's basic auth.
+type HTTPState struct {
+	URL string `json:"url" validate:"required,url"`
+}
+
+// S3State is a bucket of an S3 API (MinIO, Ceph, AWS...): a state is the object
+// <keyPrefix>/<environment>/<stack>/terraform.tfstate, locked by a lock file next to it.
+type S3State struct {
+	Bucket string `json:"bucket" validate:"required"`
+	// Endpoint is the URL of the S3 API; empty, AWS's.
+	Endpoint string `json:"endpoint,omitempty" validate:"omitempty,url"`
+	// Region is us-east-1 when empty.
+	Region    string `json:"region,omitempty"`
+	KeyPrefix string `json:"keyPrefix,omitempty"`
+	// UsePathStyle addresses the bucket as <endpoint>/<bucket> instead of <bucket>.<endpoint host>.
+	UsePathStyle bool `json:"usePathStyle,omitempty"`
 }
 
 // ArtifactoryMirror is the preset artifactory: every endpoint derives from URL.
@@ -176,8 +207,12 @@ type NodeSize struct {
 }
 
 type Secrets struct {
-	MirrorPassword           string                       `json:"mirrorPassword" validate:"required"`
-	MirrorToken              string                       `json:"mirrorToken,omitempty"`
+	MirrorPassword string `json:"mirrorPassword,omitempty"`
+	MirrorToken    string `json:"mirrorToken,omitempty"`
+	// MirrorStateAccessKey and MirrorStateSecretKey authenticate on the s3 state backend; both
+	// empty, artifacts.username and mirrorPassword do.
+	MirrorStateAccessKey     string                       `json:"mirrorStateAccessKey,omitempty"`
+	MirrorStateSecretKey     string                       `json:"mirrorStateSecretKey,omitempty"`
 	RancherBootstrapPassword string                       `json:"rancherBootstrapPassword" validate:"required"`
 	K3sClusterToken          string                       `json:"k3sClusterToken" validate:"required"`
 	VCenterPasswords         map[string]string            `json:"vcenterPasswords" validate:"required"`

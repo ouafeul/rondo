@@ -173,8 +173,8 @@ func TestApplySiteProjectsEverything(t *testing.T) {
 	if _, leaked := data["vsphere_password"]; leaked {
 		t.Error("the vCenter password is in the ConfigMap")
 	}
-	if !strings.Contains(data["artifactory_ca_pem"].(string), "BEGIN CERTIFICATE") {
-		t.Errorf("Artifactory CA not projected: %v", data["artifactory_ca_pem"])
+	if !strings.Contains(data["mirror_ca_pem"].(string), "BEGIN CERTIFICATE") {
+		t.Errorf("Artifactory CA not projected: %v", data["mirror_ca_pem"])
 	}
 	creds := nested(t, got.find(t, "Secret", "rondo-vsphere-dc1"), "stringData")
 	if creds["vsphere_user"] != "administrator@vsphere.local" || creds["vsphere_password"] != "CHANGEME" {
@@ -425,6 +425,24 @@ func TestApplyMirrorTokenOnAGenericMirror(t *testing.T) {
 				t.Error("a token RONDO did not mint was persisted, the next deploy would revoke it")
 			}
 		})
+	}
+}
+
+// A generic mirror never reaches the JFrog token API, a minter wired and a token kept or not.
+func TestApplyMirrorTokenNeverMintsNorRevokesOnAGenericMirror(t *testing.T) {
+	p, got, fk := capture(t, genericCfg())
+	m := &recordingMinter{next: "tok"}
+	p.arti = m
+	fk.Outputs[filepath.Join(p.ws.BinDir, "kubectl")+
+		" get secret rondo-tofurc -n rondo-system -o jsonpath={.data.token}"] = "dG9rLW9sZA=="
+	if err := p.ApplyMirrorToken(t.Context()); err != nil {
+		t.Fatalf("ApplyMirrorToken: %v", err)
+	}
+	if len(m.minted) != 0 || len(m.revoked) != 0 {
+		t.Errorf("minted %v, revoked %v on a generic mirror", m.minted, m.revoked)
+	}
+	if _, kept := nested(t, got.find(t, "Secret", "rondo-tofurc"), "stringData")["token"]; kept {
+		t.Error("a token kept for revocation on a generic mirror")
 	}
 }
 

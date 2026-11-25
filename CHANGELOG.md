@@ -18,10 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `mirror.yml` scans the mirrored images and binaries with Trivy.
 - **`scripts/mirror-release.sh`**, shipped with each release, copies one release (images, charts,
   assets, packages, release channel) into a site mirror; `--dry-run` prints the copy list.
+- Anonymous and publicly trusted mirrors: `artifacts.username`, `secrets.mirrorPassword` and `artifacts.caCertificateFile` are optional; without them RONDO skips registry logins, `regcred` and basic auth, and uses the system trust store.
+- OpenTofu providers from an OCI registry: `artifacts.tofu.providerOCI` (`oci_mirror`), as an alternative to the network mirror `artifacts.tofu.providerMirror`.
+- S3 state backend: `artifacts.tofu.state.s3` (MinIO, Ceph, AWS; lock file next to the state), or `artifacts.tofu.state.http`; keys in `secrets.mirrorStateAccessKey` and `secrets.mirrorStateSecretKey`.
+- Nodes pull public and rke2 system images through registry mirrors that rewrite them under `<oci.registry>/<oci.repository>`; k3s nodes check the file server by downloading k3s.
 
 ### Security
 - Images and tools on current patch releases: Go 1.26.11, Helm 3.22.1, kubectl 1.34.13, OpenTofu 1.11.14, Rocky Linux 9.9 for the sandbox machine, OS packages upgraded at build.
 - The local-path-provisioner chart runs non-root with a read-only root filesystem, no privilege escalation, all capabilities dropped and the RuntimeDefault seccomp profile.
+- Workstation tools are verified against the sha256 pinned in `manifests/dependencies.yaml` and the `<file>.sha256` served by the mirror; a mismatch is refused.
 
 ## [1.0.0-rc.1] - First release candidate
 

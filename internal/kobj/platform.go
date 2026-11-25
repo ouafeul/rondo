@@ -2,9 +2,11 @@ package kobj
 
 // PlatformInstall is what the operator manifests are rendered from.
 type PlatformInstall struct {
-	ControllerImage   string
-	ToolboxImage      string
-	TofuStateBaseURL  string
+	ControllerImage  string
+	ToolboxImage     string
+	TofuStateBaseURL string
+	// TofuStateS3 is the s3 state backend (tofustate.S3Bucket.Encode), empty with http.
+	TofuStateS3       string
 	VMModuleURL       string
 	AnsibleContentURL string
 	ArtifactoryURL    string

@@ -20,7 +20,12 @@ import RondoYamlExplorer from '../../../components/RondoYamlExplorer.astro';
 | one vCenter password per vSphere Target, no other | `secrets.vcenterPasswords.<n> is required` / `no vsphere target has this name` |
 | odd number of rke2 control planes | `must hold an odd number of nodes (etcd quorum)` |
 | exactly 3 `serverNodes` | |
-| `preset: generic` declares `oci.registry`, `files.url`, `tofu.providerMirror`, `tofu.stateURL` | `artifacts.<key> is required with artifacts.preset: generic` |
+| `preset: generic` declares `oci.registry`, `files.url` | `artifacts.<key> is required with artifacts.preset: generic` |
+| `preset: generic` declares one of `tofu.providerMirror`, `tofu.providerOCI` | `… is required with artifacts.preset: generic` / `… are exclusive` |
+| `tofu.providerOCI` is `<registry>/<repository>`, and comes without `secrets.mirrorToken` | `artifacts.tofu.providerOCI (…) must be <registry>/<repository>, without a scheme` |
+| `preset: generic` declares one of `tofu.state.http`, `tofu.state.s3` | `artifacts.tofu.state.http or artifacts.tofu.state.s3 is required…` / `… are exclusive` |
+| `tofu.state.s3` has credentials: `secrets.mirrorStateAccessKey` and `mirrorStateSecretKey` (together), else `artifacts.username` | `artifacts.tofu.state.s3 needs credentials…` |
+| `artifacts.username` and `secrets.mirrorPassword` both set, or both empty (anonymous mirror) | `artifacts.username and secrets.mirrorPassword go together…` |
 | `oci.registry` is `host[:port]` | `artifacts.oci.registry (…) must be host[:port], without a scheme or a path` |
 | `rpm.url` is empty or `files.url` | `artifacts.rpm.url (…) must be artifacts.files.url (…) or empty` |
 | `preset: artifactory` declares `artifactory.url` and nothing under `oci`, `files`, `rpm`, `tofu` | `artifacts.artifactory.url is required…` / `artifacts.<key> is not read with artifacts.preset: artifactory` |
@@ -37,12 +42,59 @@ Every repository is a path segment under its root, `<root>/<repository>/<path>`,
 | Helm charts | `oci://<oci.registry>/<oci.chartsRepository>/<chart>` | `oci://<host>/<helm>/<chart>` |
 | RONDO files | `<files.url>/<files.repository>/…` | `<url>/<generic>/…` |
 | RPM repositories | `<rpm.url>/<rpm.repository>/…` | `<url>/<rpm>/…` |
-| tofu providers | `<tofu.providerMirror>` | `<url>/api/terraform/<tofu>/providers/` |
-| tofu states | `<tofu.stateURL>/<environmentName>/…` | `<url>/<tofuState>/<environmentName>/…` |
-| rke2 system registry | `<oci.registry>` | `<docker>.<host>` |
+| tofu providers | `<tofu.providerMirror>` (network mirror), or `<tofu.providerOCI>/<namespace>/<type>` (OCI mirror) | `<url>/api/terraform/<tofu>/providers/` |
+| tofu states | `<tofu.state.http.url>/<environmentName>/…`, or `s3://<bucket>/<keyPrefix>/<environmentName>/…` | `<url>/<tofuState>/<environmentName>/…` |
+| rke2 system registry | `<oci.registry>`, image paths rewritten under `<oci.repository>` | `<docker>.<host>` |
+| public images on the nodes (`docker.io`, `registry.k8s.io`, `quay.io`, `ghcr.io`, `gcr.io`) | pulled as `<oci.registry>/<oci.repository>/<path>` | from their own registry |
 | provider mirror token | `secrets.mirrorToken`, else none | `secrets.mirrorToken`, else issued on each deploy |
+| credentials, CA | optional: anonymous, system trust store | as declared |
 
 `<host>` is the host of `artifactory.url`; `<docker>`, `<helm>`… are `artifactory.repositories.*`.
+
+### OpenTofu providers in an OCI registry
+
+With `tofu.providerOCI: registry.example.local/opentofu-providers`, the `.tofurc` of the CLI and
+of the Jobs reads:
+
+```hcl
+provider_installation {
+  oci_mirror {
+    repository_template = "registry.example.local/opentofu-providers/${namespace}/${type}"
+    include             = ["registry.opentofu.org/*/*"]
+  }
+}
+oci_credentials "registry.example.local" {
+  username = "<artifacts.username>"
+  password = "<secrets.mirrorPassword>"
+}
+```
+
+Each provider is one repository, one tag per version, an index of `linux/amd64` artefacts as
+OpenTofu's [provider mirror in OCI registries](https://opentofu.org/docs/cli/oci_registries/provider-mirror/)
+describes; `oras` pushes them. `oci_credentials` is left out for an anonymous mirror.
+
+### State in S3
+
+```yaml
+artifacts:
+  tofu:
+    state:
+      s3:
+        bucket: rondo-states
+        endpoint: https://minio.example.local:9000
+        region: us-east-1      # default
+        keyPrefix: sites       # optional
+        usePathStyle: true     # MinIO, most on-premises stores
+secrets:
+  mirrorStateAccessKey: …     # optional: artifacts.username and mirrorPassword otherwise
+  mirrorStateSecretKey: …
+```
+
+The modules declare `backend "http" {}`; with `s3` RONDO writes a `backend_override.tf` that
+selects `backend "s3" {}` and configures it at `tofu init` (bucket, key, endpoint, a lock file
+next to the state with `use_lockfile`, no AWS account or STS check). The keys reach OpenTofu as
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, on the CLI and through the Secret
+`rondo-credentials` in the machine Jobs.
 
 ## What the CLI derives from it
 

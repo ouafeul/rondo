@@ -10,6 +10,7 @@ import (
 	"rondo/internal/config"
 	"rondo/internal/log"
 	"rondo/internal/runner"
+	"rondo/internal/tofustate"
 )
 
 type TofuStage struct {
@@ -53,7 +54,8 @@ func (t *TofuStage) ConfigureRegistry(ctx context.Context) error {
 	log.Step("OpenTofu registry setup")
 	m := t.cfg.Mirror()
 	host := m.ProviderMirrorHost()
-	if !t.dryRun {
+	// A network mirror takes a bearer token; an OCI mirror, the credentials in the .tofurc.
+	if !t.dryRun && m.ProviderMirrorURL != "" {
 		if t.cachedToken == "" {
 			tok, err := t.token.Token(ctx)
 			if err != nil {
@@ -66,25 +68,56 @@ func (t *TofuStage) ConfigureRegistry(ctx context.Context) error {
 			t.regEnv["TF_TOKEN_"+suffix] = t.cachedToken
 		}
 	}
-	tofurc := fmt.Sprintf("provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\n", m.ProviderMirrorURL)
 	if !t.dryRun {
-		if err := os.WriteFile(t.ws.TofuRC(), []byte(tofurc), 0o600); err != nil {
+		if err := os.WriteFile(t.ws.TofuRC(), []byte(m.TofuRC("")), 0o600); err != nil {
 			return err
 		}
 	}
 	t.regEnv["TF_CLI_CONFIG_FILE"] = t.ws.TofuRC()
-	t.regEnv["SSL_CERT_FILE"] = t.ws.CACert
-	t.regEnv["TF_HTTP_USERNAME"] = m.Username
-	t.regEnv["TF_HTTP_PASSWORD"] = m.Password
+	if t.ws.CACert != "" {
+		t.regEnv["SSL_CERT_FILE"] = t.ws.CACert
+	}
+	switch m.StateBackend {
+	case tofustate.S3:
+		t.regEnv["AWS_ACCESS_KEY_ID"] = m.StateAccessKey
+		t.regEnv["AWS_SECRET_ACCESS_KEY"] = m.StateSecretKey
+	default:
+		if !m.Anonymous() {
+			t.regEnv["TF_HTTP_USERNAME"] = m.Username
+			t.regEnv["TF_HTTP_PASSWORD"] = m.Password
+		}
+	}
 	log.Info("OpenTofu registry configured", "host", host)
 	return nil
 }
 
-func backendArgs(address string) []string {
-	return []string{
-		"-backend-config=address=" + address,
-		"-backend-config=update_method=PUT",
+// backendArgs select the state backend of the module in dir and return the `tofu init`
+// arguments that configure it for stack: the http address, or the -backend-config file of the
+// s3 bucket.
+func (t *TofuStage) backendArgs(dir, stack string) ([]string, error) {
+	m := t.cfg.Mirror()
+	if !t.dryRun {
+		if err := tofustate.Select(dir, m.StateBackend); err != nil {
+			return nil, fmt.Errorf("state backend of %s: %w", dir, err)
+		}
 	}
+	if m.StateBackend != tofustate.S3 {
+		return []string{
+			"-backend-config=address=" + m.StateURL(stack),
+			"-backend-config=update_method=PUT",
+		}, nil
+	}
+	path := filepath.Join(t.ws.StateDir, "tofu", stack+".s3.tfbackend")
+	if !t.dryRun {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return nil, err
+		}
+		body := m.StateS3.BackendConfig(m.StateS3.Key(stack))
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			return nil, err
+		}
+	}
+	return []string{"-backend-config=" + path}, nil
 }
 
 func (t *TofuStage) setCAVar() error {
@@ -95,7 +128,7 @@ func (t *TofuStage) setCAVar() error {
 	if err != nil {
 		return fmt.Errorf("CA not found %s: %w", t.ws.CACert, err)
 	}
-	t.regEnv["TF_VAR_artifactory_ca_cert"] = string(raw)
+	t.regEnv["TF_VAR_mirror_ca"] = string(raw)
 	return nil
 }
 
@@ -104,7 +137,7 @@ func (t *TofuStage) ApplyManagement(ctx context.Context) error {
 	if err := t.setCAVar(); err != nil {
 		return err
 	}
-	return t.planAndApply(ctx, t.ws.Stack("k3s"), nil, t.cfg.Mirror().StateURL("k3s"), "management")
+	return t.planAndApply(ctx, t.ws.Stack("k3s"), nil, "k3s", "management")
 }
 
 func (t *TofuStage) DestroyManagement(ctx context.Context) error {
@@ -115,7 +148,7 @@ func (t *TofuStage) DestroyManagement(ctx context.Context) error {
 	if err := t.setCAVar(); err != nil {
 		return err
 	}
-	if err := t.destroy(ctx, t.ws.Stack("k3s"), nil, t.cfg.Mirror().StateURL("k3s")); err != nil {
+	if err := t.destroy(ctx, t.ws.Stack("k3s"), nil, "k3s"); err != nil {
 		return err
 	}
 	if !t.dryRun {
@@ -133,7 +166,7 @@ func (t *TofuStage) ApplyRKE2(ctx context.Context, target *config.DownstreamTarg
 		return "", "", err
 	}
 	dir := t.ws.Stack("rke2")
-	if err := t.planAndApply(ctx, dir, env, t.cfg.Mirror().StateURL(target.Name), target.Name); err != nil {
+	if err := t.planAndApply(ctx, dir, env, target.Name, target.Name); err != nil {
 		return "", "", err
 	}
 	if t.dryRun {
@@ -154,7 +187,7 @@ func (t *TofuStage) DestroyRKE2(ctx context.Context, target *config.DownstreamTa
 	if err != nil {
 		return err
 	}
-	return t.destroy(ctx, t.ws.Stack("rke2"), env, t.cfg.Mirror().StateURL(target.Name))
+	return t.destroy(ctx, t.ws.Stack("rke2"), env, target.Name)
 }
 
 func (t *TofuStage) rke2Env(target *config.DownstreamTarget, rancherAccess, rancherSecret string) (map[string]string, error) {
@@ -172,27 +205,32 @@ func (t *TofuStage) rke2Env(target *config.DownstreamTarget, rancherAccess, ranc
 	}
 	arti, err := t.ws.ReadCA()
 	if err != nil {
-		return nil, fmt.Errorf("Artifactory CA %s: %w", t.ws.CACert, err)
+		return nil, fmt.Errorf("mirror CA %s: %w", t.ws.CACert, err)
 	}
 	cluster, err := os.ReadFile(t.ws.RancherCA()) //nolint:gosec // workspace path
 	if err != nil {
 		return nil, fmt.Errorf("management cluster CA (%s), exported with the Rancher token: %w",
 			t.ws.RancherCA(), err)
 	}
-	env["TF_VAR_artifactory_ca_pem"] = string(arti)
+	env["TF_VAR_mirror_ca_pem"] = string(arti)
 	env["TF_VAR_cluster_ca_pem"] = string(cluster)
 	env["TF_VAR_rancher_ca_pem"] = string(cluster)
 	return env, nil
 }
 
-func (t *TofuStage) init(ctx context.Context, dir string, env map[string]string, state string) error {
-	args := append([]string{"init", "-input=false", "-reconfigure"}, backendArgs(state)...)
+// init initializes the module in dir on the state of stack.
+func (t *TofuStage) init(ctx context.Context, dir string, env map[string]string, stack string) error {
+	backend, err := t.backendArgs(dir, stack)
+	if err != nil {
+		return err
+	}
+	args := append([]string{"init", "-input=false", "-reconfigure"}, backend...)
 	return t.tofu(ctx, dir, env, args...)
 }
 
 // planAndApply asks for confirmation before applying a plan that destroys anything.
-func (t *TofuStage) planAndApply(ctx context.Context, dir string, env map[string]string, state, what string) error {
-	if err := t.init(ctx, dir, env, state); err != nil {
+func (t *TofuStage) planAndApply(ctx context.Context, dir string, env map[string]string, stack, what string) error {
+	if err := t.init(ctx, dir, env, stack); err != nil {
 		return err
 	}
 	plan := "tfplan-" + what
@@ -223,8 +261,8 @@ func (t *TofuStage) planAndApply(ctx context.Context, dir string, env map[string
 	return t.tofu(ctx, dir, env, "apply", "-input=false", plan)
 }
 
-func (t *TofuStage) destroy(ctx context.Context, dir string, env map[string]string, state string) error {
-	if err := t.init(ctx, dir, env, state); err != nil {
+func (t *TofuStage) destroy(ctx context.Context, dir string, env map[string]string, stack string) error {
+	if err := t.init(ctx, dir, env, stack); err != nil {
 		return err
 	}
 	return t.tofu(ctx, dir, env, "destroy", "-input=false", "-auto-approve")

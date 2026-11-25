@@ -21,21 +21,32 @@ func NewHelmStage(cfg *config.Config, ws Workspace, run runner.CommandRunner) *H
 }
 
 func (h *HelmStage) env() map[string]string {
-	return map[string]string{
-		"KUBECONFIG":               h.ws.Kubeconfig(),
-		"PROJECT_DIR":              h.ws.ProjectDir,
-		"SSL_CERT_FILE":            h.ws.CACert,
-		"ARTIFACTORY_CA_CERT_PATH": h.ws.CACert,
-		"HELM_PLUGINS":             h.ws.HelmPluginsDir(),
+	env := map[string]string{
+		"KUBECONFIG":   h.ws.Kubeconfig(),
+		"PROJECT_DIR":  h.ws.ProjectDir,
+		"HELM_PLUGINS": h.ws.HelmPluginsDir(),
 	}
+	if h.ws.CACert != "" {
+		env["SSL_CERT_FILE"] = h.ws.CACert
+		env["ARTIFACTORY_CA_CERT_PATH"] = h.ws.CACert
+	}
+	return env
 }
 
+// login logs Helm in to the registry of the charts; an anonymous mirror needs none.
 func (h *HelmStage) login(ctx context.Context, env map[string]string) error {
 	m := h.cfg.Mirror()
+	if m.Anonymous() {
+		log.Info("anonymous mirror, no Helm registry login", "registry", m.OCIRegistry)
+		return nil
+	}
+	args := []string{"registry", "login", m.OCIRegistry, "--username", m.Username, "--password-stdin"}
+	if h.ws.CACert != "" {
+		args = append(args, "--ca-file", h.ws.CACert)
+	}
 	if err := h.run.Run(ctx, runner.Cmd{
-		Name: h.ws.Tool("helm"),
-		Args: []string{"registry", "login", m.OCIRegistry, "--username", m.Username, "--password-stdin", "--ca-file", h.ws.CACert},
-		Dir:  h.ws.ProjectDir, Env: env, Stdin: m.Password,
+		Name: h.ws.Tool("helm"), Args: args,
+		Dir: h.ws.ProjectDir, Env: env, Stdin: m.Password,
 	}); err != nil {
 		return fmt.Errorf("Helm OCI login: %w", err)
 	}

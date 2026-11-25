@@ -59,11 +59,13 @@ write_files:
                     ${ingress_ip} ${rancher_host}
                     fallthrough
 
-  - path: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+%{ if mirror_ca != "" ~}
+  - path: /etc/pki/ca-trust/source/anchors/mirror-ca.pem
     permissions: "0644"
     content: |
-      ${indent(6, artifactory_ca)}
+      ${indent(6, mirror_ca)}
 
+%{ endif ~}
   - path: /etc/pki/ca-trust/source/anchors/cluster-ca.pem
     permissions: "0644"
     content: |

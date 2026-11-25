@@ -14,11 +14,11 @@ users:
     sudo: ["ALL=(ALL) NOPASSWD:ALL"]
 
 write_files:
-%{ if artifactory_ca_pem != "" ~}
+%{ if mirror_ca_pem != "" ~}
   - path: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
     permissions: "0644"
     content: |
-      ${indent(6, artifactory_ca_pem)}
+      ${indent(6, mirror_ca_pem)}
 %{ endif ~}
 
   - path: /etc/NetworkManager/system-connections/ens32.nmconnection
@@ -55,7 +55,7 @@ packages:
 %{ endfor ~}
 
 runcmd:
-%{ if artifactory_ca_pem != "" ~}
+%{ if mirror_ca_pem != "" ~}
   - update-ca-trust extract
 %{ endif ~}
   - nmcli connection reload

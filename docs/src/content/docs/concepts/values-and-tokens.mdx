@@ -34,7 +34,7 @@ Every Target receives values computed by the CLI; `componentValues` in `rondo.ya
 |---|---|---|---|
 | `ingressIP` | `targets.management.ingressLoadBalancerIp` | `rke2.ingressLoadBalancerIp` | |
 | `imageRegistry` | images prefix of the mirror, e.g. `<oci.registry>/<oci.repository>` | `rke2.registryHost`, else the rke2 system registry of the mirror | |
-| `artifactoryCA` | PEM of `artifacts.caCertificateFile` | same | |
+| `artifactoryCA` | PEM of `artifacts.caCertificateFile`, empty without one | same | |
 | `storageClass` | `local-path` | `local-path` | |
 | `vmTemplate` | | | `targets.vsphere[].vmTemplate` |
 | `sshUser` | | | `rondo` |
