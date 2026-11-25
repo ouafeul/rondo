@@ -38,7 +38,7 @@ variable "rke2_cluster_name" {
 }
 
 variable "rke2_k8s_version" {
-  description = "RKE2 Kubernetes version (e.g. v1.34.7+rke2r1)"
+  description = "RKE2 Kubernetes version (e.g. v1.36.5+rke2r1)"
   type        = string
 }
 

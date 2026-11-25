@@ -62,7 +62,7 @@ export const keys: Record<string, Key> = {
 
   'targets.management': { req: true, type: 'object', doc: 'The k3s management cluster. Becomes the management Target (inCluster, management role only).' },
   'targets.management.vsphereTarget': { req: true, type: 'name', doc: 'vSphere Target that hosts the 3 VMs.', rule: 'must name an entry of targets.vsphere' },
-  'targets.management.k3sVersion': { req: true, type: 'string', doc: 'k3s version, mirrored to the files of the mirror (${FILES_URL}/${FILES_REPOSITORY}/k3s/<version>/).' },
+  'targets.management.k3sVersion': { req: true, type: 'string', doc: 'k3s version, mirrored to the files of the mirror (${FILES_URL}/${FILES_REPOSITORY}/k3s/<version>/). Rancher 2.15 runs on k3s 1.34 to 1.36; the bundle mirrors v1.36.6+k3s1.' },
   'targets.management.ingressLoadBalancerIp': { req: true, type: 'IP', doc: 'IP announced by MetalLB for Traefik: rancher.<base> and rondo.<base> point to it.' },
   'targets.management.serverNodes': { req: true, type: 'list', doc: 'The k3s nodes (servers, embedded etcd).', rule: 'exactly 3; RFC 1123 hostname, ip' },
   'targets.management.serverNodeSize': { req: true, type: '{cpuCores, memoryMb, diskGb}', doc: "Size of each node. diskGb is not applied by terraform/k3s: the disk is the template's.", rule: 'cpuCores ≥ 1, memoryMb ≥ 512, diskGb ≥ 10' },
@@ -75,7 +75,7 @@ export const keys: Record<string, Key> = {
   'targets.downstreams[].componentValues': { type: 'map[string]string', doc: 'Additional Target values, read through ${target.values.<key>}. Take precedence over ingressIP, imageRegistry, mirrorCA, storageClass.' },
   'targets.downstreams[].rke2': { req: true, type: 'object', doc: 'The rke2 cluster.' },
   'targets.downstreams[].rke2.vsphereTarget': { req: true, type: 'name', doc: 'vSphere Target of the nodes.', rule: 'must name an entry of targets.vsphere' },
-  'targets.downstreams[].rke2.rke2Version': { req: true, type: 'string', doc: 'rke2 version.' },
+  'targets.downstreams[].rke2.rke2Version': { req: true, type: 'string', doc: 'rke2 version, mirrored with the bundle (v1.36.5+rke2r1). Rancher provisions only the versions of its Kubernetes metadata (KDM); offline, the metadata embedded in Rancher 2.15.3 lists rke2 1.34 to 1.36 up to v1.36.5+rke2r1. A later version needs a mirrored KDM data.json (see Prerequisites).' },
   'targets.downstreams[].rke2.cniPlugin': { req: true, type: 'enum', doc: 'Cluster CNI.', rule: 'canal | calico | cilium' },
   'targets.downstreams[].rke2.ingressLoadBalancerIp': { req: true, type: 'IP', doc: 'Ingress IP of the cluster: *.<target>.<base> and *.<role>.<base> point to it.', used: 'Target value ingressIP' },
   'targets.downstreams[].rke2.controlPlaneNodeIps': { req: true, type: 'list of IPs', doc: 'Control plane + etcd nodes.', rule: 'odd number (etcd quorum)' },

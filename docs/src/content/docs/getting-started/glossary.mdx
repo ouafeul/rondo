@@ -14,7 +14,7 @@ description: RONDO terms, one line each.
 | **Enrollment** | A Component on a Target. The only object that triggers Jobs. |
 | **Environment** | A site driven from the workstation: its `rondo.yaml`, its local state, its tofu states, its vSphere folder. |
 | **Health** | `Healthy`, `Progressing`, `Degraded`, `Unknown`: `rondo-probe`'s verdict on the inventory. |
-| **IaC bundle** | The RONDO archive the CLI downloads: tofu modules, `helmfile.yaml`, CRDs, platform tree, scripts. |
+| **IaC bundle** | The RONDO archive the CLI downloads: tofu modules, `helmfile.yaml.gotmpl`, CRDs, platform tree, scripts. |
 | **Inventory** | The objects delivered by the last `helm-apply` (`status.inventory`), re-read by `rondo-probe`. |
 | **Job** | An `rondo-toolbox exec <verb>` pod started by the controller: every action on a target. |
 | **Management** | The HA k3s cluster that runs Rancher and the operator. Target `management`, reserved role `management`. |

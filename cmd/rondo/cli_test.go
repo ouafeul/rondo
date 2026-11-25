@@ -396,7 +396,7 @@ func TestResolveWorkspaceStandaloneSuccess(t *testing.T) {
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
 	body := "releases: []\n"
-	tw.WriteHeader(&tar.Header{Name: "helmfile.yaml", Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg})
+	tw.WriteHeader(&tar.Header{Name: "helmfile.yaml.gotmpl", Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg})
 	tw.Write([]byte(body))
 	tw.Close()
 	gz.Close()
@@ -436,7 +436,7 @@ func TestResolveWorkspaceStandaloneSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveWorkspace standalone success: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(proj, "helmfile.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(proj, "helmfile.yaml.gotmpl")); err != nil {
 		t.Errorf("bundle not extracted: %v", err)
 	}
 	if bin != filepath.Join(home, "bin") {
@@ -649,7 +649,7 @@ func bundleServer(t *testing.T, version string) (*httptest.Server, string) {
 	tw := tar.NewWriter(gz)
 	body := "releases: []\n"
 	if err := tw.WriteHeader(&tar.Header{
-		Name: "helmfile.yaml", Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg,
+		Name: "helmfile.yaml.gotmpl", Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg,
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/go-playground/validator/v10"
 	"go.yaml.in/yaml/v3"
@@ -26,7 +27,7 @@ type Problem struct {
 var (
 	syntaxLine   = regexp.MustCompile(`yaml: line (\d+): (.*)`)
 	unknownField = regexp.MustCompile(`unknown field "([^"]+)"`)
-	wrongType    = regexp.MustCompile(`Go struct field (?:\w+\.)*?((?:[a-z][\w-]*\.)*[a-z][\w-]*) of type (\S+)`)
+	wrongType    = regexp.MustCompile(`Go struct field (\S+) of type (\S+)`)
 	namedTarget  = regexp.MustCompile(`target ([\w-]+):`)
 	dottedPath   = regexp.MustCompile(`\b[a-z][\w-]*(?:\.[\w-]+)+`)
 )
@@ -56,8 +57,8 @@ func Explain(raw []byte, err error) Problem {
 		return Problem{Line: line, Path: path, Message: fmt.Sprintf("unknown field %q", m[1])}
 	}
 	if m := wrongType.FindStringSubmatch(msg); m != nil {
-		steps := splitPath(m[1])
-		return Problem{Line: lineOf(root, steps), Path: m[1], Message: "expected type: " + m[2]}
+		steps := fieldSteps(m[1])
+		return Problem{Line: lineOf(root, steps), Path: render(steps), Message: "expected type: " + m[2]}
 	}
 	p := Problem{Message: strings.TrimPrefix(msg, "invalid manifest: ")}
 	for _, path := range dottedPath.FindAllString(msg, -1) {
@@ -124,6 +125,23 @@ func yamlSteps(namespace string) []step {
 func splitPath(path string) []step {
 	var out []step
 	for _, k := range strings.Split(path, ".") {
+		out = append(out, step{key: k})
+	}
+	return out
+}
+
+// fieldSteps reads the field path of an encoding/json type error: `Config.targets.vsphere.x`,
+// or `.targets.vsphere.0.x` with the sequence indexes, depending on the Go release.
+func fieldSteps(field string) []step {
+	var out []step
+	for i, k := range strings.Split(field, ".") {
+		if i == 0 && (k == "" || unicode.IsUpper(rune(k[0]))) {
+			continue
+		}
+		if n, err := strconv.Atoi(k); err == nil {
+			out = append(out, step{index: n})
+			continue
+		}
 		out = append(out, step{key: k})
 	}
 	return out

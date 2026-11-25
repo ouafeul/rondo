@@ -51,7 +51,7 @@ In order: `--config`; else `--env` (or the selected environment) → `$RONDO_HOM
 
 ## Bundle and channel
 
-Outside a clone of the repository, the CLI downloads its **IaC bundle** (tofu modules, `helmfile.yaml`, CRDs, platform tree, scripts) from the site's artifact mirror into `~/.rondo/cache/<version>`, checked by SHA-256:
+Outside a clone of the repository, the CLI downloads its **IaC bundle** (tofu modules, `helmfile.yaml.gotmpl`, CRDs, platform tree, scripts) from the site's artifact mirror into `~/.rondo/cache/<version>`, checked by SHA-256:
 
 | Priority | Source of the version |
 |---|---|

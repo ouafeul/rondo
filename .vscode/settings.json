@@ -29,7 +29,7 @@
   "files.associations": {
     "*.tpl": "yaml",
     "config.env*": "shellscript",
-    "helmfile.yaml": "helm"
+    "helmfile.yaml.gotmpl": "helm"
   },
 
   "files.exclude": {

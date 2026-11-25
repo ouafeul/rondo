@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.26.x"
-  NFPM_VERSION: v2.41.1
+  GO_VERSION: "1.27.x"
+  NFPM_VERSION: v2.49.0
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
@@ -53,14 +53,14 @@ jobs:
       - name: Bundles
         run: |
           mkdir -p certs
-          tar czf dist/iac.tar.gz terraform/ scripts/ helmfile.yaml manifests/ platform/ certs/
+          tar czf dist/iac.tar.gz terraform/ scripts/ helmfile.yaml.gotmpl manifests/ platform/ certs/
           tar czf dist/vm.tar.gz -C terraform/vm .
           tar czf dist/rondo-ansible.tar.gz -C ansible .
           cp install.sh scripts/mirror-release.sh rondo.yaml.example dist/
           ver="${TAG#v}"
           cp dist/rondo-linux-amd64 rondo
           tar czf "dist/rondo-${ver}.tar.gz" --transform "s,^,rondo-${ver}/," \
-            terraform/ scripts/ helmfile.yaml manifests/ platform/ certs/ rondo rondo.yaml.example
+            terraform/ scripts/ helmfile.yaml.gotmpl manifests/ platform/ certs/ rondo rondo.yaml.example
           rm rondo
           # Final releases move the stable channel; prereleases leave it alone.
           if echo "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then

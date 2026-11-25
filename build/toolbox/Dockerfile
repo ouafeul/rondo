@@ -1,13 +1,13 @@
-ARG GO_VERSION=1.26.11
+ARG GO_VERSION=1.27.4
 ARG HELM_VERSION=3.22.1
-ARG KUBECTL_VERSION=v1.34.13
-ARG TOFU_VERSION=1.11.14
-ARG ANSIBLE_CORE_VERSION=2.18.6
+ARG KUBECTL_VERSION=v1.36.6
+ARG TOFU_VERSION=1.13.10
+ARG ANSIBLE_CORE_VERSION=2.22.0
 
 FROM alpine/helm:${HELM_VERSION} AS helm
 FROM registry.k8s.io/kubectl:${KUBECTL_VERSION} AS kubectl
 
-FROM debian:stable-slim AS tofu
+FROM debian:13-slim AS tofu
 ARG TOFU_VERSION
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
@@ -26,7 +26,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w -X rondo/internal/version.Version=${VERSION} -X rondo/internal/version.Commit=${COMMIT}" \
       -o /out/rondo-toolbox ./cmd/rondo-toolbox
 
-FROM debian:stable-slim
+FROM debian:13-slim
 ARG ANSIBLE_CORE_VERSION
 RUN apt-get update \
  && apt-get upgrade -y \

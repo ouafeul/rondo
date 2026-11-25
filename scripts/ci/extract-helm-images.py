@@ -31,7 +31,7 @@ def parse_helmfile_values(helmfile_path: str) -> dict[str, dict]:
     try:
         helmfile_data = yaml.safe_load(cleaned)
     except yaml.YAMLError as e:
-        print(f"WARN: cannot parse helmfile.yaml: {e}", file=sys.stderr)
+        print(f"WARN: cannot parse helmfile: {e}", file=sys.stderr)
         return {}
 
     if not helmfile_data or "releases" not in helmfile_data:
@@ -446,7 +446,7 @@ def render_jobs_for(chart_name, helmfile_values, platform_values):
     jobs = []
     if chart_name in helmfile_values:
         jobs.append({
-            "origin": f"helmfile.yaml/{chart_name}",
+            "origin": f"helmfile/{chart_name}",
             "values": helmfile_values[chart_name],
             "pins": set(),
         })
@@ -574,7 +574,7 @@ def main():
     )
     parser.add_argument(
         "--helmfile", default="",
-        help="helmfile.yaml file (functional values are extracted automatically)"
+        help="helmfile (helmfile.yaml.gotmpl; functional values are extracted automatically)"
     )
     parser.add_argument(
         "--platform", default="",

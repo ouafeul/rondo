@@ -29,24 +29,24 @@
 
 binaries:
   - name: k3s
-    version: "v1.31.4+k3s1"
+    version: "v1.36.6+k3s1"
     source_url: "https://github.com/k3s-io/k3s/releases/download/{version}/k3s"
     kind: file
     path: "k3s/{version}/k3s"
 
   - name: k3s-airgap-images
-    version: "v1.31.4+k3s1"
+    version: "v1.36.6+k3s1"
     source_url: "https://github.com/k3s-io/k3s/releases/download/{version}/k3s-airgap-images-amd64.tar.zst"
     kind: file
     path: "k3s/{version}/k3s-airgap-images-amd64.tar.zst"
 
   - name: opentofu
-    version: "1.11.14"
+    version: "1.13.10"
     source_url: "https://github.com/opentofu/opentofu/releases/download/v{version}/tofu_{version}_linux_amd64.zip"
     kind: file
     path: "opentofu/{version}/tofu_{version}_linux_amd64.zip"
     # sha256 of the artefact at this version: `rondo` refuses a download that does not match.
-    sha256: "8279a6c6d4044899ae77190fc50c40c147615a76aca13ea605d68320c424c2a6"
+    sha256: "c1f0d6b34d8328f963d3b1ad10896fae30a6c6890596190ffef477dab991090f"
 
   - name: helm
     version: "v3.22.1"
@@ -56,67 +56,68 @@ binaries:
     sha256: "896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea"
 
   - name: kubectl
-    version: "v1.34.13"
+    version: "v1.36.6"
     source_url: "https://dl.k8s.io/release/{version}/bin/linux/amd64/kubectl"
     kind: file
     path: "kubectl/{version}/kubectl"
-    sha256: "b4bb494e9466a7a94bb851414548bc0d3e2f8da90757e6eccc3371e648648591"
+    sha256: "29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634"
 
   - name: k9s
-    version: "v0.40.5"
+    version: "v0.51.0"
     source_url: "https://github.com/derailed/k9s/releases/download/{version}/k9s_Linux_amd64.tar.gz"
     kind: file
     path: "k9s/{version}/k9s_Linux_amd64.tar.gz"
-    sha256: "63dcf6817b2c391ccb4a8b7ee313f5990f5accfa0e55a72c769b73c303a03e01"
+    sha256: "c3752ad51a5a4015a113819c4eeb6e55a4d0e4b8e652494797532f6fc8161dd7"
 
   - name: yq
-    version: "v4.44.6"
+    version: "v4.54.3"
     source_url: "https://github.com/mikefarah/yq/releases/download/{version}/yq_linux_amd64"
     kind: file
     path: "yq/{version}/yq_linux_amd64"
-    sha256: "0c2b24e645b57d8e7c0566d18643a6d4f5580feeea3878127354a46f2a1e4598"
+    sha256: "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973"
 
   - name: helmfile
-    version: "0.171.0"
+    version: "1.8.5"
     source_url: "https://github.com/helmfile/helmfile/releases/download/v{version}/helmfile_{version}_linux_amd64.tar.gz"
     kind: file
     path: "helmfile/{version}/helmfile_{version}_linux_amd64.tar.gz"
-    sha256: "c190fd305307ea3fd41a91a95b3341100a1ede239cf32e225564a1ece286fb1b"
+    sha256: "e10344a4e6121689265c8fbe8ce96977b4722a9f953db862014a08b99938c333"
 
-  # Last helm-diff with a command/hooks plugin.yaml: later ones need Helm >= 3.18.
+  # Its plugin.yaml (platformCommand/platformHooks) needs Helm >= 3.18.
   - name: helm-diff
-    version: "v3.9.14"
+    version: "v3.15.15"
     source_url: "https://github.com/databus23/helm-diff/releases/download/{version}/helm-diff-linux-amd64.tgz"
     kind: file
     path: "helm-diff/{version}/helm-diff-linux-amd64.tgz"
 
   - name: rke2
-    version: "v1.34.5+rke2r1"
+    version: "v1.36.5+rke2r1"
     source_url: "https://github.com/rancher/rke2/releases/download/{version}/rke2.linux-amd64"
     kind: file
     path: "rke2/{version}/rke2.linux-amd64"
 
   - name: rke2-sha256sum
-    version: "v1.34.5+rke2r1"
+    version: "v1.36.5+rke2r1"
     source_url: "https://github.com/rancher/rke2/releases/download/{version}/sha256sum-amd64.txt"
     kind: file
     path: "rke2/{version}/sha256sum-amd64.txt"
 
 tofu_providers:
   - name: hashicorp/vsphere
-    version: "2.9.3"
-    source_url: "https://releases.hashicorp.com/terraform-provider-vsphere/{version}/terraform-provider-vsphere_{version}_linux_amd64.zip"
+    version: "2.18.0"
+    # Releases moved to the vmware organisation; the registry address stays hashicorp/vsphere.
+    source_url: "https://github.com/vmware/terraform-provider-vsphere/releases/download/v{version}/terraform-provider-vsphere_{version}_linux_amd64.zip"
     kind: provider
     path: "hashicorp/vsphere/terraform-provider-vsphere_{version}_linux_amd64.zip"
 
   - name: hashicorp/cloudinit
-    version: "2.3.7"
+    version: "2.4.1"
     source_url: "https://releases.hashicorp.com/terraform-provider-cloudinit/{version}/terraform-provider-cloudinit_{version}_linux_amd64.zip"
     kind: provider
     path: "hashicorp/cloudinit/terraform-provider-cloudinit_{version}_linux_amd64.zip"
 
   - name: rancher/rancher2
-    version: "14.1.1"
+    version: "15.3.0"
     source_url: "https://github.com/rancher/terraform-provider-rancher2/releases/download/v{version}/terraform-provider-rancher2_{version}_linux_amd64.zip"
     kind: provider
     path: "rancher/rancher2/terraform-provider-rancher2_{version}_linux_amd64.zip"
@@ -125,25 +126,25 @@ tofu_providers:
 
 helm_charts:
   - name: metallb
-    version: "0.14.9"
+    version: "0.16.2"
     source_repo: "https://metallb.github.io/metallb"
     kind: chart
     path: metallb
 
   - name: rancher
-    version: "2.14.0"
+    version: "2.15.3"
     source_repo: "https://releases.rancher.com/server-charts/latest"
     kind: chart
     path: rancher
 
   - name: cert-manager
-    version: "v1.16.2"
+    version: "v1.21.3"
     source_repo: "https://charts.jetstack.io"
     kind: chart
     path: cert-manager
 
   - name: traefik
-    version: "41.0.2"
+    version: "42.4.3"
     source_repo: "https://traefik.github.io/charts"
     kind: chart
     path: traefik
@@ -152,6 +153,6 @@ rpm_packages: []
 
 base_images:
   - name: ansible-core
-    version: "2.18.6"
-    source_url: "https://pypi.org/project/ansible-core/2.18.6/"
+    version: "2.22.0"
+    source_url: "https://pypi.org/project/ansible-core/2.22.0/"
     note: "installed by pip in build/toolbox/Dockerfile (ARG ANSIBLE_CORE_VERSION)"

@@ -18,6 +18,8 @@ spec:
   privateKey:
     algorithm: RSA
     size: 4096
+    # A renewed CA keeps its key, so what already trusts it keeps working.
+    rotationPolicy: Never
   issuerRef:
     name: selfsigned-bootstrap
     kind: ClusterIssuer

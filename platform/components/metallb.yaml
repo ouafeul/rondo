@@ -5,7 +5,7 @@ metadata:
 spec:
   chart:
     oci: ${CHARTS_OCI}/metallb
-    version: 0.14.9
+    version: 0.16.2
   namespace: metallb-system
   values:
     controller:
@@ -19,10 +19,10 @@ spec:
         requests:
           cpu: 25m
           memory: 64Mi
+    # Layer 2 only: no BGP backend (frr-k8s), so no FRR images to mirror.
+    frrk8s:
+      enabled: false
     speaker:
-      frr:
-        image:
-          repository: ${target.values.imageRegistry}/frrouting/frr
       image:
         repository: ${target.values.imageRegistry}/metallb/speaker
       priorityClassName: system-cluster-critical

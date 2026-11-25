@@ -64,7 +64,7 @@ func requireEnvtestOrDie(pkg string) {
 	fmt.Fprintf(os.Stderr, "RONDO_REQUIRE_ENVTEST=1 but KUBEBUILDER_ASSETS is empty: "+
 		"the envtest tests of %s would skip silently.\n"+
 		"Set KUBEBUILDER_ASSETS:\n"+
-		"  go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.24.1\n"+
+		"  go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3\n"+
 		"  export KUBEBUILDER_ASSETS=\"$(setup-envtest use -p path)\"\n", pkg)
 	os.Exit(1)
 }

@@ -1,12 +1,12 @@
 # Upstream defaults on purpose: extract-helm-images.py inventories the mirror from them.
 image:
   repository: docker.io/rancher/local-path-provisioner
-  tag: v0.0.31
+  tag: v0.0.37
   pullPolicy: IfNotPresent
 
 helperImage:
   repository: docker.io/library/busybox
-  tag: "1.37.0"
+  tag: "1.38.0"
 
 storageClass:
   name: local-path

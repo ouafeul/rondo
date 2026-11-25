@@ -11,9 +11,12 @@ releases:
   - name: metallb
     namespace: metallb-system
     chart: {{ $chartsOCI }}/metallb
-    version: {{ env "METALLB_VERSION" | default "0.14.9" }}
+    version: {{ env "METALLB_VERSION" | default "0.16.2" }}
     values:
-      - controller:
+      # Layer 2 only: no BGP backend (frr-k8s), so no FRR images to mirror.
+      - frrk8s:
+          enabled: false
+        controller:
           image:
             repository: {{ $dockerRepo }}/metallb/controller
           priorityClassName: system-cluster-critical
@@ -27,12 +30,6 @@ releases:
           resources:
             requests: { cpu: 25m, memory: 64Mi }
             limits: { cpu: 100m, memory: 128Mi }
-          frr:
-            image:
-              repository: {{ $dockerRepo }}/frrouting/frr
-            resources:
-              requests: { cpu: 10m, memory: 32Mi }
-              limits: { cpu: 100m, memory: 64Mi }
     hooks:
       - events: ["postsync"]
         showlogs: true
@@ -44,11 +41,13 @@ releases:
   - name: cert-manager
     namespace: cert-manager
     chart: {{ $chartsOCI }}/cert-manager
-    version: {{ env "CERT_MANAGER_VERSION" | default "v1.16.2" }}
+    version: {{ env "CERT_MANAGER_VERSION" | default "v1.21.3" }}
     needs:
       - metallb-system/metallb
     values:
-      - installCRDs: true
+      - crds:
+          enabled: true
+          keep: true
         global:
           priorityClassName: system-cluster-critical
         image:
@@ -94,7 +93,7 @@ releases:
   - name: rancher
     namespace: cattle-system
     chart: {{ $chartsOCI }}/rancher
-    version: {{ env "RANCHER_VERSION" | default "2.14.0" }}
+    version: {{ env "RANCHER_VERSION" | default "2.15.3" }}
     needs:
       - metallb-system/metallb
       - cert-manager/cert-manager

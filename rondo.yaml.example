@@ -59,7 +59,7 @@ targets:
         dnsSearchDomain: example.local
   management:
     vsphereTarget: dc1
-    k3sVersion: v1.31.4+k3s1
+    k3sVersion: v1.36.6+k3s1        # Rancher 2.15 runs on k3s 1.34 to 1.36
     ingressLoadBalancerIp: 10.0.0.100
     serverNodes:
       - { hostname: k3s-server-1, ip: 10.0.0.11 }
@@ -74,7 +74,7 @@ targets:
       componentValues: { storageClass: local-path }
       rke2:
         vsphereTarget: dc1
-        rke2Version: v1.34.5+rke2r1
+        rke2Version: v1.36.5+rke2r1   # a version of Rancher's embedded KDM (1.34 to 1.36, up to 1.36.5)
         cniPlugin: canal
         ingressLoadBalancerIp: 10.0.0.50
         controlPlaneNodeIps: [10.0.0.31, 10.0.0.32, 10.0.0.33]
