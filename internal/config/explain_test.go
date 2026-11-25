@@ -47,7 +47,7 @@ func TestExplainPointsAtTheLine(t *testing.T) {
 		}, "RKE2_A", "targets.downstreams[0].name", "must be a hostname"},
 		"wrong type": {func(s string) string {
 			return strings.Replace(s, "netmaskBits: 24", "netmaskBits: twenty", 1)
-		}, "netmaskBits", "targets.vsphere.vmNetwork.netmaskBits", "expected type: int"},
+		}, "netmaskBits", "targets.vsphere[0].vmNetwork.netmaskBits", "expected type: int"},
 		"path named by the rule": {func(s string) string {
 			return strings.Replace(s, "    dc1: CHANGEME\n", "    dc1: CHANGEME\n    dc9: x\n", 1)
 		}, "dc9: x", "secrets.vcenterPasswords.dc9", "dc9"},
@@ -65,7 +65,8 @@ func TestExplainPointsAtTheLine(t *testing.T) {
 			if want := lineOfText(bad, tc.near); p.Line != want {
 				t.Errorf("line %d, want %d (%q); error: %v", p.Line, want, tc.near, err)
 			}
-			if p.Path != tc.path || !strings.Contains(p.Message, tc.msg) {
+			// Before Go 1.27, encoding/json leaves the sequence indexes out of a type error.
+			if p.Path != tc.path && p.Path != strings.ReplaceAll(tc.path, "[0]", "") || !strings.Contains(p.Message, tc.msg) {
 				t.Errorf("path %q, message %q; want %q, %q", p.Path, p.Message, tc.path, tc.msg)
 			}
 		})
@@ -101,6 +102,19 @@ func TestRuleMessagesAreReadable(t *testing.T) {
 	} {
 		if got := ruleMessage(fieldError{tag: tag, param: "p"}); got != want {
 			t.Errorf("%s: %q, want %q", tag, got, want)
+		}
+	}
+}
+
+func TestFieldStepsReadsBothTypeErrorForms(t *testing.T) {
+	for field, want := range map[string]string{
+		"Config.targets.vsphere.vmNetwork.netmaskBits":    "targets.vsphere.vmNetwork.netmaskBits",
+		".targets.vsphere.0.vmNetwork.netmaskBits":        "targets.vsphere[0].vmNetwork.netmaskBits",
+		".targets.downstreams.1.rke2.controlPlaneNodeIps": "targets.downstreams[1].rke2.controlPlaneNodeIps",
+		"secrets": "secrets",
+	} {
+		if got := render(fieldSteps(field)); got != want {
+			t.Errorf("fieldSteps(%q) = %q, want %q", field, got, want)
 		}
 	}
 }
