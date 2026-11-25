@@ -266,7 +266,7 @@ jobs:
           pip install --quiet pytest==9.1.1 ruff==0.15.22 shellcheck-py==0.11.0.1 pyyaml==6.0.2
           requests==2.34.2 jinja2==3.1.6 ansible-lint==26.9.0
       - run: ruff check scripts/ci
-      - run: shellcheck scripts/ci/*.sh .githooks/pre-commit .githooks/pre-push cmd/rondo-sandbox/rondo-sandbox.sh install.sh
+      - run: shellcheck scripts/ci/*.sh scripts/*.sh .githooks/pre-commit .githooks/pre-push cmd/rondo-sandbox/rondo-sandbox.sh install.sh
       - run: ansible-lint ansible/
       - run: python -m pytest scripts/ci/tests -q --junitxml=ci-scripts-junit.xml
       - uses: actions/upload-artifact@v7

@@ -57,7 +57,7 @@ The code lives at [github.com/ouafeul/rondo](https://github.com/ouafeul/rondo).
   <TabItem label="CI scripts">
     ```bash
     ruff check scripts/ci
-    shellcheck scripts/ci/*.sh .githooks/pre-commit .githooks/pre-push
+    shellcheck scripts/ci/*.sh scripts/*.sh .githooks/pre-commit .githooks/pre-push
     pytest scripts/ci/tests -q
     ansible-lint ansible/
     ```
@@ -93,7 +93,7 @@ The code lives at [github.com/ouafeul/rondo](https://github.com/ouafeul/rondo).
 
 ## Add a dependency
 
-Everything installed on a site is declared in `manifests/dependencies.yaml` and mirrored to the site's Artifactory. Images are not declared: they are extracted from the charts.
+Everything installed on a site is declared in `manifests/dependencies.yaml` and mirrored to the site's mirror (OCI registry, file server, RPM server). Each entry has a `kind` and a relative `path`; the header of the file documents them. Images are not declared: they are extracted from the charts.
 
 | To add | Where |
 |---|---|

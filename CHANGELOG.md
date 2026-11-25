@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset.
+- **Vendor-neutral air-gap mirror.** The mirror scripts write to any OCI registry
+  (`--oci-registry`), any HTTP file server or S3-compatible bucket (`--files-url`), any RPM
+  repository server (`--rpm-url`), with `MIRROR_USER`, `MIRROR_PASSWORD` and `MIRROR_CA_CERT`.
+  `manifests/dependencies.yaml` entries carry a `kind` and a relative `path`. Uploads are
+  idempotent through `.sha256` sidecars, OpenTofu providers go to a static network mirror, RPM
+  `repodata/` is built with `createrepo_c`, registry checks follow the Bearer token challenge,
+  and `mirror.yml` scans the mirrored images and binaries with Trivy.
+- **`scripts/mirror-release.sh`**, shipped with each release, copies one release (images, charts,
+  assets, packages, release channel) into a site mirror; `--dry-run` prints the copy list.
 
 ### Security
 - Images and tools on current patch releases: Go 1.26.11, Helm 3.22.1, kubectl 1.34.13, OpenTofu 1.11.14, Rocky Linux 9.9 for the sandbox machine, OS packages upgraded at build.

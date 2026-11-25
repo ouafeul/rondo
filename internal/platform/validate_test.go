@@ -374,12 +374,11 @@ func TestMisplacedFileWarns(t *testing.T) {
 	}
 }
 
-func mirrorOf(charts map[string]Dependency, artifacts, rpmRepos []string) *Mirror {
+func mirrorOf(charts map[string]Dependency, artifacts, rpmPaths []string) *Mirror {
 	m := &Mirror{
-		Charts:       charts,
-		Artifacts:    map[string]bool{},
-		GenericRepos: map[string]bool{},
-		RPMRepos:     map[string]bool{},
+		Charts:    charts,
+		Artifacts: map[string]bool{},
+		RPMPaths:  map[string]bool{},
 	}
 	if m.Charts == nil {
 		m.Charts = map[string]Dependency{}
@@ -387,8 +386,8 @@ func mirrorOf(charts map[string]Dependency, artifacts, rpmRepos []string) *Mirro
 	for _, a := range artifacts {
 		m.Artifacts[a] = true
 	}
-	for _, r := range rpmRepos {
-		m.RPMRepos[r] = true
+	for _, r := range rpmPaths {
+		m.RPMPaths[r] = true
 	}
 	return m
 }
@@ -463,8 +462,8 @@ func vmTree(t *testing.T) *Tree {
 func TestVMArtifactMustBeMirrored(t *testing.T) {
 	tree := vmTree(t)
 	findings := tree.ValidateDependencies(mirrorOf(nil,
-		[]string{"rondo-generic-local/other/2.0.0/other.tar.gz"},
-		[]string{"rondo-rpms-local"}))
+		[]string{"other/2.0.0/other.tar.gz"},
+		[]string{"el9"}))
 	requireError(t, findings, "demo/1.0.0/demo.tar.gz")
 	requireError(t, findings, "spec.vm.artifacts[0]")
 }
@@ -472,8 +471,8 @@ func TestVMArtifactMustBeMirrored(t *testing.T) {
 func TestVMArtifactMirroredPasses(t *testing.T) {
 	tree := vmTree(t)
 	got := tree.ValidateDependencies(mirrorOf(nil,
-		[]string{"rondo-generic-local/demo/1.0.0/demo.tar.gz"},
-		[]string{"rondo-rpms-local"}))
+		[]string{"demo/1.0.0/demo.tar.gz"},
+		[]string{"el9"}))
 	if HasErrors(got) {
 		t.Fatalf("mirrored artifact rejected: %s", render(got))
 	}
@@ -509,9 +508,7 @@ func artifactTree(t *testing.T, doc string) *Tree {
 }
 
 func emptyMirror() *Mirror {
-	m := mirrorOf(nil, nil, nil)
-	m.GenericRepos["rondo-generic-local"] = true
-	return m
+	return mirrorOf(nil, nil, nil)
 }
 
 func TestUpstreamArtifactMustBeMirrored(t *testing.T) {
@@ -524,7 +521,7 @@ func TestUpstreamArtifactMustBeMirrored(t *testing.T) {
 	requireError(t, tree.ValidateDependencies(emptyMirror()), "will NOT be mirrored")
 
 	m := emptyMirror()
-	m.Artifacts["rondo-generic-local/nextcloud/33.0.0/nc.tar.bz2"] = true
+	m.Artifacts["nextcloud/33.0.0/nc.tar.bz2"] = true
 	if got := tree.ValidateDependencies(m); HasErrors(got) {
 		t.Fatalf("mirrored upstream COTS rejected: %s", render(got))
 	}
@@ -547,20 +544,12 @@ func TestComponentArtifactMustFollowTheConvention(t *testing.T) {
 	}
 }
 
-func TestComponentArtifactRepoMustBeKnown(t *testing.T) {
-	doc := strings.Replace(
-		vmArtifactComponent("demo", "component", "components/demo/1.0.0/demo.tar.gz"),
-		"repo: rondo-generic-local", "repo: rondo-generic-locl", 1)
-	requireError(t, artifactTree(t, doc).ValidateDependencies(emptyMirror()),
-		"wrong repository name")
-}
-
 func TestVMRPMRepoMustBeFed(t *testing.T) {
 	tree := vmTree(t)
 	findings := tree.ValidateDependencies(mirrorOf(nil,
-		[]string{"rondo-generic-local/demo/1.0.0/demo.tar.gz"},
-		[]string{"another-repo"}))
-	requireError(t, findings, `package repository "rondo-rpms-local"`)
+		[]string{"demo/1.0.0/demo.tar.gz"},
+		[]string{"el8"}))
+	requireError(t, findings, `package repository path "el9"`)
 }
 
 func TestComponentArtifactConventionSurvivesAPlaceholderRepo(t *testing.T) {
@@ -589,12 +578,12 @@ func TestComponentArtifactConventionSurvivesAPlaceholderRepo(t *testing.T) {
 
 func TestVMPlaceholderIsNotVerified(t *testing.T) {
 	comp := strings.Replace(vmMirrorComponent,
-		"repo: rondo-generic-local", "repo: ${ARTIFACTORY_GENERIC_REPO}", 1)
+		"path: demo/1.0.0/demo.tar.gz", "path: demo/${DEMO_VERSION}/demo.tar.gz", 1)
 	tree, err := Load(writeTree(t, map[string]string{"components/demo.yaml": comp}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings := tree.ValidateDependencies(mirrorOf(nil, nil, []string{"rondo-rpms-local"}))
+	findings := tree.ValidateDependencies(mirrorOf(nil, nil, []string{"el9"}))
 	if HasErrors(findings) {
 		t.Fatalf("placeholder treated as an error: %s", render(findings))
 	}

@@ -150,3 +150,40 @@ def test_prerelease_sorts_below_its_final_release(workflows):
         return subprocess.run(["sh", "-c", derivation_script(workflows)], env={"TAG": tag, "PATH": "/usr/bin:/bin"},
                               capture_output=True, text=True, check=True).stdout
     assert version("v1.0.0-rc.1") == version("v1.0.0") + "~rc.1"
+
+
+def test_release_ships_the_mirror_script(workflows):
+    script = step_named(workflows["release.yml"], "artifacts", "Bundles")["run"]
+    assert "scripts/mirror-release.sh" in script
+    assert (ROOT / "scripts" / "mirror-release.sh").exists()
+
+
+def test_mirror_reads_the_vendor_neutral_secrets(workflows):
+    env = workflows["mirror.yml"]["jobs"]["mirror"]["env"]
+    assert {k: v for k, v in env.items() if k.startswith("MIRROR_")} == {
+        "MIRROR_REGISTRY": "${{ secrets.MIRROR_REGISTRY }}",
+        "MIRROR_FILES_URL": "${{ secrets.MIRROR_FILES_URL }}",
+        "MIRROR_RPM_URL": "${{ secrets.MIRROR_RPM_URL }}",
+        "MIRROR_USER": "${{ secrets.MIRROR_USER }}",
+        "MIRROR_PASSWORD": "${{ secrets.MIRROR_PASSWORD }}",
+        "MIRROR_CA_CERT_PEM": "${{ secrets.MIRROR_CA_CERT }}",
+    }
+    text = (WORKFLOWS / "mirror.yml").read_text()
+    for gone in ("--artifactory-url", "--target-registry", "--dest-creds", "xray"):
+        assert gone not in text.lower(), gone
+
+
+def test_mirror_scans_with_trivy_and_does_not_fail_on_findings_by_default(workflows):
+    wf = workflows["mirror.yml"]
+    assert wf["on"]["workflow_dispatch"]["inputs"]["fail_on_vulns"]["default"] is False
+    trivy = [s for _, s in steps(wf) if s.get("uses", "").startswith("aquasecurity/trivy-action@")]
+    assert trivy
+    pinned = "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"
+    assert all(s["uses"] == pinned for s in trivy)
+    assert not (ROOT / "scripts" / "ci" / "xray-scan.py").exists()
+
+
+def test_mirror_copies_the_rancher_and_rke2_image_lists(workflows):
+    step = step_named(workflows["mirror.yml"], "mirror", "Upstream image lists (Rancher, rke2)")["run"]
+    assert "rancher/rancher/releases/download/v${rancher_version#v}/rancher-images.txt" in step
+    assert "rancher/rke2/releases/download/${rke2_version}/rke2-images.linux-amd64.txt" in step

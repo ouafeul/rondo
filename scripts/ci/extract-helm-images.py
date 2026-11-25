@@ -491,7 +491,7 @@ def collect_chart_images(chart_dir, label, jobs, tmpdir):
     return sorted(images), pin_errors
 
 
-def _describe(chart_dir, images, source_chart, docker_target_repo):
+def _describe(chart_dir, images, source_chart):
     value_paths = find_image_value_paths(chart_dir)
     results = []
     for img_ref in images:
@@ -510,7 +510,6 @@ def _describe(chart_dir, images, source_chart, docker_target_repo):
         results.append({
             "name": name,
             "version": tag,
-            "target_repo": docker_target_repo,
             "image_path": image_path,
             "helm_value_path": helm_path,
             "source_chart": source_chart,
@@ -521,8 +520,7 @@ def _describe(chart_dir, images, source_chart, docker_target_repo):
     return results
 
 
-def process_chart(chart_info, helmfile_values, platform_values, tmpdir,
-                  docker_target_repo):
+def process_chart(chart_info, helmfile_values, platform_values, tmpdir):
     chart_name = chart_info["name"]
     chart_version = chart_info["version"]
     source_repo = chart_info.get("source_repo", "")
@@ -534,13 +532,11 @@ def process_chart(chart_info, helmfile_values, platform_values, tmpdir,
     chart_dir = helm_pull(chart_name, chart_version, source_repo, tmpdir)
     jobs = render_jobs_for(chart_name, helmfile_values, platform_values)
     images, pin_errors = collect_chart_images(chart_dir, chart_name, jobs, tmpdir)
-    results = _describe(chart_dir, images, f"{chart_name}:{chart_version}",
-                        docker_target_repo)
+    results = _describe(chart_dir, images, f"{chart_name}:{chart_version}")
     return results, pin_errors
 
 
-def process_local_chart(release, helmfile_values, platform_values, base_dir, tmpdir,
-                        docker_target_repo):
+def process_local_chart(release, helmfile_values, platform_values, base_dir, tmpdir):
     name = release["name"]
     chart_dir = release["chart"]
     if not os.path.isabs(chart_dir):
@@ -552,20 +548,18 @@ def process_local_chart(release, helmfile_values, platform_values, base_dir, tmp
 
     jobs = render_jobs_for(name, helmfile_values, platform_values)
     images, pin_errors = collect_chart_images(chart_dir, name, jobs, tmpdir)
-    results = _describe(chart_dir, images, f"{name} (local)", docker_target_repo)
+    results = _describe(chart_dir, images, f"{name} (local)")
     return results, pin_errors
 
 
-def process_first_party_chart(chart_name, chart_dir, platform_values, tmpdir,
-                              docker_target_repo):
+def process_first_party_chart(chart_name, chart_dir, platform_values, tmpdir):
     print(f"\n{'=' * 60}", file=sys.stderr)
     print(f"  {chart_name} (first-party chart {chart_dir})", file=sys.stderr)
     print(f"{'=' * 60}", file=sys.stderr)
 
     jobs = render_jobs_for(chart_name, {}, platform_values)
     images, pin_errors = collect_chart_images(chart_dir, chart_name, jobs, tmpdir)
-    results = _describe(chart_dir, images, f"{chart_name} (first-party)",
-                        docker_target_repo)
+    results = _describe(chart_dir, images, f"{chart_name} (first-party)")
     return results, pin_errors
 
 
@@ -592,15 +586,11 @@ def main():
     )
     parser.add_argument(
         "--target-registry",
-        help="Target Docker registry (e.g. host/rondo-docker-local)"
+        help="Target registry host[/prefix], used to print the Helm --set overrides"
     )
     parser.add_argument(
         "--update-manifest", action="store_true",
         help="Update the docker_images section of dependencies.yaml"
-    )
-    parser.add_argument(
-        "--docker-target-repo", default="rondo-docker-local",
-        help="Target Artifactory repo for the extracted Docker images (default: rondo-docker-local)"
     )
     parser.add_argument(
         "--helm-sets", action="store_true",
@@ -688,7 +678,7 @@ def main():
         for chart in charts:
             try:
                 images, errs = process_chart(chart, helmfile_values, platform_values,
-                                             tmpdir, args.docker_target_repo)
+                                             tmpdir)
             except RuntimeError as e:
                 print(f"  ERROR: {e}", file=sys.stderr)
                 sys.exit(1)
@@ -698,8 +688,7 @@ def main():
         for release in local_charts:
             try:
                 images, errs = process_local_chart(release, helmfile_values,
-                                                   platform_values, base_dir, tmpdir,
-                                                   args.docker_target_repo)
+                                                   platform_values, base_dir, tmpdir)
             except RuntimeError as e:
                 print(f"  ERROR: {e}", file=sys.stderr)
                 sys.exit(1)
@@ -709,8 +698,7 @@ def main():
         for chart_name, chart_dir in first_party.items():
             try:
                 images, errs = process_first_party_chart(
-                    chart_name, chart_dir, platform_values, tmpdir,
-                    args.docker_target_repo)
+                    chart_name, chart_dir, platform_values, tmpdir)
             except RuntimeError as e:
                 print(f"  ERROR: {e}", file=sys.stderr)
                 sys.exit(1)
@@ -763,7 +751,8 @@ def main():
             docker_images.append({
                 "name": img["name"],
                 "version": img["version"],
-                "target_repo": img["target_repo"],
+                "kind": "image",
+                "path": img["image_path"],
             })
         manifest["docker_images"] = docker_images
         with open(args.manifest, "w") as f:
@@ -775,7 +764,8 @@ def main():
         for img in unique:
             print(f'  - name: "{img["name"]}"')
             print(f'    version: "{img["version"]}"')
-            print(f'    target_repo: {img["target_repo"]}')
+            print("    kind: image")
+            print(f'    path: {img["image_path"]}')
 
     if args.helm_sets and args.target_registry:
         by_chart = {}

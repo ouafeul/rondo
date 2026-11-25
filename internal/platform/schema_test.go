@@ -163,7 +163,8 @@ func TestLoadDependenciesReadsHelmCharts(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`helm_charts:
   - name: metallb
     version: 0.14.9
-    target_repo: rondo-helm-local
+    kind: chart
+    path: metallb
   - name: cert-manager
     version: v1.16.2
 binaries:
@@ -191,17 +192,18 @@ func TestLoadDependenciesReadsArtifactsAndRPMRepos(t *testing.T) {
 binaries:
   - name: rke2
     version: "v1.34.5+rke2r1"
-    target_repo: rondo-generic-local
-    target_path: "rke2/{version}/rke2.linux-amd64"
+    kind: file
+    path: "rke2/{version}/rke2.linux-amd64"
 grafana_plugins:
   - name: vl-datasource
     version: "v0.26.3"
-    target_repo: rondo-generic-local
-    target_path: "grafana-plugins/{version}/plugin.zip"
+    kind: grafana_plugin
+    path: "grafana-plugins/{version}/plugin.zip"
 rpm_packages:
   - name: httpd
     version: el9
-    target_repo: rondo-rpms-local
+    kind: rpm
+    path: el9
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -210,18 +212,15 @@ rpm_packages:
 		t.Fatalf("LoadDependencies: %v", err)
 	}
 	for _, want := range []string{
-		"rondo-generic-local/rke2/v1.34.5+rke2r1/rke2.linux-amd64",
-		"rondo-generic-local/grafana-plugins/v0.26.3/plugin.zip",
+		"rke2/v1.34.5+rke2r1/rke2.linux-amd64",
+		"grafana-plugins/v0.26.3/plugin.zip",
 	} {
 		if !m.Artifacts[want] {
 			t.Errorf("artifact %q missing from the mirrored surface: %+v", want, m.Artifacts)
 		}
 	}
-	if !m.RPMRepos["rondo-rpms-local"] {
-		t.Errorf("RPM repository missing: %+v", m.RPMRepos)
-	}
-	if !m.GenericRepos["rondo-generic-local"] {
-		t.Errorf("generic repository missing: %+v", m.GenericRepos)
+	if !m.RPMPaths["el9"] {
+		t.Errorf("RPM repository path missing: %+v", m.RPMPaths)
 	}
 }
 

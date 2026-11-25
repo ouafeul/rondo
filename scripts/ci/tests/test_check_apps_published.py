@@ -1,3 +1,4 @@
+import base64
 import json
 import subprocess
 import sys
@@ -11,32 +12,47 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "ci" / "check-apps-published.py"
 REPO = "rondo-helm-local"
-CREDS = {"ARTIFACTORY_DOCKER_USER": "ci", "ARTIFACTORY_DOCKER_PASSWORD": "secret"}
+CREDS = {"MIRROR_USER": "ci", "MIRROR_PASSWORD": "secret"}
+BASIC = "Basic " + base64.b64encode(b"ci:secret").decode()
 
 
 @pytest.fixture()
 def registry():
-    state = {"published": set(), "status": None, "hits": []}
+    """An OCI registry stub. mode "basic": Basic challenge; "bearer": token endpoint at /token;
+    "open": anonymous."""
+    state = {"published": set(), "status": None, "hits": [], "paths": [], "mode": "basic",
+             "tokens": []}
 
     class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802 (name imposed by BaseHTTPRequestHandler)
-            state["hits"].append(self.path)
-            if not self.headers.get("Authorization"):
-                self.send_response(401)
-                self.end_headers()
-                return
-            if state["status"] is not None:
-                self.send_response(state["status"])
-                self.end_headers()
-                return
-            parts = self.path.strip("/").split("/")
-            found = (len(parts) == 5 and parts[0] == "v2" and parts[3] == "manifests"
-                     and (parts[2], parts[4]) in state["published"])
-            body = json.dumps({"schemaVersion": 2}).encode()
-            self.send_response(200 if found else 404)
+        def reply(self, status, body=b"", headers=None):
+            self.send_response(status)
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def do_GET(self):  # noqa: N802 (name imposed by BaseHTTPRequestHandler)
+            auth = self.headers.get("Authorization", "")
+            if self.path.startswith("/token"):
+                state["tokens"].append((self.path, auth))
+                if auth != BASIC:
+                    return self.reply(401)
+                return self.reply(200, json.dumps({"token": "tok"}).encode())
+            if state["mode"] == "basic" and auth != BASIC:
+                return self.reply(401, headers={"WWW-Authenticate": 'Basic realm="registry"'})
+            if state["mode"] == "bearer" and auth != "Bearer tok":
+                scope = "repository:charts/x:pull"
+                return self.reply(401, headers={"WWW-Authenticate": (
+                    f'Bearer realm="{state["url"]}/token",service="reg",scope="{scope}"')})
+            state["hits"].append(self.path)
+            if state["status"] is not None:
+                return self.reply(state["status"])
+            parts = self.path.strip("/").split("/")
+            state["paths"].append("/".join(parts[1:-2]))
+            found = (parts[0] == "v2" and parts[-2] == "manifests"
+                     and (parts[-3], parts[-1]) in state["published"])
+            self.reply(200 if found else 404, json.dumps({"schemaVersion": 2}).encode())
 
         def log_message(self, *args):
             pass
@@ -71,8 +87,7 @@ def run(cwd: Path, registry_url: str, *args, env_extra=None):
     env = dict(CREDS, PATH="/usr/bin:/bin", PYTHONIOENCODING="utf-8")
     env.update(env_extra or {})
     return subprocess.run(
-        [sys.executable, str(SCRIPT), "platform", "--registry", registry_url,
-         "--repo", REPO, *args],
+        [sys.executable, str(SCRIPT), "platform", "--oci-registry", registry_url, *args],
         cwd=cwd, env=env, capture_output=True, text=True, check=False)
 
 
@@ -134,9 +149,9 @@ def test_an_unreachable_registry_is_red(tmp_path):
 def test_missing_credentials_is_red(tmp_path, registry):
     make_tree(tmp_path, {"hello-world": "0.1.2"}, {"hello-world": ("hello-world", "0.1.2")})
     result = run(tmp_path, registry["url"],
-                 env_extra={"ARTIFACTORY_DOCKER_USER": "", "ARTIFACTORY_DOCKER_PASSWORD": ""})
+                 env_extra={"MIRROR_USER": "", "MIRROR_PASSWORD": ""})
     assert result.returncode == 1
-    assert "no registry credentials" in result.stderr
+    assert "not anonymous" in result.stderr
     assert registry["hits"] == []
 
 
@@ -189,9 +204,46 @@ def test_the_repo_tree_passes_against_a_registry_that_has_its_pins(load, registr
     for pin in pins:
         registry["published"].add((pin.chart, pin.version))
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "platform", "examples", "--registry", registry["url"],
-         "--repo", REPO],
+        [sys.executable, str(SCRIPT), "platform", "examples", "--oci-registry", registry["url"]],
         cwd=ROOT, env=dict(CREDS, PATH="/usr/bin:/bin", PYTHONIOENCODING="utf-8"),
         capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
     assert "%d pins examined" % len(pins) in result.stdout
+
+
+def test_a_bearer_registry_gets_a_token_from_its_realm(tmp_path, registry):
+    registry["mode"] = "bearer"
+    make_tree(tmp_path, {"hello-world": "0.1.2"}, {"hello-world": ("hello-world", "0.1.2")})
+    registry["published"].add(("hello-world", "0.1.2"))
+    result = run(tmp_path, registry["url"])
+    assert result.returncode == 0, result.stderr
+    assert "0.1.2, published" in result.stdout
+    (path, auth), = registry["tokens"]
+    assert auth == BASIC, "the credentials go to the token endpoint, not to the registry"
+    assert "service=reg" in path and "scope=repository%3Acharts%2Fx%3Apull" in path
+
+
+def test_a_bearer_registry_with_bad_credentials_is_red(tmp_path, registry):
+    registry["mode"] = "bearer"
+    make_tree(tmp_path, {"hello-world": "0.1.2"}, {"hello-world": ("hello-world", "0.1.2")})
+    result = run(tmp_path, registry["url"], env_extra={"MIRROR_PASSWORD": "wrong"})
+    assert result.returncode == 1
+    assert "token endpoint" in result.stderr and "HTTP 401" in result.stderr
+
+
+def test_an_anonymous_registry_needs_no_credentials(tmp_path, registry):
+    registry["mode"] = "open"
+    make_tree(tmp_path, {"hello-world": "0.1.2"}, {"hello-world": ("hello-world", "0.1.2")})
+    registry["published"].add(("hello-world", "0.1.2"))
+    result = run(tmp_path, registry["url"], env_extra={"MIRROR_USER": "", "MIRROR_PASSWORD": ""})
+    assert result.returncode == 0, result.stderr
+
+
+def test_charts_live_under_the_registry_prefix(tmp_path, registry):
+    make_tree(tmp_path, {"hello-world": "0.1.2"}, {"hello-world": ("hello-world", "0.1.2")})
+    registry["published"].add(("hello-world", "0.1.2"))
+    result = run(tmp_path, registry["url"] + "/site/mirror")
+    assert result.returncode == 0, result.stderr
+    assert registry["paths"] == ["site/mirror/charts/hello-world"]
+    result = run(tmp_path, registry["url"], "--charts-path", "helm")
+    assert registry["paths"][-1] == "helm/hello-world"

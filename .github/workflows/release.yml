@@ -56,7 +56,7 @@ jobs:
           tar czf dist/iac.tar.gz terraform/ scripts/ helmfile.yaml manifests/ platform/ certs/
           tar czf dist/vm.tar.gz -C terraform/vm .
           tar czf dist/rondo-ansible.tar.gz -C ansible .
-          cp install.sh rondo.yaml.example dist/
+          cp install.sh scripts/mirror-release.sh rondo.yaml.example dist/
           ver="${TAG#v}"
           cp dist/rondo-linux-amd64 rondo
           tar czf "dist/rondo-${ver}.tar.gz" --transform "s,^,rondo-${ver}/," \

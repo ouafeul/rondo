@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
-"""Mirror RPM packages to an Artifactory YUM repository (rondo-rpms-local).
+"""Mirror RPM packages to an RPM repository served by any HTTP file server.
 
-Resolves dependencies with `dnf download --resolve --alldeps`, then pushes each .rpm
-to Artifactory, which indexes the repository itself (repodata): no `createrepo` to run.
+Resolves dependencies with `dnf download --resolve --alldeps`, builds the repository
+metadata locally with `createrepo_c` (`repodata/`), then uploads packages and metadata to
+`<rpm-url>/<path-prefix>/`. `--rpm-url` is an HTTP(S) base URL (PUT), s3://bucket/prefix
+(boto3, optional) or a directory.
 
 The wanted packages are declared and CI resolves them, in a UBI9 image: the full tree
 changes with every upstream release, and pinning it by hand would be unmanageable.
 
-  scripts/ci/mirror-rpms.py --deps deps-resolved.json \
-      --artifactory-url https://arti/artifactory --repo rondo-rpms-local \
-      --creds user:password
+  scripts/ci/mirror-rpms.py --deps deps-resolved.json --rpm-url https://files.site/rpms
+  (MIRROR_USER / MIRROR_PASSWORD / MIRROR_CA_CERT in the environment)
 
-Usage: CI job `deps-push-rpms` (online zone). Idempotent: a package already present
-with the same checksum is skipped.
+Idempotent: a file whose `<file>.sha256` sidecar holds its digest is not uploaded again.
+`repodata/` describes the packages resolved by this run, so the run must resolve the whole
+set, which it always does.
 """
 
 import argparse
-import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import requests
+import mirror_common as mc
 
 REPOS_ENTRY = "_repos"
 
@@ -107,54 +109,64 @@ def resolve_and_download(packages: list[str], repo_names: list[str],
     return rpms
 
 
-def rpm_target_url(base_url: str, repo: str, path_prefix: str, name: str) -> str:
-    segments = [base_url.rstrip("/"), repo.strip("/")]
-    if path_prefix.strip("/"):
-        segments.append(path_prefix.strip("/"))
-    segments.append(name)
-    return "/".join(segments)
+def build_repodata(directory: str) -> bool:
+    """createrepo_c over `directory`; False (with a message) when it is not installed."""
+    if shutil.which("createrepo_c") is None:
+        print("WARN: createrepo_c is not installed: repodata/ is NOT built, so the repository "
+              "is not usable by dnf until it is (dnf install createrepo_c). "
+              "Packages are still uploaded.", file=sys.stderr)
+        return False
+    subprocess.run(["createrepo_c", "--quiet", "--update", directory], check=True)
+    return True
 
 
-def sha256_of(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def upload_tree(directory: str, store: mc.Store, path_prefix: str,
+                skip_existing: bool, workers: int) -> dict[str, str]:
+    """Upload the packages, then repodata/ (repomd.xml last, it is what clients read first)."""
+    root = Path(directory)
+    files = [p for p in root.rglob("*") if p.is_file()]
 
+    def rel(p: Path) -> str:
+        return "/".join(x for x in (path_prefix.strip("/"), p.relative_to(root).as_posix()) if x)
 
-def upload(rpm: Path, base_url: str, repo: str, path_prefix: str,
-           auth: tuple[str, str], skip_existing: bool) -> tuple[str, str]:
-    target = rpm_target_url(base_url, repo, path_prefix, rpm.name)
-    digest = sha256_of(rpm)
+    def send(p: Path) -> tuple[str, str]:
+        try:
+            if skip_existing:
+                state = "ok" if store.put_checked(rel(p), p) else "skip"
+            else:
+                store.put(rel(p), p)
+                state = "ok"
+        except Exception as e:  # noqa: BLE001 (any transport error is a failed upload)
+            state = f"error: {e}"
+        return rel(p), state
 
-    if skip_existing:
-        head = requests.head(target, auth=auth, timeout=30)
-        if head.status_code == 200:
-            remote = head.headers.get("X-Checksum-Sha256", "")
-            if remote == digest:
-                return rpm.name, "skip"
-
-    with open(rpm, "rb") as f:
-        resp = requests.put(
-            target, data=f, auth=auth, timeout=600,
-            headers={"X-Checksum-Sha256": digest},
-        )
-    if resp.status_code not in (200, 201):
-        return rpm.name, f"error: HTTP {resp.status_code} {resp.text[:200]}"
-    return rpm.name, "ok"
+    results: dict[str, str] = {}
+    packages = [p for p in files if p.parent == root]
+    metadata = [p for p in files if p.parent != root and p.name != "repomd.xml"]
+    repomd = [p for p in files if p.name == "repomd.xml"]
+    for batch in (packages, metadata):
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for fut in as_completed([pool.submit(send, p) for p in batch]):
+                name, state = fut.result()
+                results[name] = state
+                if state.startswith("error"):
+                    print(f"  KO   {name} : {state}", file=sys.stderr)
+    for p in repomd:
+        name, state = send(p)
+        results[name] = state
+        if state.startswith("error"):
+            print(f"  KO   {name} : {state}", file=sys.stderr)
+    return results
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--deps", required=True, help="resolved manifest (JSON)")
-    parser.add_argument("--artifactory-url", required=True)
-    parser.add_argument("--repo", default="rondo-rpms-local")
+    mc.add_target_args(parser, rpm=True)
     parser.add_argument("--path-prefix", default="el9",
-                        help="sub-path in the repository (must match the "
+                        help="sub-path under --rpm-url (must match the "
                              "component's spec.vm.rpmRepos[].path)")
-    parser.add_argument("--creds", default="", help="user:password")
     parser.add_argument("--dest", default="/tmp/rpms", help="working directory")
     parser.add_argument("--repo-dir", default="/etc/yum.repos.d")
     parser.add_argument("--workers", type=int, default=8)
@@ -189,24 +201,13 @@ def main() -> None:
         print("--download-only: nothing is pushed.")
         return
 
-    user, _, password = args.creds.partition(":")
-    if not user or not password:
-        print("--creds user:password is required to push.", file=sys.stderr)
-        sys.exit(1)
-    auth = (user, password)
+    if not args.rpm_url:
+        mc.die("--rpm-url (MIRROR_RPM_URL) is required to push.")
+    store = mc.store_for(args.rpm_url)
 
-    results: dict[str, str] = {}
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {
-            pool.submit(upload, r, args.artifactory_url, args.repo,
-                        args.path_prefix, auth, args.skip_existing): r
-            for r in rpms
-        }
-        for fut in as_completed(futures):
-            name, state = fut.result()
-            results[name] = state
-            if state.startswith("error"):
-                print(f"  KO   {name} : {state}", file=sys.stderr)
+    # createrepo_c writes repodata/ into --dest, next to the packages.
+    build_repodata(args.dest)
+    results = upload_tree(args.dest, store, args.path_prefix, args.skip_existing, args.workers)
 
     ok = sum(1 for s in results.values() if s == "ok")
     skipped = sum(1 for s in results.values() if s == "skip")
@@ -214,8 +215,6 @@ def main() -> None:
     print(f"\n==> {ok} pushed, {skipped} already up to date, {len(errors)} failed")
     if errors:
         sys.exit(1)
-    print(f"==> Artifactory is indexing repository {args.repo} (asynchronous "
-          "repodata); wait before running `dnf makecache` on the machine.")
 
 
 if __name__ == "__main__":

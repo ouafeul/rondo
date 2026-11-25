@@ -38,7 +38,8 @@ helm_charts:
   - name: probe-chart
     version: "1.0.0"
     source_repo: "https://charts.example/probe"
-    target_repo: rondo-helm-local
+    kind: chart
+    path: probe-chart
 """
 
 _COMPONENT = """\
@@ -204,7 +205,7 @@ def test_rondo_own_images_stay_out_of_the_inventory(extract_helm_images, tmp_pat
 
     got = extract_helm_images._describe(
         str(chart_dir), ["rondo-toolbox:latest", "docker.io/probe/app:v1"],
-        "rondo-dashboard", "rondo-docker-local")
+        "rondo-dashboard")
     assert [r["image_path"] for r in got] == ["probe/app"]
 
 

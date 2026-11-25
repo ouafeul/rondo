@@ -350,7 +350,7 @@ func vmSources(tree *platform.Tree, builds []artifactBuild, deps *depsFile) ([]v
 	}
 	upstream := map[string]bool{}
 	for _, d := range append(deps.Binaries, deps.GrafanaPlugins...) {
-		upstream[d.TargetRepo+"/"+strings.ReplaceAll(d.TargetPath, "{version}", d.Version)] = true
+		upstream[genericRepo+"/"+strings.Trim(strings.ReplaceAll(d.Path, "{version}", d.Version), "/")] = true
 	}
 	var out []vmSource
 	var missing []string

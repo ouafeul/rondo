@@ -2,4 +2,5 @@ helm_charts:
 - name: fluent-bit
   version: "0.57.2"
   source_repo: "https://fluent.github.io/helm-charts"
-  target_repo: rondo-helm-local
+  kind: chart
+  path: fluent-bit

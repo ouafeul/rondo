@@ -16,16 +16,56 @@ def mirror_rpms():
     return mod
 
 
-def test_target_url_keeps_the_scheme(mirror_rpms):
-    got = mirror_rpms.rpm_target_url(
-        "https://arti/artifactory/", "/rondo-rpms-local/", "/el9/", "httpd-2.4.rpm")
-    assert got == "https://arti/artifactory/rondo-rpms-local/el9/httpd-2.4.rpm"
+def make_repo(tmp_path):
+    work = tmp_path / "work"
+    (work / "repodata").mkdir(parents=True)
+    (work / "httpd-2.4.rpm").write_bytes(b"rpm")
+    (work / "repodata" / "primary.xml.gz").write_bytes(b"primary")
+    (work / "repodata" / "repomd.xml").write_text("<repomd/>")
+    return work
 
 
-def test_target_url_without_prefix(mirror_rpms):
-    got = mirror_rpms.rpm_target_url(
-        "https://arti/artifactory", "rondo-rpms-local", "", "httpd.rpm")
-    assert got == "https://arti/artifactory/rondo-rpms-local/httpd.rpm"
+def test_upload_tree_puts_packages_then_metadata_with_sidecars(mirror_rpms, mirror_common, tmp_path):
+    work = make_repo(tmp_path)
+    dest = tmp_path / "site"
+    order = []
+
+    class Spy(mirror_common.DirStore):
+        def put(self, rel, local):
+            order.append(rel)
+            super().put(rel, local)
+
+    results = mirror_rpms.upload_tree(str(work), Spy(str(dest)), "el9", True, 1)
+    assert set(results.values()) == {"ok"}
+    assert (dest / "el9" / "httpd-2.4.rpm").read_bytes() == b"rpm"
+    assert (dest / "el9" / "repodata" / "repomd.xml").exists()
+    assert (dest / "el9" / "httpd-2.4.rpm.sha256").read_text().split()[0] == \
+        mirror_common.sha256_of(work / "httpd-2.4.rpm")
+    assert order.index("el9/repodata/repomd.xml") > order.index("el9/repodata/primary.xml.gz")
+    assert order.index("el9/repodata/primary.xml.gz") > order.index("el9/httpd-2.4.rpm")
+
+
+def test_upload_tree_skips_what_the_sidecar_covers(mirror_rpms, mirror_common, tmp_path):
+    work = make_repo(tmp_path)
+    store = mirror_common.DirStore(str(tmp_path / "site"))
+    mirror_rpms.upload_tree(str(work), store, "el9", True, 1)
+    (work / "repodata" / "repomd.xml").write_text("<repomd rev='2'/>")
+    again = mirror_rpms.upload_tree(str(work), store, "el9", True, 1)
+    assert again["el9/httpd-2.4.rpm"] == "skip"
+    assert again["el9/repodata/repomd.xml"] == "ok"
+
+
+def test_build_repodata_runs_createrepo_c(mirror_rpms, stub_bin, tmp_path):
+    marker = tmp_path / "called"
+    stub_bin("createrepo_c", f'echo "$@" > {marker}')
+    assert mirror_rpms.build_repodata(str(tmp_path)) is True
+    assert str(tmp_path) in marker.read_text()
+
+
+def test_build_repodata_without_createrepo_c_says_so(mirror_rpms, monkeypatch, capsys):
+    monkeypatch.setenv("PATH", "/nonexistent")
+    assert mirror_rpms.build_repodata("/tmp") is False
+    assert "createrepo_c is not installed" in capsys.readouterr().err
 
 
 def test_load_packages_separates_upstream_repos(mirror_rpms, tmp_path):
@@ -105,9 +145,5 @@ def test_manifest_rpm_packages_stays_readable_by_the_script():
 
     assert len(repos) == 1, "exactly one _repos entry expected as soon as there are packages"
     assert repos[0]["upstream_repos"], "no upstream repository declared"
-    targets = {e["target_repo"] for e in entries}
-    assert len(targets) == 1, f"the entries target several repositories: {targets}"
-    (target,) = targets
-    assert "rpm" in target, (
-        f"target_repo {target!r}: packages must target the RPM repository, never the "
-        "generic or docker one")
+    assert {e["kind"] for e in packages} == {"rpm"}, "rpm_packages entries are kind: rpm"
+    assert len({e["path"] for e in packages}) == 1, "the entries feed several repository paths"
