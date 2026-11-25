@@ -45,36 +45,43 @@ binaries:
     source_url: "https://github.com/opentofu/opentofu/releases/download/v{version}/tofu_{version}_linux_amd64.zip"
     kind: file
     path: "opentofu/{version}/tofu_{version}_linux_amd64.zip"
+    # sha256 of the artefact at this version: `rondo` refuses a download that does not match.
+    sha256: "8279a6c6d4044899ae77190fc50c40c147615a76aca13ea605d68320c424c2a6"
 
   - name: helm
     version: "v3.22.1"
     source_url: "https://get.helm.sh/helm-{version}-linux-amd64.tar.gz"
     kind: file
     path: "helm/{version}/helm-{version}-linux-amd64.tar.gz"
+    sha256: "896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea"
 
   - name: kubectl
     version: "v1.34.13"
     source_url: "https://dl.k8s.io/release/{version}/bin/linux/amd64/kubectl"
     kind: file
     path: "kubectl/{version}/kubectl"
+    sha256: "b4bb494e9466a7a94bb851414548bc0d3e2f8da90757e6eccc3371e648648591"
 
   - name: k9s
     version: "v0.40.5"
     source_url: "https://github.com/derailed/k9s/releases/download/{version}/k9s_Linux_amd64.tar.gz"
     kind: file
     path: "k9s/{version}/k9s_Linux_amd64.tar.gz"
+    sha256: "63dcf6817b2c391ccb4a8b7ee313f5990f5accfa0e55a72c769b73c303a03e01"
 
   - name: yq
     version: "v4.44.6"
     source_url: "https://github.com/mikefarah/yq/releases/download/{version}/yq_linux_amd64"
     kind: file
     path: "yq/{version}/yq_linux_amd64"
+    sha256: "0c2b24e645b57d8e7c0566d18643a6d4f5580feeea3878127354a46f2a1e4598"
 
   - name: helmfile
     version: "0.171.0"
     source_url: "https://github.com/helmfile/helmfile/releases/download/v{version}/helmfile_{version}_linux_amd64.tar.gz"
     kind: file
     path: "helmfile/{version}/helmfile_{version}_linux_amd64.tar.gz"
+    sha256: "c190fd305307ea3fd41a91a95b3341100a1ede239cf32e225564a1ece286fb1b"
 
   # Last helm-diff with a command/hooks plugin.yaml: later ones need Helm >= 3.18.
   - name: helm-diff

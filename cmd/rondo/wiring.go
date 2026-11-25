@@ -206,6 +206,10 @@ func (d *deps) ensureTools(ctx context.Context) error {
 		return nil
 	}
 	mirror := d.cfg.Mirror()
+	digests, err := versions.ToolDigests(filepath.Join(d.ws.ProjectDir, "manifests", "dependencies.yaml"))
+	if err != nil {
+		log.Warn("versions: dependencies.yaml unreadable, no pinned tool checksums", "err", err)
+	}
 	inst := &tools.Installer{
 		BaseURL:   mirror.FilesRepoURL(),
 		User:      mirror.Username,
@@ -213,6 +217,7 @@ func (d *deps) ensureTools(ctx context.Context) error {
 		BinDir:    d.ws.BinDir,
 		PluginDir: d.ws.HelmPluginsDir(),
 		Versions:  d.env,
+		Digests:   digests,
 	}
 	if flagDryRun {
 		return inst.Describe(ctx)

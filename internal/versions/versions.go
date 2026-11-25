@@ -3,6 +3,7 @@ package versions
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"sigs.k8s.io/yaml"
 )
@@ -10,6 +11,33 @@ import (
 type entry struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	SHA256  string `json:"sha256,omitempty"`
+}
+
+// toolOf is the workstation tool each binary dependency installs (internal/tools).
+var toolOf = map[string]string{
+	"opentofu": "tofu", "helm": "helm", "helmfile": "helmfile", "helm-diff": "helm-diff",
+	"kubectl": "kubectl", "k9s": "k9s", "yq": "yq",
+}
+
+// ToolDigests are the sha256 that dependencies.yaml pins for the workstation tools, by tool
+// name, each for the version next to it.
+func ToolDigests(dependenciesPath string) (map[string]string, error) {
+	raw, err := os.ReadFile(dependenciesPath)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", dependenciesPath, err)
+	}
+	var m manifest
+	if err := yaml.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", dependenciesPath, err)
+	}
+	out := map[string]string{}
+	for _, b := range m.Binaries {
+		if tool, ok := toolOf[b.Name]; ok && b.SHA256 != "" {
+			out[tool] = strings.ToLower(strings.TrimSpace(b.SHA256))
+		}
+	}
+	return out, nil
 }
 
 type manifest struct {

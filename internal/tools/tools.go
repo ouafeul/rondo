@@ -53,6 +53,8 @@ type Installer struct {
 	BinDir         string
 	PluginDir      string
 	Versions       map[string]string
+	// Digests are the sha256 dependencies.yaml pins, by tool name (versions.ToolDigests).
+	Digests map[string]string
 }
 
 // Last helm-diff whose plugin.yaml uses command/hooks; later ones need Helm 3.18.
@@ -104,7 +106,7 @@ func (in *Installer) installHelmDiff(ctx context.Context) error {
 	}
 	v := def(in.Versions, "HELM_DIFF_VERSION", helmDiffDefaultVersion)
 	log.Info("downloading", "tool", "helm-diff", "version", v)
-	body, err := httpx.Get(ctx, in.HTTP, in.User, in.Password, in.BaseURL+"/"+helmDiffPath(v))
+	body, err := in.download(ctx, "helm-diff", in.BaseURL+"/"+helmDiffPath(v))
 	if err != nil {
 		return fmt.Errorf("plugin helm-diff: %w", err)
 	}
@@ -135,7 +137,7 @@ func (in *Installer) each(fn func(t tool, dest string) error) error {
 }
 
 func (in *Installer) fetchAndInstall(ctx context.Context, t tool, dest string) error {
-	body, err := httpx.Get(ctx, in.HTTP, in.User, in.Password, in.BaseURL+"/"+t.path)
+	body, err := in.download(ctx, t.name, in.BaseURL+"/"+t.path)
 	if err != nil {
 		return err
 	}
