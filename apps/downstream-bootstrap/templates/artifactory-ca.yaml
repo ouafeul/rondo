@@ -1,0 +1,19 @@
+{{- if .Values.artifactoryCA.pem }}
+{{- range .Values.artifactoryCA.namespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ . }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $.Values.artifactoryCA.secretName }}
+  namespace: {{ . }}
+type: Opaque
+stringData:
+  ca.crt: |
+{{ $.Values.artifactoryCA.pem | indent 4 }}
+{{- end }}
+{{- end }}

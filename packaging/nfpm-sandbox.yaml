@@ -1,0 +1,43 @@
+name: rondo-sandbox${PKG_SUFFIX}
+arch: amd64
+platform: linux
+version: ${VERSION}
+version_schema: none
+maintainer: "RONDO maintainers <361086432+ouafeul@users.noreply.github.com>"
+vendor: "RONDO"
+homepage: "https://github.com/ouafeul/rondo"
+license: "MIT"
+section: devel
+description: |
+  RONDO component sandbox, on k3d clusters on the workstation
+  Runs on the workstation what the rondo CLI runs on a site (deploy, deploy downstreams,
+  component install), for charts as for machines (containers), and tells whether
+  RONDO judges the component deployed. Ships the RONDO tree of its version; its images come
+  from Artifactory.
+  Prerequisites not packaged: Docker (with `docker login` to Artifactory), k3d, kubectl, helm.
+
+depends:
+  - bash
+  - curl
+  - openssl
+
+conflicts:
+  - ${PKG_CONFLICTS}
+
+contents:
+  - src: ./rondo-sandbox-linux-amd64
+    dst: /usr/bin/rondo-sandbox
+    file_info:
+      mode: 0755
+  - src: ./completions/rondo-sandbox.bash
+    dst: /usr/share/bash-completion/completions/rondo-sandbox
+    file_info:
+      mode: 0644
+  - src: ./completions/_rondo-sandbox
+    dst: /usr/share/zsh/site-functions/_rondo-sandbox
+    file_info:
+      mode: 0644
+  - src: ./completions/rondo-sandbox.fish
+    dst: /usr/share/fish/vendor_completions.d/rondo-sandbox.fish
+    file_info:
+      mode: 0644

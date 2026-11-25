@@ -1,0 +1,33 @@
+ INFO archive downloaded  bytes=48213
+ INFO remote target  auth=token server=https://rancher.mgmt.rondo.example/k8s/clusters/c-m-7x2kq9vd target=rke2-a
+ INFO secrets injected into the values  tokens=2
+ INFO helm upgrade --install  chart=oci://registry.example/rondo-helm-local/grafana namespace=monitoring release=grafana version=10.1.2
+Pulled: registry.example/rondo-helm-local/grafana:10.1.2
+Digest: sha256:4be1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1
+upgrade.go:142: [debug] preparing upgrade for grafana
+upgrade.go:150: [debug] performing update for grafana
+upgrade.go:322: [debug] creating upgraded release for grafana
+client.go:338: [debug] checking 14 resources for changes
+client.go:621: [debug] Patch ConfigMap "grafana" in namespace monitoring
+client.go:621: [debug] Patch Secret "grafana" in namespace monitoring
+client.go:621: [debug] Patch Deployment "grafana" in namespace monitoring
+client.go:621: [debug] Patch Ingress "grafana" in namespace monitoring
+upgrade.go:430: [debug] waiting for release grafana resources (created: 0 updated: 14  deleted: 0)
+wait.go:48: [debug] beginning wait for 14 resources with timeout of 5m0s
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+ WARN pod not ready  pod=monitoring/grafana-6c9f8b7d5-pk2lw reason=ImagePullBackOff message=Back-off pulling image "rondo-docker-local.registry.example/grafana/grafana:12.1.1"
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+ WARN pod not ready  pod=monitoring/grafana-6c9f8b7d5-pk2lw reason=ImagePullBackOff message=Back-off pulling image "rondo-docker-local.registry.example/grafana/grafana:12.1.1"
+ready.go:303: [debug] Deployment is not ready: monitoring/grafana. 0 out of 1 expected pods are ready
+upgrade.go:478: [debug] warning: Upgrade "grafana" failed: context deadline exceeded
+upgrade.go:496: [debug] Upgrade failed and atomic is set, rolling back to last successful release
+history.go:56: [debug] getting history for release grafana
+rollback.go:65: [debug] preparing rollback of grafana
+rollback.go:131: [debug] creating rolled back release for grafana
+rollback.go:259: [debug] updating status for rolled back release for grafana
+Error: UPGRADE FAILED: release grafana failed, and has been rolled back due to atomic being set: context deadline exceeded
+ERROR helm upgrade --install grafana  err=exit status 1

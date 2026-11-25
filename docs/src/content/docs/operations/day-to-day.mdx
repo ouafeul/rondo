@@ -1,0 +1,106 @@
+---
+title: Day to day
+description: Monitor, update, add, move, remove, back up.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Monitor
+
+<Tabs>
+  <TabItem label="kubectl">
+    ```bash
+    kubectl -n rondo-system get targets,enrollments          # alias: enroll
+    kubectl -n rondo-system get enrollments -o wide          # + message, objects, phase
+    kubectl -n rondo-system describe enrollment <name>       # conditions, target, history
+    kubectl -n rondo-system get jobs                         # one Job per action
+    kubectl -n rondo-system logs job/<job>                   # named in status.lastAttempt
+    k9s -n rondo-system                                      # in ~/.rondo/bin
+    ```
+  </TabItem>
+  <TabItem label="Dashboard">
+    `https://rondo.<ingressBaseDomain>`, read-only, refreshed every 5 s:
+
+    | View | Shows |
+    |---|---|
+    | Overview | Ready / total per Target, Component, Enrollment |
+    | Components | archetype, chart, version, groups, dependsOn, Enrollments |
+    | Enrollments | phase, Ready, health and message, version, hash, objects, failures, history |
+    | Targets | type, server, roles, values |
+    | Jobs and logs | verb, owner, state, pod logs |
+    | Services | `rondo-system` pods, image, restarts |
+
+    The dashboard has no authentication of its own: only the management ingress reaches it (NetworkPolicy), and it reads no Secret.
+  </TabItem>
+  <TabItem label="Rancher">
+    `https://rancher.<ingressBaseDomain>` shows the rke2 clusters, their nodes and their workloads.
+  </TabItem>
+</Tabs>
+
+The columns of `kubectl get enrollments`: `Component`, `Target` (resolved), `Version` (applied), `Health`, `Ready`, `Age`; with `-o wide`: `Objects`, `Message`, `Phase`.
+
+## Run again
+
+Every command is **idempotent**: after a failure, fix the cause and run the same command again. A tofu plan that only creates or updates is applied; a plan that **destroys** (replacements included) is shown and asks for `y`. `--yes` agrees in advance, `--dry-run` shows without doing anything.
+
+## Update
+
+| What | How |
+|---|---|
+| RONDO (CLI, operator, base layer) | new CLI, `rondo deploy`, then `rondo deploy downstreams` if `platform/enrollments` changed |
+| a component | `rondo component install <name>` (latest published version) or `--version <v>` |
+| the management cluster, a vSphere Target | edit `rondo.yaml`, `rondo deploy` |
+| an rke2 cluster | edit `rondo.yaml`, `rondo deploy downstreams <target>` |
+| a secret | edit `rondo.yaml`, `rondo deploy` (rewrites the Secrets) |
+| a Target value | edit `componentValues`, `rondo deploy` (vSphere) or `rondo deploy downstreams <t>` |
+
+`rondo deploy` deploys the operator at the **CLI's version**: changing the CLI changes the operator.
+
+<Aside type="caution" title="A changed secret does not re-run a chart">
+A chart only compares its values, `${secrets.*}` tokens included, not the content of the Secrets. To apply it again, clear the fingerprint:
+
+```bash
+kubectl -n rondo-system patch enrollment <name> --subresource=status --type=merge \
+  -p '{"status":{"appliedValuesHash":""}}'
+```
+
+A machine component, on the other hand, replays its installer when a `secretsFrom` Secret changes.
+</Aside>
+
+## Add, move
+
+- **An rke2 target**: declare it in `rondo.yaml`, then `rondo deploy` (internal DNS) and `rondo deploy downstreams <target>`.
+- **A role**: change it in `rondo.yaml`, then redeploy the target. Enrollments already resolved stay on their target.
+- **A component to another target**:
+
+  ```bash
+  # 1. move the role in rondo.yaml, redeploy both targets
+  rondo deploy downstreams rke2-a rke2-b
+  # 2. uninstall from the old target
+  kubectl -n rondo-system delete enrollment <name>
+  # 3. recreate: the Enrollment resolves the role on the new target
+  rondo component install <component>
+  ```
+
+## Remove
+
+In reverse install order:
+
+```bash
+rondo component uninstall <name>       # each Enrollment uninstalls its workload, then disappears
+kubectl -n rondo-system get enrollments -w   # wait until they are gone
+rondo destroy downstreams [target...]  # base layer, rke2 cluster, Target
+rondo destroy                          # the management cluster
+```
+
+<Aside type="danger">`rondo destroy downstreams` does not wait for components to be uninstalled before `tofu destroy`, and `rondo destroy` does not touch the downstreams. Keep the order.</Aside>
+
+## Back up
+
+| What | Where | If lost |
+|---|---|---|
+| `rondo.yaml`, `state/` | `~/.rondo` (or `envs/<env>/`) | **back it up** with the workstation |
+| tofu states | Artifactory, `tofuStateRepository` | backed up with Artifactory |
+| Targets, Secrets, Components, Enrollments | `rondo-system` | `rondo deploy`, `rondo deploy downstreams`, `rondo component install` rewrite them |
+| Rancher token | `state/rondo.state.json` | regenerated from `secrets.rancherBootstrapPassword` |
+| machine SSH key | Secret `rondo-vm-ssh` | **generated once**: back it up, a new key does not give access to existing machines |

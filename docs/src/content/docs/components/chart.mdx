@@ -1,0 +1,96 @@
+---
+title: Chart component
+description: Every field of a Helm Component and its Enrollment, and what the Job does with them.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+```yaml title="components/grafana.yaml"
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata: {name: grafana}
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/grafana
+    version: 10.1.2
+  namespace: monitoring
+  releaseName: grafana                 # default: the Component's name (≤ 53 chars)
+  dependsOn: [{name: traefik}]
+  values:
+    adminPassword: ${secrets.grafanaAdminPassword}
+    ingress:
+      hosts: [grafana.monitoring.${INGRESS_BASE_DOMAIN}]
+    persistence: {storageClassName: ${target.values.storageClass}}
+  valuesFrom:
+    - secretRef: {name: acme}
+      keys: [grafanaAdminPassword]
+  health:
+    - {group: monitoring.coreos.com, kind: Prometheus, condition: Available}
+```
+
+## Fields
+
+| Field | Rule | Effect |
+|---|---|---|
+| `chart.oci` | `oci://…`, chart name included | the host is used for the Job's `helm registry login` |
+| `chart.version` | exact version (`1.2.3`, `v1.2.3-rc.1`), never a range | compared with `status.appliedChartVersion` |
+| `chart.published` | optional | the chart is published by the component's CI: `lint --deps` does not look for it in the dependency manifest |
+| `namespace` | required for a chart, RFC 1123, ≤ 63 | `helm --namespace`, created if missing |
+| `releaseName` | ≤ 53 | release name |
+| `values` | free YAML, tokens allowed | merged with the Enrollment, then hashed |
+| `valuesFrom[]` | `secretRef` **or** `configMapRef`, non-empty `keys` | sources of `${secrets.<key>}`, read in `rondo-system` |
+| `dependsOn[]` | Component names | the Enrollment waits until these Components are `Ready` **on the same target** |
+| `health[]` | ≤ 32 rules | health of kinds `rondo-probe` does not know |
+
+## The Enrollment
+
+```yaml title="enrollments/grafana.yaml"
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata: {name: grafana}
+spec:
+  component: grafana
+  target: monitoring            # name or role of a single Target
+  values:                       # override, deep merge
+    replicas: 2
+  valuesFrom: []                # added to the Component's
+  policy:
+    timeout: 15m                # default 10m: limit of the Job and of helm
+    atomic: true                # default true: rollback on failure
+    wait: true                  # default true: waits for resources to be ready
+    createNamespace: true       # default true
+```
+
+The Job runs:
+
+```bash
+helm upgrade --install <release> <chart.oci> --version <v> --namespace <ns> \
+  --create-namespace --wait --atomic --timeout <policy.timeout − 30 s> -f /work/values.json
+```
+
+then reads `helm get manifest` to build the inventory (`status.inventory`) and a first health.
+
+<Aside type="note">`policy.skipDryRunOnMissingCRD` is accepted by the CRD but read by no code.</Aside>
+
+## Targeting the management cluster
+
+The management cluster always carries the `management` role: `target: management` reaches it on any site, with the `rondo-exec` ServiceAccount (cluster-admin) instead of a kubeconfig.
+
+## Host names
+
+`<x>.<role>.${INGRESS_BASE_DOMAIN}` resolves to the ingress IP of the target that carries the role, on the management cluster (CoreDNS) as in the site's DNS. A component exposes its ingresses under its role without knowing the cluster's name.
+
+## Images
+
+Use `${target.values.imageRegistry}` as is for the registry: it is `<host>/<repository>` on the management cluster and `<repository>.<host>` on rke2. The base-layer charts all do so.
+
+## Health
+
+`rondo-probe` knows workloads, Jobs, Pods, PVCs, the cert-manager and RONDO kinds, and stateless objects (ConfigMap, Service, RBAC, Ingress, IngressRoute…). Any other kind is judged on its `Ready` condition if it has one; otherwise it stays `Unknown`, and the Enrollment with it. Declare a rule:
+
+| `condition` | Verdict |
+|---|---|
+| empty | `Healthy` as soon as the object exists |
+| `Available` | `True` → Healthy, `False` → Degraded, `Unknown` → Progressing, missing → Unknown |
+
+Rules do not replace the built-in tables: a Deployment is always judged on its replicas.

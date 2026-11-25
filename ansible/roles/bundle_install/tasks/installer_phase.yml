@@ -1,0 +1,35 @@
+---
+- name: "Run phase {{ _phase.name }}"
+  ansible.builtin.command:
+    argv: >-
+      {{ ([rondo_workdir + '/' + _phase.script]
+          + (([_inst.config_flag, _inst_dir + '/' + _inst.config_file] if (_inst.config_flag | length > 0 and _inst.config_file | length > 0) else []))
+          + (([_inst.secrets_flag, _inst_dir + '/' + _inst.secrets_file] if (_inst.secrets_flag | length > 0 and _inst.secrets_file | length > 0) else []))
+          + (([_inst.steps_flag, _phase.steps | join(',')] if (_phase.steps | length > 0) else []))
+          + (([_inst.skip_flag, _phase.skip_steps | join(',')] if (_phase.skip_steps | length > 0) else []))
+          + _phase.args) }}
+    chdir: "{{ rondo_workdir }}"
+  become: "{{ _inst.become | bool }}"
+  register: rondo_install
+  changed_when: true
+  timeout: "{{ _phase.timeout | default(_inst.timeout) | int }}"
+  failed_when: false
+
+- name: "Output of phase {{ _phase.name }}"
+  ansible.builtin.debug:
+    var: rondo_install.stdout_lines
+
+- name: "Error output of phase {{ _phase.name }}"
+  ansible.builtin.debug:
+    var: rondo_install.stderr_lines
+  when: rondo_install.stderr | default('') | length > 0
+
+- name: "Fail if phase {{ _phase.name }} failed"
+  ansible.builtin.fail:
+    msg: >-
+      phase {{ _phase.name }} ({{ _phase.script }}) failed on
+      {{ inventory_hostname }}: exit code
+      {{ rondo_install.rc | default('missing, task killed by its time bound') }}.
+      {{ rondo_install.msg | default('') }} The following phases are NOT run.
+      The full output is above.
+  when: rondo_install.rc | default(1) != 0

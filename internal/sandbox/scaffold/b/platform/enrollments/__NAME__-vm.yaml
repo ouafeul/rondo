@@ -1,0 +1,8 @@
+# Where: the vSphere Target holding the dmz role.
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: __NAME__-vm
+spec:
+  component: __NAME__-vm
+  target: dmz

@@ -1,0 +1,38 @@
+---
+- name: "Wait for the cloud-init pre-stage to finish"
+  ansible.builtin.wait_for:
+    path: /var/lib/rondo-cloud-init-done
+    timeout: 900
+  register: rondo_prestage
+  failed_when: false
+
+- name: "Warn if the pre-stage marker is missing"
+  ansible.builtin.debug:
+    msg: >-
+      /var/lib/rondo-cloud-init-done still missing after 900 s. Was the machine
+      provisioned by terraform/vm? Carrying on, but a dnf failure on a lock is
+      then the likely cause.
+  when: rondo_prestage.failed | default(false)
+
+- name: "Component working directory"
+  ansible.builtin.file:
+    path: "{{ rondo_workdir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+
+- name: "Artifactory RPM repositories"
+  ansible.builtin.include_tasks: rpm_repos.yml
+  when: rondo_rpm_repos | length > 0
+
+- name: "Component artifacts"
+  ansible.builtin.include_tasks: artifacts.yml
+  when: rondo_artifacts | length > 0
+
+- name: "Component installer"
+  ansible.builtin.include_tasks: installer.yml
+  when:
+    - rondo_run_installer | bool
+    - rondo_installer.phases | default([]) | length > 0

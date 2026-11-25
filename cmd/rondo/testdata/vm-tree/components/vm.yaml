@@ -1,0 +1,38 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: vm
+spec:
+  vm:
+    template: ${target.values.vmTemplate}
+    sizing:
+      cpu: 4
+      memoryMb: 1024
+      diskGb: 10
+    groups:
+      - name: app
+        replicas: 1
+    config:
+      HELLO_MESSAGE:
+        value: ${target.values.helloMessage}
+    artifacts:
+      - repo: ${ARTIFACTORY_GENERIC_REPO}
+        provenance: component
+        path: components/vm/1.0.0/payload.tar.gz
+        extract: true
+    installer:
+      version: "1.0.0"
+      configFile: install.conf
+      secretsFile: secrets.env
+      secretsFrom:
+        - secretRef:
+            name: vm-secrets
+          keys:
+            - HELLO_SECRET
+      phases:
+        - name: install
+          script: deploy/install.sh
+          timeout: 3m
+        - name: verify
+          script: deploy/verify.sh
+          timeout: 2m

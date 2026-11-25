@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "timonwong.shellcheck",
+    "foxundermoon.shell-format",
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "redhat.vscode-yaml",
+    "hashicorp.terraform",
+    "tim-koehler.helm-intellisense",
+    "github.vscode-github-actions",
+    "DavidAnson.vscode-markdownlint",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}

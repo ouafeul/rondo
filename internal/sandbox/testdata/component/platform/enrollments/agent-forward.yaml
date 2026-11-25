@@ -1,0 +1,7 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: agent-forward
+spec:
+  component: agent-forward
+  target: management

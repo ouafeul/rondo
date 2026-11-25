@@ -1,0 +1,147 @@
+name: Images
+
+on:
+  pull_request:
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - 'build/**'
+      - 'manifests/dependencies.yaml'
+      - 'manifests/crds/**'
+      - '.github/workflows/images.yml'
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: rondo-controller
+            context: .
+            dockerfile: build/controller/Dockerfile
+          - name: rondo-toolbox
+            context: .
+            dockerfile: build/toolbox/Dockerfile
+          - name: rondo-component-toolbox
+            context: .
+            dockerfile: build/component-toolbox/Dockerfile
+          - name: rondo-sandbox-machine
+            context: .
+            dockerfile: build/sandbox-machine/Dockerfile
+          - name: rondo-ci-toolbox
+            context: build/ci-toolbox
+            dockerfile: build/ci-toolbox/Dockerfile
+    env:
+      PUSH: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Versions
+        id: v
+        run: |
+          dep() { grep -A2 "name: $1\$" manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}'; }
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then version="${GITHUB_REF_NAME}"; else version="edge-main-${GITHUB_SHA::8}"; fi
+          {
+            echo "version=${version}"
+            echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER}/${{ matrix.name }}"
+            echo "build-args<<EOF"
+            echo "VERSION=${version}"
+            echo "COMMIT=${GITHUB_SHA}"
+            echo "HELM_VERSION=$(dep helm | sed 's/^v//')"
+            echo "KUBECTL_VERSION=$(dep kubectl)"
+            echo "TOFU_VERSION=$(dep opentofu)"
+            echo "ANSIBLE_CORE_VERSION=$(dep ansible-core)"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.v.outputs.image }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=edge-main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ steps.v.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,format=long,enable=${{ github.event_name != 'pull_request' }}
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=${{ matrix.name }}
+            org.opencontainers.image.licenses=MIT
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build for scan
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ steps.v.outputs.build-args }}
+          load: true
+          tags: scan/${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: scan/${{ matrix.name }}:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+
+      - uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4
+        if: env.PUSH == 'true'
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: env.PUSH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        id: push
+        if: env.PUSH == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ steps.v.outputs.build-args }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.name }}
+
+      - name: Attest build provenance
+        if: env.PUSH == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.v.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

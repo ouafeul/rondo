@@ -1,0 +1,92 @@
+---
+// The order of EnrollmentReconciler.Reconcile (internal/controllers/enrollment.go): first closed gate wins.
+type Gate = { id: string; q: string; no: string; tone: 'err' | 'warn' | 'ok' | 'info'; then: string; requeue?: string };
+
+const gates: Gate[] = [
+  { id: 'del', q: 'Deleted?', no: 'uninstall', tone: 'info', then: 'helm-uninstall or vm-destroy, then the finalizer is removed.', requeue: '15 s' },
+  { id: 'job', q: 'A Job running?', no: 'collects the Job', tone: 'info', then: 'Success: Applied=True, counter at 0. Failure: consecutiveFailures+1, delayed retry.', requeue: '15 s' },
+  { id: 'res', q: 'Component found, a single Target?', no: 'Stalled', tone: 'err', then: 'Component not found, no Target, several Targets, or role moved.' },
+  { id: 'fail', q: 'Fewer than 10 consecutive failures?', no: 'Stalled', tone: 'err', then: 'No more retries until the spec changes or the counter is reset to 0.' },
+  { id: 'arch', q: 'Archetype accepted by the target?', no: 'Stalled', tone: 'err', then: 'Chart to vSphere, or machines to Kubernetes.' },
+  { id: 'ready', q: 'Target Ready?', no: 'waiting', tone: 'warn', then: 'Ready=False, TargetUnreachable.', requeue: '30 s' },
+  { id: 'deps', q: 'dependsOn Ready on the same target?', no: 'waiting', tone: 'warn', then: 'Ready=False, DependencyPending: "waiting for [...] on <target>".', requeue: '30 s' },
+  { id: 'diff', q: 'Version or values changed?', no: 'at rest', tone: 'ok', then: 'Ready recomputed from the health.', requeue: '5 min' },
+  { id: 'lock', q: 'Lease free?', no: 'waiting', tone: 'warn', then: 'Another holder: new attempt.', requeue: '20 s' },
+];
+
+// for each scenario: index of the gate where the path leaves, and how ('no' or 'yes' for the deletion/job gates)
+const scenarios = [
+  { id: 'new', label: 'New Enrollment, everything ready', stop: -1 },
+  { id: 'idle', label: 'Nothing changed', stop: 7 },
+  { id: 'role', label: 'No target carries the role', stop: 2 },
+  { id: 'deps', label: 'traefik not Ready yet', stop: 6 },
+  { id: 'ten', label: '10th failure', stop: 3 },
+  { id: 'running', label: 'A Job is already running', stop: 1 },
+  { id: 'delete', label: 'kubectl delete enrollment', stop: 0 },
+];
+---
+
+<div class="not-content rondo-widget gates" data-scenarios={JSON.stringify(scenarios)}>
+  <header><span class="rondo-kicker">Scenarios</span> One reconciliation, gate by gate</header>
+  <div class="scen" role="group" aria-label="Scenario">
+    {scenarios.map((s, i) => <button type="button" data-s={s.id} aria-pressed={i === 0 ? 'true' : 'false'}>{s.label}</button>)}
+  </div>
+  <ol>
+    {gates.map((g, i) => (
+      <li data-i={i}>
+        <div class="q"><span class="n">{i + 1}</span>{g.q}</div>
+        <div class="out" data-tone={g.tone}>
+          <span class="arrow">{i < 2 ? 'yes →' : 'no →'}</span>
+          <span class="rondo-pill" data-tone={g.tone === 'ok' ? 'ok' : g.tone === 'info' ? 'info' : g.tone}>{g.no}</span>
+          <span class="then">{g.then}{g.requeue && <em> Requeued in {g.requeue}.</em>}</span>
+        </div>
+      </li>
+    ))}
+    <li class="launch">
+      <div class="q"><span class="n">▶</span>Lease taken, Job started</div>
+      <div class="out" data-tone="ok"><span class="then">helm-apply, vm-apply or vm-install. <em>Requeued in 15 s.</em></span></div>
+    </li>
+  </ol>
+</div>
+
+<style>
+  .scen { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1rem; }
+  ol { list-style: none; padding: 0; margin: 0; position: relative; }
+  ol::before { content: ''; position: absolute; left: 0.85rem; top: 0.8rem; bottom: 1.2rem; width: 2px; background: var(--rondo-border); }
+  li { display: grid; grid-template-columns: minmax(13rem, 1fr) 1.4fr; gap: 0.75rem; align-items: center; margin: 0 0 0.45rem; position: relative; transition: opacity 0.2s; }
+  @media (max-width: 45rem) { li { grid-template-columns: 1fr; gap: 0.25rem; } }
+  .q { display: flex; align-items: center; gap: 0.6rem; font-size: var(--sl-text-sm); font-weight: 600; }
+  .n { flex: none; width: 1.75rem; height: 1.75rem; border-radius: 50%; display: grid; place-items: center; font-size: var(--sl-text-xs); background: var(--sl-color-black); border: 2px solid var(--rondo-border); position: relative; z-index: 1; }
+  .out { display: flex; align-items: baseline; gap: 0.5rem; font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); padding: 0.35rem 0.6rem; border-radius: 0.5rem; border: 1px dashed transparent; }
+  .arrow { font-family: var(--sl-font-mono); flex: none; }
+  .then em { font-style: normal; color: var(--sl-color-gray-2); }
+  /* path highlighting */
+  .gates[data-active] li { opacity: 0.35; }
+  .gates[data-active] li.pass { opacity: 1; }
+  .gates[data-active] li.pass .n { border-color: var(--rondo-ok); color: var(--rondo-ok); }
+  .gates[data-active] li.stop { opacity: 1; }
+  .gates[data-active] li.stop .n { border-color: var(--sl-color-accent); background: var(--sl-color-accent); color: var(--sl-color-black); }
+  .gates[data-active] li.stop .out { border-color: currentColor; background: var(--rondo-surface-2); color: var(--sl-color-white); }
+  .gates[data-active] li.pass .out { display: none; }
+  .launch .n { font-size: 0.65rem; }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.gates').forEach((root) => {
+    const scenarios: { id: string; stop: number }[] = JSON.parse(root.dataset.scenarios!);
+    const items = [...root.querySelectorAll<HTMLLIElement>('ol > li')];
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('.scen button')];
+    const show = (id: string) => {
+      const s = scenarios.find((x) => x.id === id)!;
+      const stop = s.stop < 0 ? items.length - 1 : s.stop;
+      root.dataset.active = id;
+      items.forEach((li, i) => {
+        li.classList.toggle('pass', i < stop);
+        li.classList.toggle('stop', i === stop);
+      });
+      buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === id)));
+    };
+    buttons.forEach((b) => b.addEventListener('click', () => show(b.dataset.s!)));
+    show(scenarios[0].id);
+  });
+</script>

@@ -1,0 +1,5 @@
+{% set pairs = [] %}
+{% for key in rondo_config | sort %}
+{% set _ = pairs.append({'key': key, 'value': rondo_config[key].value}) %}
+{% endfor %}
+{{ pairs | items2dict | to_nice_json }}

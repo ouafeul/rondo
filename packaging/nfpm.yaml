@@ -1,0 +1,27 @@
+name: rondo${PKG_SUFFIX}
+arch: amd64
+platform: linux
+version: ${VERSION}
+version_schema: none
+maintainer: "RONDO maintainers <361086432+ouafeul@users.noreply.github.com>"
+vendor: "RONDO"
+homepage: "https://github.com/ouafeul/rondo"
+license: "MIT"
+description: |
+  RONDO platform orchestrator (k3s management + RKE2 downstream).
+  Fetches its tools and IaC bundle from Artifactory at run time.
+
+depends:
+  - openssh-clients
+  - bash
+recommends:
+  - sshpass
+
+conflicts:
+  - ${PKG_CONFLICTS}
+
+contents:
+  - src: ./rondo-linux-amd64
+    dst: /usr/bin/rondo
+    file_info:
+      mode: 0755

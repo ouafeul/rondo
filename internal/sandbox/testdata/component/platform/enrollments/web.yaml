@@ -1,0 +1,7 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: web
+spec:
+  component: web
+  target: monitoring

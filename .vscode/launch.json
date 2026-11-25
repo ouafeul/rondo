@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "extract-helm-images",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/ci/extract-helm-images.py",
+      "args": [
+        "--manifest", "${workspaceFolder}/manifests/dependencies.yaml",
+        "--helm-sets",
+        "--target-registry", "localhost/rondo-docker-local"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "resolve-deps",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/ci/resolve-deps.py",
+      "args": [
+        "--manifest", "${workspaceFolder}/manifests/dependencies.yaml",
+        "--output", "${workspaceFolder}/deps-resolved.json"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

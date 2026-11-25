@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-path-provisioner
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-path-provisioner
+  template:
+    metadata:
+      labels:
+        app: local-path-provisioner
+    spec:
+      serviceAccountName: local-path-provisioner
+      priorityClassName: {{ .Values.priorityClassName }}
+      containers:
+        - name: local-path-provisioner
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["local-path-provisioner"]
+          args:
+            - start
+            - --config=/etc/config/config.json
+            - --service-account-name=local-path-provisioner
+            - --provisioner-name=rancher.io/local-path
+            - --configmap-name=local-path-config
+            # Repeated from the ConfigMap: extract-helm-images.py only sees this occurrence.
+            - --helper-image={{ .Values.helperImage.repository }}:{{ .Values.helperImage.tag }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config/
+      volumes:
+        - name: config-volume
+          configMap:
+            name: local-path-config

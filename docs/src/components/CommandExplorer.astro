@@ -1,0 +1,137 @@
+---
+import { commands, type Command } from '../data/cli';
+
+interface Props {
+  // restrict to these command ids, in this order
+  only?: string[];
+  // open on this one
+  open?: string;
+}
+
+const { only, open } = Astro.props;
+const list: Command[] = only ? only.map((id) => commands.find((c) => c.id === id)!) : commands;
+const first = open ?? list[0].id;
+const groups: Record<Command['group'], string> = {
+  cycle: 'Site lifecycle',
+  component: 'Components',
+  env: 'Environments',
+  misc: 'Other',
+};
+// the command words, without arguments
+const cmdWords = (usage: string) => usage.split(/\s+[[<|]|\s+--/)[0];
+const toolLabel = { workstation: 'workstation', tofu: 'tofu', ssh: 'ssh', helm: 'helm', kubectl: 'kubectl', http: 'http' };
+---
+
+<div class="not-content rondo-widget cmdx">
+  <header>
+    <span class="rondo-kicker">Explorer</span> What each command does
+    <label class="dry"><input type="checkbox" /> <code>--dry-run</code></label>
+  </header>
+  <div class="layout">
+    <nav aria-label="Commands">
+      {Object.entries(groups).map(([g, label]) => {
+        const items = list.filter((c) => c.group === g);
+        return items.length > 0 && (
+          <div class="grp">
+            {!only && <p>{label}</p>}
+            {items.map((c) => (
+              <button type="button" data-cmd={c.id} aria-pressed={c.id === first ? 'true' : 'false'}>
+                <code>{cmdWords(c.usage)}</code>
+              </button>
+            ))}
+          </div>
+        );
+      })}
+    </nav>
+    <div class="detail">
+      {list.map((c) => (
+        <section data-for={c.id} hidden={c.id !== first ? true : undefined}>
+          <pre class="usage"><span class="prompt">$</span> {c.usage}</pre>
+          <p class="sum">{c.summary}</p>
+          {c.confirm && (
+            <p class="confirm">
+              <span class="rondo-pill" data-tone="warn">confirmation</span> "{c.confirm}" (y/N), unless <code>--yes</code>
+            </p>
+          )}
+          {c.flags && (
+            <table class="flags">
+              <tbody>
+                {c.flags.map((f) => (
+                  <tr><td><code>{f.name}</code></td><td>{f.def && <code class="def">{f.def}</code>}</td><td>{f.help}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {c.steps && (
+            <ol class="steps">
+              {c.steps.map((s, i) => (
+                <li data-dry={s.dry ? 'alt' : 'skip'}>
+                  <div class="row">
+                    <span class="num">{i + 1}</span>
+                    <strong>{s.name}</strong>
+                    <span class={`tool t-${s.tool}`}>{toolLabel[s.tool]}</span>
+                  </div>
+                  <p class="does">{s.does}</p>
+                  {s.writes && <p class="writes">{s.writes.map((w) => <code>{w}</code>)}</p>}
+                  <p class="dryinfo">dry-run: {s.dry ?? 'skipped, or only logged'}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+          {c.notes?.map((n) => <p class="note">{n}</p>)}
+        </section>
+      ))}
+    </div>
+  </div>
+</div>
+
+<style>
+  header { flex-wrap: wrap; }
+  .dry { margin-left: auto; font-weight: 400; font-size: var(--sl-text-sm); display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+  .dry input { accent-color: var(--sl-color-accent); }
+  .layout { display: grid; grid-template-columns: minmax(12rem, 15rem) 1fr; gap: 1.25rem; }
+  @media (max-width: 50rem) { .layout { grid-template-columns: 1fr; } nav { display: flex; flex-wrap: wrap; gap: 0.35rem; } .grp p { display: none; } }
+  nav .grp { display: grid; gap: 0.3rem; margin-bottom: 0.75rem; }
+  nav .grp p { margin: 0 0 0.1rem; font-size: var(--sl-text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--sl-color-gray-3); }
+  nav button { text-align: left; }
+  nav button code { background: none; border: none; padding: 0; font-size: var(--sl-text-xs); }
+  .usage { margin: 0; font-family: var(--sl-font-mono); padding: 0.6rem 0.9rem; background: var(--sl-color-black); border: 1px solid var(--rondo-border); border-radius: 0.5rem; font-size: var(--sl-text-sm); white-space: pre-wrap; }
+  .prompt { color: var(--rondo-cyan); user-select: none; }
+  .sum { margin: 0.6rem 0; }
+  .confirm { font-size: var(--sl-text-sm); margin: 0.4rem 0; }
+  .flags { width: 100%; font-size: var(--sl-text-sm); margin: 0.5rem 0; }
+  .flags td { padding: 0.3rem 0.6rem; vertical-align: top; border: none; }
+  .def { color: var(--sl-color-gray-3); }
+  .steps { list-style: none; padding: 0; margin: 0.75rem 0 0; counter-reset: s; position: relative; }
+  .steps::before { content: ''; position: absolute; left: 0.75rem; top: 0.5rem; bottom: 0.5rem; border-left: 2px solid var(--rondo-border); }
+  .steps li { position: relative; padding: 0 0 0.7rem 2.2rem; margin: 0; transition: opacity 0.2s; }
+  .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .num { position: absolute; left: 0; top: 0; width: 1.6rem; height: 1.6rem; border-radius: 50%; display: grid; place-items: center; font-size: var(--sl-text-xs); font-weight: 700; background: var(--sl-color-accent-low); color: var(--sl-color-accent-high); border: 2px solid var(--sl-color-accent); }
+  .row strong { font-size: var(--sl-text-sm); }
+  .tool { font-family: var(--sl-font-mono); font-size: 0.7rem; padding: 0 0.4rem; border-radius: 0.3rem; border: 1px solid currentColor; }
+  .t-tofu { color: #a855f7; } .t-ssh { color: var(--rondo-warn); } .t-helm { color: var(--rondo-cyan); }
+  .t-kubectl { color: var(--sl-color-accent); } .t-http { color: var(--rondo-ok); } .t-workstation { color: var(--sl-color-gray-3); }
+  .does { margin: 0.2rem 0 0; font-size: var(--sl-text-sm); color: var(--sl-color-gray-2); }
+  .writes { margin: 0.3rem 0 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .writes code { font-size: 0.7rem; }
+  .dryinfo { display: none; margin: 0.25rem 0 0; font-size: var(--sl-text-xs); color: var(--rondo-warn); }
+  .note { font-size: var(--sl-text-sm); border-left: 3px solid var(--sl-color-accent); padding-left: 0.7rem; color: var(--sl-color-gray-2); }
+  .cmdx.is-dry .dryinfo { display: block; }
+  .cmdx.is-dry li[data-dry='skip'] { opacity: 0.45; }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.cmdx').forEach((root) => {
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('nav button')];
+    const sections = [...root.querySelectorAll<HTMLElement>('.detail section')];
+    buttons.forEach((b) =>
+      b.addEventListener('click', () => {
+        buttons.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        sections.forEach((s) => (s.hidden = s.dataset.for !== b.dataset.cmd));
+      }),
+    );
+    root.querySelector<HTMLInputElement>('.dry input')!.addEventListener('change', (e) =>
+      root.classList.toggle('is-dry', (e.target as HTMLInputElement).checked),
+    );
+  });
+</script>

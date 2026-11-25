@@ -1,0 +1,32 @@
+---
+rondo_component: ""
+
+rondo_artifactory_url: ""
+rondo_artifactory_user: ""
+rondo_artifactory_password: ""
+rondo_artifactory_ca_path: /etc/pki/ca-trust/source/anchors/artifactory-ca.pem
+
+rondo_workdir: "/opt/rondo/{{ rondo_component }}"
+
+rondo_rpm_repos: []
+
+rondo_artifacts: []
+
+rondo_config: {}
+
+rondo_installer: {}
+rondo_installer_defaults:
+  phases: []
+  config_file: ""
+  config_format: shell
+  secrets_file: ""
+  steps_flag: "--steps"
+  skip_flag: "--skip"
+  config_flag: ""
+  secrets_flag: ""
+  become: true
+  timeout: 3600
+
+rondo_secrets: {}
+
+rondo_run_installer: true

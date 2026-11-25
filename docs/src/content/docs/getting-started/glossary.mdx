@@ -1,0 +1,25 @@
+---
+title: Glossary
+description: RONDO terms, one line each.
+---
+
+| Term | Meaning |
+|---|---|
+| **Air-gap** | The site has no Internet access: everything RONDO installs comes from the site's Artifactory, mirrored by CI. |
+| **Archetype** | `chart` (a Helm chart) or `vm` (vSphere machines). A Component is one or the other. |
+| **Base layer** | What every downstream receives before any component: MetalLB, cert-manager, local-path-provisioner, downstream-bootstrap, Traefik. |
+| **Channel** | A JSON pointer to a version: `stable` or `edge-<branch>` for RONDO, `latest` for a component. |
+| **Component** | What to install. See [the model](/concepts/model/). |
+| **Downstream** | An rke2 cluster created by Rancher, declared in `targets.downstreams`. |
+| **Enrollment** | A Component on a Target. The only object that triggers Jobs. |
+| **Environment** | A site driven from the workstation: its `rondo.yaml`, its local state, its tofu states, its vSphere folder. |
+| **Health** | `Healthy`, `Progressing`, `Degraded`, `Unknown`: `rondo-probe`'s verdict on the inventory. |
+| **IaC bundle** | The RONDO archive the CLI downloads: tofu modules, `helmfile.yaml`, CRDs, platform tree, scripts. |
+| **Inventory** | The objects delivered by the last `helm-apply` (`status.inventory`), re-read by `rondo-probe`. |
+| **Job** | An `rondo-toolbox exec <verb>` pod started by the controller: every action on a target. |
+| **Management** | The HA k3s cluster that runs Rancher and the operator. Target `management`, reserved role `management`. |
+| **Role** | A name a Target carries besides its own (`monitoring`); an Enrollment targets it without knowing the site. |
+| **Stalled** | An Enrollment or a Target blocked until someone intervenes. |
+| **Target** | Where to install: a Kubernetes cluster, or a vSphere placement. |
+| **Target values** | A Target's `spec.values`, read through `${target.values.<key>}`. |
+| **Tree** | What a component publishes: `components/*.yaml` and `enrollments/*.yaml`, in a versioned archive. Recorded in the ConfigMap `rondo-component-<tree>`. |

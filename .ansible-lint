@@ -1,0 +1,7 @@
+strict: true
+enable_list:
+  - args
+skip_list:
+  - var-naming[no-role-prefix]
+  - name[template]
+  - name[casing]

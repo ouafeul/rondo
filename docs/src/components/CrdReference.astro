@@ -1,0 +1,171 @@
+---
+// Renders a CRD straight from manifests/crds, so the reference never drifts from the API.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
+import { repoFile } from '../lib/url';
+
+interface Props {
+  kind: 'Component' | 'Target' | 'Enrollment';
+}
+
+type Schema = {
+  type?: string;
+  description?: string;
+  properties?: Record<string, Schema>;
+  items?: Schema;
+  additionalProperties?: Schema | boolean;
+  required?: string[];
+  default?: unknown;
+  enum?: unknown[];
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+  maxProperties?: number;
+  format?: string;
+  'x-kubernetes-validations'?: { rule: string; message?: string }[];
+  'x-kubernetes-preserve-unknown-fields'?: boolean;
+};
+
+type Row = {
+  path: string;
+  depth: number;
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+  constraints: string[];
+  rules: string[];
+  leaf: boolean;
+};
+
+const { kind } = Astro.props;
+const file = fileURLToPath(repoFile(`manifests/crds/rondo.ouafeul.github.io_${kind.toLowerCase()}s.yaml`));
+const crd = parse(readFileSync(file, 'utf8'));
+const version = crd.spec.versions[0];
+const root: Schema = version.schema.openAPIV3Schema;
+const shortNames: string[] = crd.spec.names.shortNames ?? [];
+
+const typeOf = (s: Schema): string => {
+  if (s['x-kubernetes-preserve-unknown-fields'] && !s.type) return 'any (YAML libre)';
+  if (s.type === 'array') return `${s.items ? typeOf(s.items) : 'any'}[]`;
+  if (s.type === 'object' && s.additionalProperties && typeof s.additionalProperties === 'object')
+    return `map[string]${typeOf(s.additionalProperties)}`;
+  return s.format ? `${s.type} (${s.format})` : (s.type ?? 'object');
+};
+
+const constraintsOf = (s: Schema): string[] => {
+  const c: string[] = [];
+  if (s.default !== undefined) c.push(`default ${JSON.stringify(s.default)}`);
+  if (s.enum) c.push(`∈ {${s.enum.join(', ')}}`);
+  if (s.pattern) c.push(`pattern ${s.pattern}`);
+  if (s.minimum !== undefined) c.push(`≥ ${s.minimum}`);
+  if (s.maximum !== undefined) c.push(`≤ ${s.maximum}`);
+  if (s.minLength !== undefined) c.push(`length ≥ ${s.minLength}`);
+  if (s.maxLength !== undefined) c.push(`length ≤ ${s.maxLength}`);
+  if (s.minItems !== undefined) c.push(`≥ ${s.minItems} item(s)`);
+  if (s.maxItems !== undefined) c.push(`≤ ${s.maxItems} items`);
+  if (s.maxProperties !== undefined) c.push(`≤ ${s.maxProperties} keys`);
+  const items = s.items;
+  if (items?.maxLength !== undefined) c.push(`item ≤ ${items.maxLength} chars`);
+  if (items?.enum) c.push(`items ∈ {${items.enum.join(', ')}}`);
+  return c;
+};
+
+const rows: Row[] = [];
+const walk = (s: Schema, path: string, depth: number, required: boolean) => {
+  const name = path.split('.').at(-1)!;
+  const target = s.type === 'array' && s.items ? s.items : s;
+  const children = target.properties ?? {};
+  const rules = (target['x-kubernetes-validations'] ?? []).map((v) => v.message ?? v.rule);
+  rows.push({
+    path,
+    depth,
+    name,
+    type: typeOf(s),
+    required,
+    description: (s.description ?? '').split('\n')[0],
+    constraints: constraintsOf(s),
+    rules,
+    leaf: Object.keys(children).length === 0,
+  });
+  for (const [k, child] of Object.entries(children)) {
+    walk(child, `${path}${s.type === 'array' ? '[]' : ''}.${k}`, depth + 1, (target.required ?? []).includes(k));
+  }
+};
+for (const top of ['spec', 'status'] as const) {
+  if (root.properties?.[top]) walk(root.properties[top], top, 0, top === 'spec' && (root.required ?? []).includes('spec'));
+}
+const columns: { name: string; jsonPath: string; priority?: number }[] = version.additionalPrinterColumns ?? [];
+---
+
+<div class="not-content rondo-widget crd" data-kind={kind}>
+  <header>
+    <span class="rondo-kicker">Generated</span>
+    <code>{crd.spec.group}/{version.name}</code> · <code>{kind}</code>
+    {shortNames.length > 0 && <span class="short">alias <code>{shortNames.join(', ')}</code></span>}
+  </header>
+  <p class="src">
+    Read at build time from <code>manifests/crds/rondo.ouafeul.github.io_{kind.toLowerCase()}s.yaml</code>. Columns of
+    <code>kubectl get</code>: {columns.map((c, i) => <>{i > 0 && ', '}<code class={c.priority ? 'wide' : ''}>{c.name}</code></>)}
+    {columns.some((c) => c.priority) && <span class="muted"> (greyed: with <code>-o wide</code>)</span>}.
+  </p>
+  <input type="search" placeholder="Filter fields (name, type, description)…" aria-label={`Filter the fields of ${kind}`} />
+  <div class="tree" role="list">
+    {rows.map((r) => (
+      <div
+        class:list={['row', { top: r.depth === 0 }]}
+        role="listitem"
+        style={`--d:${r.depth}`}
+        data-search={`${r.path} ${r.type} ${r.description} ${r.constraints.join(' ')}`.toLowerCase()}
+      >
+        <div class="head">
+          <code class="name" title={r.path}>{r.name}</code>
+          <span class="type">{r.type}</span>
+          {r.required && <span class="rondo-pill" data-tone="warn">required</span>}
+        </div>
+        {(r.description || r.constraints.length > 0 || r.rules.length > 0) && (
+          <div class="body">
+            {r.description && <span class="desc">{r.description}</span>}
+            {r.constraints.map((c) => <span class="chip">{c}</span>)}
+            {r.rules.map((m) => <span class="rule">⚖ {m}</span>)}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+  .short { margin-left: auto; font-weight: 400; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+  .src { font-size: var(--sl-text-sm); color: var(--sl-color-gray-2); margin: 0 0 0.75rem; }
+  .src code.wide, .muted { color: var(--sl-color-gray-3); }
+  input[type='search'] { width: 100%; margin-bottom: 0.75rem; }
+  .tree { max-height: 36rem; overflow: auto; border: 1px solid var(--rondo-border); border-radius: 0.6rem; background: var(--sl-color-black); }
+  .row { padding: 0.35rem 0.75rem 0.35rem calc(0.75rem + var(--d) * 1.1rem); border-bottom: 1px solid var(--rondo-border); position: relative; margin: 0; }
+  .row::before { content: ''; position: absolute; left: calc(0.35rem + var(--d) * 1.1rem); top: 0; bottom: 0; border-left: 1px dashed var(--rondo-border); }
+  .row.top { background: var(--rondo-surface-2); }
+  .row.top::before { display: none; }
+  .row[hidden] { display: none; }
+  .head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .name { font-weight: 700; color: var(--sl-color-accent-high); background: none; border: none; padding: 0; }
+  .type { font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); color: var(--rondo-cyan); }
+  .body { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; margin-top: 0.15rem; font-size: var(--sl-text-xs); color: var(--sl-color-gray-2); align-items: baseline; }
+  .chip { font-family: var(--sl-font-mono); background: var(--rondo-surface-2); border-radius: 0.3rem; padding: 0 0.35rem; color: var(--sl-color-gray-2); word-break: break-all; }
+  .rule { color: var(--rondo-warn); }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.crd').forEach((root) => {
+    const input = root.querySelector<HTMLInputElement>('input[type=search]')!;
+    const rows = [...root.querySelectorAll<HTMLElement>('.row')];
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      rows.forEach((r) => (r.hidden = q !== '' && !r.dataset.search!.includes(q)));
+    });
+  });
+</script>

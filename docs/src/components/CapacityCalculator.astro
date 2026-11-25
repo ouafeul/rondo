@@ -1,0 +1,141 @@
+---
+// Sums the vSphere footprint of rondo.yaml; defaults are rondo.yaml.example.
+---
+
+<div class="not-content rondo-widget capacity">
+  <header><span class="rondo-kicker">Calculator</span> vSphere footprint of the <code>rondo.yaml</code> clusters</header>
+  <table class="grid">
+    <thead>
+      <tr><th>Cluster</th><th>Pool</th><th>Nodes</th><th>vCPU</th><th>RAM (MB)</th><th>Disk (GB)</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <div class="actions">
+    <button type="button" class="add">+ rke2 cluster</button>
+    <span class="hint">Machines of <code>spec.vm</code> components add to this total, on their vSphere Target.</span>
+  </div>
+  <div class="totals"></div>
+  <div class="bars" role="img" aria-label="Resource split per cluster"></div>
+</div>
+
+<template id="cap-row">
+  <tr>
+    <td><input class="name" size="10" aria-label="Cluster name" /></td>
+    <td class="pool"></td>
+    <td><input type="number" min="0" max="32" class="n" aria-label="Number of nodes" /></td>
+    <td><input type="number" min="1" class="cpu" aria-label="vCPU per node" /></td>
+    <td><input type="number" min="512" step="512" class="mem" aria-label="RAM per node (MB)" /></td>
+    <td><input type="number" min="10" class="disk" aria-label="Disk per node (GB)" /></td>
+    <td><button type="button" class="rm" aria-label="Remove">✕</button></td>
+  </tr>
+</template>
+
+<style>
+  .grid { width: 100%; font-size: var(--sl-text-sm); border-collapse: collapse; }
+  .grid :is(th, td) { padding: 0.3rem 0.4rem; text-align: left; border-bottom: 1px solid var(--rondo-border); }
+  .grid th { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); font-weight: 600; }
+  .grid input { width: 100%; min-width: 3.5rem; padding: 0.25rem 0.4rem; }
+  .grid input.name { font-family: var(--sl-font-mono); min-width: 7.5rem; }
+  .grid td { vertical-align: middle; }
+  .grid td.pool { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); white-space: nowrap; }
+  .grid tr.mgmt .rm, .grid tr.sub .rm { visibility: hidden; }
+  .grid tr.sub input.name { visibility: hidden; }
+  .actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; }
+  .hint { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); }
+  .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+  .totals :global(div) { background: var(--sl-color-black); border: 1px solid var(--rondo-border); border-radius: 0.6rem; padding: 0.6rem 0.8rem; }
+  .totals :global(strong) { display: block; font-size: 1.5rem; color: var(--sl-color-white); font-variant-numeric: tabular-nums; }
+  .totals :global(span) { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); }
+  .bars { margin-top: 1rem; display: grid; gap: 0.5rem; }
+  .bars :global(.metric) { display: grid; grid-template-columns: 4.5rem 1fr; align-items: center; gap: 0.5rem; font-size: var(--sl-text-xs); }
+  .bars :global(.track) { display: flex; height: 1.1rem; border-radius: 0.35rem; overflow: hidden; background: var(--rondo-surface-2); }
+  .bars :global(.seg) { height: 100%; transition: width 0.25s; }
+  .bars :global(.legend) { display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: var(--sl-text-xs); color: var(--sl-color-gray-2); }
+  .bars :global(.legend i) { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-right: 0.3rem; vertical-align: -1px; }
+</style>
+
+<script>
+  const PALETTE = ['#4f7cff', '#22d3ee', '#16a34a', '#d97706', '#a855f7', '#ec4899', '#64748b'];
+  type Pool = { cluster: string; pool: string; n: number; cpu: number; mem: number; disk: number; fixed?: boolean };
+
+  document.querySelectorAll<HTMLElement>('.capacity').forEach((root) => {
+    const tbody = root.querySelector('tbody')!;
+    const tpl = document.getElementById('cap-row') as HTMLTemplateElement;
+    const pools: Pool[] = [
+      { cluster: 'management', pool: 'serverNodes (k3s)', n: 3, cpu: 4, mem: 8192, disk: 50, fixed: true },
+      { cluster: 'rke2-a', pool: 'controlPlane', n: 3, cpu: 4, mem: 8192, disk: 100 },
+      { cluster: 'rke2-a', pool: 'workers', n: 3, cpu: 12, mem: 24576, disk: 100 },
+    ];
+
+    const draw = () => {
+      tbody.innerHTML = '';
+      pools.forEach((p, i) => {
+        const tr = (tpl.content.cloneNode(true) as DocumentFragment).querySelector('tr')!;
+        const first = i === 0 || pools[i - 1].cluster !== p.cluster;
+        tr.classList.toggle('mgmt', !!p.fixed);
+        tr.classList.toggle('sub', !first);
+        const set = (sel: string, v: string | number) => ((tr.querySelector(sel) as HTMLInputElement).value = String(v));
+        set('.name', p.cluster);
+        set('.n', p.n);
+        set('.cpu', p.cpu);
+        set('.mem', p.mem);
+        set('.disk', p.disk);
+        tr.querySelector('.pool')!.textContent = p.pool;
+        if (p.fixed) tr.querySelectorAll<HTMLInputElement>('.n, .name').forEach((el) => (el.readOnly = true));
+        tr.addEventListener('input', (e) => {
+          const t = e.target as HTMLInputElement;
+          if (t.classList.contains('name')) {
+            const old = p.cluster;
+            pools.forEach((q) => q.cluster === old && (q.cluster = t.value));
+          } else (p as any)[t.className] = Math.max(0, +t.value || 0);
+          totals();
+        });
+        tr.querySelector('.rm')!.addEventListener('click', () => {
+          const c = p.cluster;
+          for (let k = pools.length - 1; k >= 0; k--) if (pools[k].cluster === c) pools.splice(k, 1);
+          draw();
+        });
+        tbody.appendChild(tr);
+      });
+      totals();
+    };
+
+    const totals = () => {
+      const sum = (f: (p: Pool) => number) => pools.reduce((a, p) => a + p.n * f(p), 0);
+      const nodes = pools.reduce((a, p) => a + p.n, 0);
+      const cpu = sum((p) => p.cpu);
+      const mem = sum((p) => p.mem);
+      const disk = sum((p) => p.disk);
+      root.querySelector('.totals')!.innerHTML =
+        `<div><strong>${nodes}</strong><span>VMs</span></div>` +
+        `<div><strong>${cpu}</strong><span>vCPU</span></div>` +
+        `<div><strong>${(mem / 1024).toLocaleString('en-US', { maximumFractionDigits: 1 })}</strong><span>GB of RAM</span></div>` +
+        `<div><strong>${disk.toLocaleString('en-US')}</strong><span>GB of disk</span></div>`;
+      const clusters = [...new Set(pools.map((p) => p.cluster))];
+      const share = (c: string, f: (p: Pool) => number, total: number) =>
+        total ? (pools.filter((p) => p.cluster === c).reduce((a, p) => a + p.n * f(p), 0) / total) * 100 : 0;
+      const metric = (label: string, f: (p: Pool) => number, total: number) =>
+        `<div class="metric"><span>${label}</span><div class="track">${clusters
+          .map((c, i) => `<div class="seg" style="width:${share(c, f, total)}%;background:${PALETTE[i % PALETTE.length]}" title="${c}"></div>`)
+          .join('')}</div></div>`;
+      root.querySelector('.bars')!.innerHTML =
+        metric('vCPU', (p) => p.cpu, cpu) +
+        metric('RAM', (p) => p.mem, mem) +
+        metric('Disk', (p) => p.disk, disk) +
+        `<div class="legend">${clusters.map((c, i) => `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${c.replace(/</g, '&lt;')}</span>`).join('')}</div>`;
+    };
+
+    root.querySelector('.add')!.addEventListener('click', () => {
+      let k = 1;
+      const names = new Set(pools.map((p) => p.cluster));
+      while (names.has(`rke2-${String.fromCharCode(97 + k)}`)) k++;
+      const name = `rke2-${String.fromCharCode(97 + k)}`;
+      pools.push(
+        { cluster: name, pool: 'controlPlane', n: 3, cpu: 4, mem: 8192, disk: 100 },
+        { cluster: name, pool: 'workers', n: 3, cpu: 8, mem: 16384, disk: 100 },
+      );
+      draw();
+    });
+    draw();
+  });
+</script>

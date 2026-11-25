@@ -1,0 +1,11 @@
+ingressIP: ""
+
+pki:
+  caCommonName: "RONDO Downstream Internal CA"
+  caDuration: "87600h"
+
+artifactoryCA:
+  pem: ""
+  secretName: artifactory-ca
+  namespaces:
+    - monitoring

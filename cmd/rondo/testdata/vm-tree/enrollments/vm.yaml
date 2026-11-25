@@ -1,0 +1,9 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: vm
+spec:
+  component: vm
+  target: dmz
+  policy:
+    timeout: 20m

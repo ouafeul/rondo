@@ -1,0 +1,14 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: local-path-provisioner
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/local-path-provisioner
+    version: 0.1.2
+  namespace: local-path-storage
+  values:
+    image:
+      repository: ${target.values.imageRegistry}/rancher/local-path-provisioner
+    helperImage:
+      repository: ${target.values.imageRegistry}/library/busybox

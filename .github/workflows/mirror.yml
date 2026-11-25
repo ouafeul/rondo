@@ -1,0 +1,84 @@
+name: Air-gap mirror
+
+# Resolves the third-party dependencies of a release (manifests/dependencies.yaml + rendered charts),
+# downloads them, scans them with ClamAV, and uploads them to the mirror configured in the
+# MIRROR_* secrets. Without those secrets it stops after the scan and keeps the bundle as an artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload to the mirror configured in the MIRROR_* secrets
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Resolve, download, scan, upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MIRROR_URL: ${{ secrets.MIRROR_URL }}
+      MIRROR_REGISTRY: ${{ secrets.MIRROR_REGISTRY }}
+      MIRROR_USER: ${{ secrets.MIRROR_USER }}
+      MIRROR_PASSWORD: ${{ secrets.MIRROR_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+          pip install --quiet pyyaml==6.0.2 requests==2.32.3 certifi
+          helm_version="$(grep -A2 'name: helm$' manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}')"
+          curl -fsSL "https://get.helm.sh/helm-${helm_version}-linux-amd64.tar.gz" | tar xz -C /tmp
+          sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: Resolve
+        run: |
+          python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml \
+            --platform platform --apps apps --update-manifest
+          python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
+      - name: Download
+        run: |
+          for t in binaries tofu_providers helm_charts grafana_plugins; do
+            python3 scripts/ci/download-deps.py --deps deps-resolved.json --type "$t" --download-only --local-dir deps-artifacts
+          done
+          python3 scripts/ci/mirror-images.py --deps deps-resolved.json --section docker_images --download-only \
+            --local-dir deps-artifacts --target-registry "${MIRROR_REGISTRY:-mirror.invalid}"
+      - name: ClamAV scan
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w --entrypoint sh clamav/clamav:1.4 -c '
+            apk add --no-cache python3 >/dev/null
+            freshclam || echo "WARN: freshclam failed, database age is checked by --max-db-age-days"
+            python3 scripts/ci/clamav-scan.py --scan-dir deps-artifacts --max-db-age-days 14 \
+              --junit clamav-junit.xml --html clamav-report.html --badge clamav-badge.svg'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: clamav-report
+          path: |
+            clamav-report.html
+            clamav-junit.xml
+          retention-days: 30
+      - name: Upload to the mirror
+        if: inputs.upload
+        run: |
+          if [ -z "${MIRROR_URL}" ] || [ -z "${MIRROR_REGISTRY}" ]; then
+            echo "FAILED: MIRROR_URL and MIRROR_REGISTRY secrets are required to upload" >&2
+            exit 1
+          fi
+          host="$(echo "${MIRROR_URL}" | sed -E 's#^https?://##; s#/.*$##')"
+          echo "${MIRROR_PASSWORD}" | helm registry login "$host" --username "${MIRROR_USER}" --password-stdin
+          for t in binaries tofu_providers helm_charts grafana_plugins; do
+            python3 scripts/ci/download-deps.py --deps deps-resolved.json --type "$t" --upload-only \
+              --local-dir deps-artifacts --artifactory-url "${MIRROR_URL}"
+          done
+          python3 scripts/ci/mirror-images.py --deps deps-resolved.json --section docker_images --upload-only \
+            --local-dir deps-artifacts --target-registry "${MIRROR_REGISTRY}" --dest-creds "${MIRROR_USER}:${MIRROR_PASSWORD}"

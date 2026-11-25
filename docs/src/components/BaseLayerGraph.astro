@@ -1,0 +1,35 @@
+---
+// Dependency graph of the downstream base layer, read from platform/components at build time.
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
+import { repoFile } from '../lib/url';
+
+const dir = fileURLToPath(repoFile('platform/components/'));
+const comps = readdirSync(dir)
+  .filter((f) => f.endsWith('.yaml'))
+  .map((f) => parse(readFileSync(dir + f, 'utf8')))
+  .map((c) => ({
+    name: c.metadata.name as string,
+    version: c.spec.chart?.version as string,
+    ns: c.spec.namespace as string,
+    deps: ((c.spec.dependsOn ?? []) as { name: string }[]).map((d) => d.name),
+  }));
+
+const id = (n: string) => n.replace(/[^a-z0-9]/gi, '_');
+const lines = [
+  'flowchart LR',
+  ...comps.map((c) => `  ${id(c.name)}["<b>${c.name}</b><br/><small>${c.version} · ns ${c.ns}</small>"]`),
+  ...comps.flatMap((c) => c.deps.map((d) => `  ${id(d)} --> ${id(c.name)}`)),
+];
+---
+
+<pre class="mermaid">{lines.join('\n')}</pre>
+<p class="caption">
+  Generated from <code>platform/components/*.yaml</code>. An arrow <code>a → b</code>: <code>b</code> declares
+  <code>dependsOn: a</code> and waits until <code>a</code> is <code>Ready</code> on the same target.
+</p>
+
+<style>
+  .caption { font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); margin-top: 0.5rem; }
+</style>

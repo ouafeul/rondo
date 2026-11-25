@@ -1,0 +1,147 @@
+---
+// Mirrors internal/subst (CLI), internal/values (controller) and internal/exec/helm.go (Job).
+const values = `ingress:
+  hosts: [grafana.monitoring.\${INGRESS_BASE_DOMAIN}]
+image:
+  registry: \${target.values.imageRegistry}
+persistence:
+  storageClassName: \${target.values.storageClass}
+adminPassword: \${secrets.grafanaAdminPassword}`;
+const site = `REGISTRY_HOST=artifactory.example.local
+INGRESS_BASE_DOMAIN=cluster.example.local
+ARTIFACTORY_HELM_REPO=rondo-helm-local`;
+const target = `name=rke2-a
+values.imageRegistry=artifactory.example.local/rondo-docker-local
+values.storageClass=local-path
+values.ingressIP=10.0.0.50`;
+const secrets = `grafanaAdminPassword=s3cr3t`;
+---
+
+<div class="not-content rondo-widget tokens">
+  <header><span class="rondo-kicker">Playground</span> Three moments, three token families</header>
+  <div class="inputs">
+    <label class="span2">Component (and Enrollment) values<textarea rows="8" wrap="off" spellcheck="false" data-in="values">{values}</textarea></label>
+    <label><span><b class="c1">①</b> rondo.yaml → site tokens</span><textarea rows="4" wrap="off" spellcheck="false" data-in="site">{site}</textarea></label>
+    <label><span><b class="c2">②</b> the resolved Target</span><textarea rows="4" wrap="off" spellcheck="false" data-in="target">{target}</textarea></label>
+    <label><span><b class="c3">③</b> <code>valuesFrom</code> Secrets</span><textarea rows="4" wrap="off" spellcheck="false" data-in="secrets">{secrets}</textarea></label>
+  </div>
+  <ol class="stages">
+    <li data-stage="1"><h5><b class="c1">①</b> <code>rondo component install</code> <small>on the workstation, in the tree</small></h5><pre></pre><p class="msg"></p></li>
+    <li data-stage="2"><h5><b class="c2">②</b> the controller <small>per Enrollment, before the Job</small></h5><pre></pre><p class="msg"></p></li>
+    <li data-stage="3"><h5><b class="c3">③</b> the <code>helm-apply</code> Job <small>values.json, never stored</small></h5><pre></pre><p class="msg"></p></li>
+  </ol>
+</div>
+
+<style>
+  .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.75rem; }
+  .inputs label { display: grid; gap: 0.3rem; font-size: var(--sl-text-xs); font-weight: 600; color: var(--sl-color-gray-2); }
+  .span2 { grid-column: 1 / -1; }
+  .c1 { color: var(--rondo-cyan); }
+  .c2 { color: var(--sl-color-accent); }
+  .c3 { color: var(--rondo-warn); }
+  .stages { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 0.75rem; }
+  .stages li { margin: 0; border: 1px solid var(--rondo-border); border-radius: 0.6rem; padding: 0.6rem 0.8rem; background: var(--sl-color-black); }
+  h5 { margin: 0 0 0.4rem; font-size: var(--sl-text-sm); }
+  h5 small { font-weight: 400; color: var(--sl-color-gray-3); margin-left: 0.3rem; }
+  pre { margin: 0; padding: 0.5rem 0.7rem; font-size: var(--sl-text-xs); background: var(--rondo-surface); border-radius: 0.4rem; overflow-x: auto; white-space: pre; }
+  pre :global(mark) { background: none; border-radius: 0.2rem; padding: 0 0.1rem; }
+  pre :global(mark.s1) { color: var(--rondo-cyan); background: color-mix(in srgb, var(--rondo-cyan) 14%, transparent); }
+  pre :global(mark.s2) { color: var(--sl-color-accent-high); background: var(--sl-color-accent-low); }
+  pre :global(mark.s3) { color: var(--rondo-warn); background: color-mix(in srgb, var(--rondo-warn) 14%, transparent); }
+  pre :global(mark.bad) { color: var(--rondo-err); text-decoration: wavy underline; }
+  .msg { margin: 0.4rem 0 0; font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); }
+  .msg.err { color: var(--rondo-err); font-weight: 600; }
+</style>
+
+<script>
+  const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+  const kv = (s: string) =>
+    Object.fromEntries(
+      s.split('\n').map((l) => l.trim()).filter((l) => l && l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]),
+    );
+  const TOKEN = /\$\{([^}]*)\}/g;
+  const SITE = ['REGISTRY_HOST', 'ARTIFACTORY_URL', 'ARTIFACTORY_HELM_REPO', 'ARTIFACTORY_DOCKER_REPO', 'ARTIFACTORY_GENERIC_REPO', 'ARTIFACTORY_RPM_REPO', 'INGRESS_BASE_DOMAIN'];
+
+  // Replaces matching tokens; returns plain text and an HTML rendering with the substitutions marked.
+  function pass(text: string, cls: string, pick: (name: string) => string | undefined | null, owns: (name: string) => boolean) {
+    const missing: string[] = [];
+    let html = '';
+    let plain = '';
+    let last = 0;
+    for (const m of text.matchAll(TOKEN)) {
+      const raw = m[0];
+      const name = m[1];
+      html += esc(text.slice(last, m.index));
+      plain += text.slice(last, m.index);
+      last = m.index! + raw.length;
+      if (!owns(name)) {
+        html += esc(raw);
+        plain += raw;
+        continue;
+      }
+      const v = pick(name);
+      if (v === undefined || v === null || v === '') {
+        if (!missing.includes(raw)) missing.push(raw);
+        html += `<mark class="bad">${esc(raw)}</mark>`;
+        plain += raw;
+      } else {
+        html += `<mark class="${cls}">${esc(v)}</mark>`;
+        plain += v;
+      }
+    }
+    html += esc(text.slice(last));
+    plain += text.slice(last);
+    return { html, plain, missing };
+  }
+
+  document.querySelectorAll<HTMLElement>('.tokens').forEach((root) => {
+    const get = (k: string) => root.querySelector<HTMLTextAreaElement>(`[data-in=${k}]`)!.value;
+    const stage = (n: number) => root.querySelector<HTMLElement>(`[data-stage="${n}"]`)!;
+    const show = (n: number, html: string, msg: string, err = false) => {
+      stage(n).querySelector('pre')!.innerHTML = html;
+      const p = stage(n).querySelector('.msg')!;
+      p.innerHTML = msg;
+      p.classList.toggle('err', err);
+      stage(n).style.opacity = '1';
+    };
+    const halt = (from: number) => {
+      for (let n = from; n <= 3; n++) {
+        show(n, '', 'not reached');
+        stage(n).style.opacity = '0.45';
+      }
+    };
+
+    const render = () => {
+      const site = kv(get('site'));
+      const tgt = kv(get('target'));
+      const sec = kv(get('secrets'));
+
+      // ① CLI: known site tokens replaced, any other ${UPPER_CASE} refuses the tree.
+      const s1 = pass(get('values'), 's1', (n) => (SITE.includes(n) ? site[n] : undefined), (n) => /^[A-Z0-9_]+$/.test(n));
+      if (s1.missing.length) {
+        show(1, s1.html, `unknown placeholders: ${s1.missing.join(', ')}. The install is refused before any apply.`, true);
+        return halt(2);
+      }
+      show(1, s1.html, 'Site tokens replaced in the files, then server-side apply.');
+
+      // ② controller: ${target.*} from the resolved Target.
+      const vars: Record<string, string> = { 'target.name': tgt.name ?? '' };
+      if (tgt.server) vars['target.server'] = tgt.server;
+      for (const [k, v] of Object.entries(tgt)) if (k.startsWith('values.')) vars[`target.${k}`] = v;
+      const s2 = pass(s1.plain, 's2', (n) => (n in vars ? vars[n] || ' ' : undefined), (n) => n.startsWith('target.'));
+      if (s2.missing.length) {
+        show(2, s2.html, `unknown substitution token(s): ${s2.missing.map((t) => t.slice(2, -1)).join(', ')}, available: ${Object.keys(vars).sort().join(', ')}`, true);
+        return halt(3);
+      }
+      show(2, s2.html, 'Values merged then hashed: a hash change starts a Job.');
+
+      // ③ Job: ${secrets.*} from the valuesFrom keys, read in rondo-system.
+      const s3 = pass(s2.plain, 's3', (n) => sec[n.slice('secrets.'.length)], (n) => n.startsWith('secrets.'));
+      if (Object.keys(sec).length === 0) return show(3, esc(s2.plain), "No valuesFrom: ${secrets.*} tokens stay as they are in values.json.");
+      if (s3.missing.length) return show(3, s3.html, `key(s) missing from the valuesFrom sources: ${s3.missing.join(', ')}. The Job fails.`, true);
+      show(3, s3.html.replace(/<mark class="s3">[^<]*<\/mark>/g, '<mark class="s3">••••••</mark>'), 'Secrets injected into /work/values.json (0600), then helm upgrade --install.');
+    };
+    root.addEventListener('input', render);
+    render();
+  });
+</script>

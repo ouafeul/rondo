@@ -1,0 +1,9 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: downstream-bootstrap
+spec:
+  component: downstream-bootstrap
+  target: each-rke2-target
+  policy:
+    skipDryRunOnMissingCRD: true

@@ -1,0 +1,202 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build the release for
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.26.x"
+  NFPM_VERSION: v2.41.1
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  artifacts:
+    name: Binaries, bundles, packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Validate tag
+        run: |
+          echo "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
+            || { echo "FAILED: ${TAG} is not a vMAJOR.MINOR.PATCH[-PRERELEASE] tag" >&2; exit 1; }
+
+      - name: Binaries
+        run: |
+          commit="$(git rev-parse --short=8 HEAD)"
+          ldflags="-s -w -X rondo/internal/version.Version=${TAG} -X rondo/internal/version.Commit=${commit}"
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags" -o dist/rondo-linux-amd64 ./cmd/rondo
+          CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags -X main.rondoRegistry=ghcr.io/${GITHUB_REPOSITORY_OWNER}" \
+            -o dist/rondo-sandbox-linux-amd64 ./cmd/rondo-sandbox
+          dist/rondo-linux-amd64 version
+          dist/rondo-sandbox-linux-amd64 version
+
+      - name: Bundles
+        run: |
+          mkdir -p certs
+          tar czf dist/iac.tar.gz terraform/ scripts/ helmfile.yaml manifests/ platform/ certs/
+          tar czf dist/vm.tar.gz -C terraform/vm .
+          tar czf dist/rondo-ansible.tar.gz -C ansible .
+          cp install.sh rondo.yaml.example dist/
+          ver="${TAG#v}"
+          cp dist/rondo-linux-amd64 rondo
+          tar czf "dist/rondo-${ver}.tar.gz" --transform "s,^,rondo-${ver}/," \
+            terraform/ scripts/ helmfile.yaml manifests/ platform/ certs/ rondo rondo.yaml.example
+          rm rondo
+          # Final releases move the stable channel; prereleases leave it alone.
+          if echo "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            printf '{"version":"%s"}\n' "${TAG}" > dist/stable.json
+          fi
+
+      - name: Packages (rpm, deb)
+        run: |
+          go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
+          nfpm="$(go env GOPATH)/bin/nfpm"
+          tag="${TAG#v}"
+          case "${tag}" in
+            *-*) VERSION="${tag%%-*}~$(printf '%s' "${tag#*-}" | tr '-' '.')" ;;
+            *)   VERSION="${tag}" ;;
+          esac
+          case "${VERSION}" in
+            *-*) echo "FAILED: package version ${VERSION} contains a dash" >&2; exit 1 ;;
+          esac
+          if [ "${tag}" != "${tag%%-*}" ] && [ "${VERSION}" = "${VERSION%%~*}" ]; then
+            echo "FAILED: prerelease ${TAG} rendered as ${VERSION} without a tilde would sort above its final release" >&2
+            exit 1
+          fi
+          export VERSION PKG_SUFFIX="" PKG_CONFLICTS="rondo-edge"
+          echo "package version: ${VERSION}"
+          cp dist/rondo-linux-amd64 dist/rondo-sandbox-linux-amd64 .
+          chmod +x rondo-sandbox-linux-amd64
+          mkdir -p completions
+          ./rondo-sandbox-linux-amd64 completion bash > completions/rondo-sandbox.bash
+          ./rondo-sandbox-linux-amd64 completion zsh  > completions/_rondo-sandbox
+          ./rondo-sandbox-linux-amd64 completion fish > completions/rondo-sandbox.fish
+          "$nfpm" package --config packaging/nfpm.yaml --packager rpm --target "dist/rondo-${VERSION}.x86_64.rpm"
+          PKG_CONFLICTS=rondo-sandbox-edge "$nfpm" package --config packaging/nfpm-sandbox.yaml --packager rpm \
+            --target "dist/rondo-sandbox-${VERSION}.x86_64.rpm"
+          PKG_CONFLICTS=rondo-sandbox-edge "$nfpm" package --config packaging/nfpm-sandbox.yaml --packager deb \
+            --target "dist/rondo-sandbox_${VERSION}_amd64.deb"
+          rm -f rondo-linux-amd64 rondo-sandbox-linux-amd64
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          for f in iac.tar.gz; do sha256sum "$f" > "$f.sha256"; done
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 7
+
+  charts:
+    name: Helm charts to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - name: Helm version
+        id: v
+        run: |
+          echo "helm=$(grep -A2 'name: helm$' manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}')" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ steps.v.outputs.helm }}
+      - name: Package and push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${GH_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          repo="oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
+          mkdir -p charts-dist
+          for dir in apps/*/; do
+            [ -f "${dir}Chart.yaml" ] || continue
+            helm dependency update "${dir}"
+            helm package "${dir}" --destination charts-dist/
+          done
+          for tgz in charts-dist/*.tgz; do
+            [ -f "$tgz" ] || continue
+            if out=$(helm push "$tgz" "$repo" 2>&1); then
+              echo "$out"
+            elif echo "$out" | grep -qiE 'already exists|409|denied: .*immutable'; then
+              echo "$(basename "$tgz") already published, skipped"
+            else
+              echo "$out" >&2; exit 1
+            fi
+          done
+
+  publish:
+    name: GitHub Release
+    needs: [artifacts, charts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist
+      - name: Release notes from CHANGELOG.md
+        run: |
+          ver="${TAG#v}"
+          awk -v ver="$ver" '
+            $0 ~ "^## \\[" ver "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "FAILED: CHANGELOG.md has no '## [${ver}]' section" >&2
+            exit 1
+          fi
+          {
+            echo
+            echo "### Install"
+            echo
+            echo '```bash'
+            echo "curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/install.sh | RONDO_VERSION=${TAG} sh"
+            echo '```'
+            echo
+            echo "Images: \`ghcr.io/${GITHUB_REPOSITORY_OWNER}/rondo-*:${TAG}\` · Charts: \`oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts\`"
+          } >> notes.md
+          cat notes.md
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pre=""
+          case "${TAG}" in *-*) pre="--prerelease" ;; esac
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --notes-file notes.md ${pre}
+            gh release upload "${TAG}" dist/* --clobber
+          else
+            gh release create "${TAG}" dist/* --title "RONDO ${TAG#v}" --notes-file notes.md --verify-tag ${pre}
+          fi

@@ -1,0 +1,7 @@
+ INFO rondo-controller started  namespace=rondo-system version=edge-main-9c481a63
+ INFO leader lease acquired  lease=rondo-system/rondo-controller
+ INFO action launched  enrollment=traefik-rke2-a target=rke2-a verb=helm-apply
+ INFO Job finished  enrollment=traefik-rke2-a result=Succeeded
+ INFO action launched  enrollment=grafana target=rke2-a verb=helm-apply
+ WARN Job failed  enrollment=grafana consecutiveFailures=3 retryIn=4m0s
+ INFO action launched  enrollment=demo-mft target=dc1 verb=vm-install

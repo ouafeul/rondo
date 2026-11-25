@@ -1,0 +1,8 @@
+# Where: the Target holding the apps role, a downstream.
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: __NAME__-web
+spec:
+  component: __NAME__-web
+  target: apps

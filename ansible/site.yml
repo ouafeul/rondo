@@ -1,0 +1,14 @@
+---
+- name: "Install component {{ rondo_component | default('unknown') }}"
+  hosts: rondo_machines
+  gather_facts: false
+  serial: "{{ rondo_serial | default(4) }}"
+  become: false
+  pre_tasks:
+    - name: "Wait for the machine to answer over SSH"
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+    - name: "Gather facts"
+      ansible.builtin.setup:
+  roles:
+    - role: bundle_install

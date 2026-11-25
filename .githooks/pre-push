@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command -v go >/dev/null 2>&1 || { echo "[pre-push] go not found, left to CI"; exit 0; }
+
+relevant=false
+while read -r _lref lsha _rref rsha; do
+  if [[ "$lsha" =~ ^0+$ ]]; then continue; fi
+  if [[ "$rsha" =~ ^0+$ ]]; then relevant=true; break; fi
+  if git diff --name-only "${rsha}..${lsha}" 2>/dev/null \
+      | grep -qE '\.go$|^(apps|platform|ansible|manifests)/'; then
+    relevant=true
+    break
+  fi
+done
+
+if [ "$relevant" = true ]; then
+  echo "[pre-push] go vet + dependency boundary + platform/ tree validation"
+  go vet ./...
+  go test ./api/... ./internal/platform/... ./internal/constructs
+  scripts/ci/check-rondo-deps.sh
+  go run ./cmd/rondo component lint platform
+else
+  echo "[pre-push] nothing relevant in the push, skipping"
+fi

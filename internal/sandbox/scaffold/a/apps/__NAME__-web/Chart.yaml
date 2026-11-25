@@ -1,0 +1,6 @@
+apiVersion: v2
+name: __NAME__-web
+description: The __NAME__ page
+type: application
+version: 0.1.0
+appVersion: "0.1.0"                     # the image tag (rondo-sandbox.yaml, tagFromChart)

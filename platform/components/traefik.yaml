@@ -1,0 +1,22 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: traefik
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/traefik
+    version: 41.0.2
+  dependsOn:
+  - name: metallb
+  - name: downstream-bootstrap
+  namespace: traefik
+  values:
+    image:
+      registry: ${target.values.imageRegistry}
+    priorityClassName: system-cluster-critical
+    service:
+      annotations:
+        # Lets another LoadBalancer Service (the `acme` component's fluent-bit) take ports on the same IP.
+        metallb.universe.tf/allow-shared-ip: ingress
+        metallb.universe.tf/loadBalancerIPs: ${target.values.ingressIP}
+      type: LoadBalancer

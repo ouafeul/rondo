@@ -1,0 +1,9 @@
+apiVersion: v2
+name: downstream-bootstrap
+version: 0.2.2
+description: >-
+  Glue CRs for bootstrapping downstream clusters: MetalLB address pool
+  (IPAddressPool + L2Advertisement) and internal cert-manager PKI (selfSigned
+  ClusterIssuer -> cluster-ca CA -> cluster-ca-issuer ClusterIssuer). First-party
+  chart, deployed from OCI by its Component. Expects MetalLB and cert-manager to
+  be installed on the cluster already (their own Components, via dependsOn).

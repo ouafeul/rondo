@@ -1,0 +1,7 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: local-path-provisioner
+spec:
+  component: local-path-provisioner
+  target: each-rke2-target

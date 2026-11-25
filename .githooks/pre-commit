@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+
+has() { grep -qE "$1" <<<"$staged"; }
+say() { printf '[pre-commit] %s\n' "$*"; }
+
+if has '^apps/'; then
+  say "chart version guard (apps/ staged)"
+  scripts/ci/check-chart-versions.sh --staged
+fi
+
+if has '^platform/' || has '^rondo\.yaml\.example$'; then
+  say "validating the desired-state trees (index)"
+  idx=$(mktemp -d)
+  # shellcheck disable=SC2064
+  trap "rm -rf '$idx'" EXIT
+  git checkout-index -a --prefix="$idx/"
+  go build -o "$idx/.rondo-hook" ./cmd/rondo
+  ( cd "$idx" && ./.rondo-hook component lint platform )
+fi
+
+if has '^scripts/ci/'; then
+  if command -v ruff >/dev/null 2>&1; then
+    say "ruff (scripts/ci staged)"
+    ruff check scripts/ci
+  else
+    say "WARN: ruff not found, lint left to CI (ci-scripts-test)"
+  fi
+  if command -v shellcheck >/dev/null 2>&1; then
+    say "shellcheck"
+    shellcheck scripts/ci/*.sh .githooks/pre-commit .githooks/pre-push
+  else
+    say "WARN: shellcheck not found, left to CI"
+  fi
+  if command -v pytest >/dev/null 2>&1; then
+    say "pytest scripts/ci/tests"
+    pytest scripts/ci/tests -q
+  else
+    say "WARN: pytest not found, tests left to CI"
+  fi
+fi
+
+if has '\.go$' && command -v gofmt >/dev/null 2>&1; then
+  unfmt=$(grep -E '\.go$' <<<"$staged" | xargs -r gofmt -l)
+  if [ -n "$unfmt" ]; then
+    echo "[pre-commit] gofmt needed on:" >&2
+    echo "$unfmt" >&2
+    exit 1
+  fi
+fi
+
+say "OK"

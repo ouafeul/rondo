@@ -1,0 +1,116 @@
+---
+title: The repository
+description: What lives where in the repository, how to build and test, how to propose a change, and how to write this documentation.
+---
+
+import { FileTree, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The code lives at [github.com/ouafeul/rondo](https://github.com/ouafeul/rondo).
+
+<FileTree>
+- api/v1alpha1/ Component, Target, Enrollment
+- cmd/
+  - rondo/ the CLI
+  - rondo-controller/ the operator
+  - rondo-toolbox/ Jobs (exec), probe, dashboard
+  - rondo-sandbox/ the sandbox
+- internal/
+  - controllers/ reconciliation of Targets and Enrollments
+  - jobs/ Job construction, leases
+  - exec/ helm-\* and vm-\* verbs
+  - probe/ health
+  - steps/ CLI steps
+  - config/ rondo.yaml
+  - kobj/ RONDO Kubernetes objects
+  - …
+- platform/
+  - components/ base-layer Components
+  - enrollments/ Enrollment templates per downstream
+- apps/ first-party charts (downstream-bootstrap, local-path-provisioner)
+- terraform/
+  - k3s/ management cluster
+  - rke2/ downstreams, through Rancher
+  - vm/ component machines
+- ansible/ machine install playbook
+- web/dashboard/ dashboard UI (Vite)
+- manifests/
+  - crds/ generated, do not edit
+  - dependencies.yaml everything that is mirrored
+- helmfile.yaml management charts
+- docs/ this site
+- .github/workflows/ CI workflows
+- scripts/ci/ scripts the workflows run
+</FileTree>
+
+## Build and test
+
+<Tabs>
+  <TabItem label="Go">
+    ```bash
+    go build ./cmd/rondo                         # the CLI
+    go vet ./...
+    go test ./...                               # controller tests need envtest
+    scripts/ci/gen-crds.sh                      # regenerates manifests/crds after an API change
+    go run ./cmd/rondo component lint platform   # validates the platform tree
+    ```
+  </TabItem>
+  <TabItem label="CI scripts">
+    ```bash
+    ruff check scripts/ci
+    shellcheck scripts/ci/*.sh .githooks/pre-commit .githooks/pre-push
+    pytest scripts/ci/tests -q
+    ansible-lint ansible/
+    ```
+  </TabItem>
+  <TabItem label="Hooks">
+    ```bash
+    git config core.hooksPath .githooks
+    ```
+    The pre-commit hook checks chart versions (`apps/`), lints the tree (`platform/`), runs ruff/shellcheck/pytest (`scripts/ci/`) and gofmt.
+  </TabItem>
+</Tabs>
+
+## Propose a change
+
+<Steps>
+
+1. Fork the repository (or create a branch if you have write access) and commit on a topic branch.
+2. Run the checks above locally; add an entry under `[Unreleased]` in `CHANGELOG.md` for a user-visible change.
+3. Open a pull request against `main`. The `ci.yml` workflow runs the tests, linters and scans; `pages.yml` builds this site when `docs/` changes.
+4. A maintainer reviews it; once CI is green and the review approved, it is merged into `main`.
+
+</Steps>
+
+## Conventions
+
+| Topic | Rule |
+|---|---|
+| commits | `:emoji: type: short description` — `:sparkles: feat:`, `:bug: fix:`, `:recycle: refactor:`, `:wrench: chore:`, `:memo: docs:`, `:lock: security:`, `:bookmark: release:`; `!` for a breaking change |
+| shell | `#!/usr/bin/env bash`, `set -euo pipefail`, shellcheck, variables as `"${…}"` |
+| Python | 3.11+, dependencies `pyyaml`, `requests`, `certifi` |
+| YAML, Terraform | 2 spaces, `tofu fmt` |
+| language | code, identifiers, messages and documentation in English |
+
+## Add a dependency
+
+Everything installed on a site is declared in `manifests/dependencies.yaml` and mirrored to the site's Artifactory. Images are not declared: they are extracted from the charts.
+
+| To add | Where |
+|---|---|
+| a management chart | `helm_charts` + `helmfile.yaml` |
+| a base-layer chart | `helm_charts` + `platform/components/` + `platform/enrollments/` |
+| a CLI tool | `binaries` + `internal/tools` |
+| a tofu provider | `tofu_providers` |
+
+## This documentation
+
+Astro + Starlight, under `docs/`. Pages are in `src/content/docs/` (MDX), interactive components in `src/components/`, their data in `src/data/`.
+
+```bash
+cd docs
+npm ci
+npm run dev        # http://localhost:4321/rondo/
+npm run build      # dist/, published to GitHub Pages by pages.yml
+```
+
+Some pages are generated from the repository at build time, so they never drift from the code: the [API reference](/reference/api/) (from `manifests/crds`), the [rondo.yaml explorer](/reference/rondo-yaml/) (from `rondo.yaml.example`), the base-layer graph (from `platform/components`). Internal links are written from the site root (`/concepts/model/`); the `/rondo` base is added at build time.

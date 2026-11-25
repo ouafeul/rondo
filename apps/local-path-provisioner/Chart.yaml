@@ -1,0 +1,9 @@
+apiVersion: v2
+name: local-path-provisioner
+version: 0.1.2
+description: >-
+  local-path volume provisioner for downstream RKE2 clusters, which have NO
+  default provisioner, unlike k3s, which ships one on the management cluster.
+  Without it, PVCs (e.g. of an observability stack such as kube-prometheus-stack
+  or VictoriaLogs) stay Pending forever and their pods are never scheduled.
+  First-party chart: upstream does not publish this chart to a Helm repository.

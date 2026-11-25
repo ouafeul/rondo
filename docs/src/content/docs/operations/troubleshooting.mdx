@@ -1,0 +1,46 @@
+---
+title: Troubleshooting
+description: Read the state, find the Job, and the catalog of messages with their cause.
+---
+
+import ErrorCatalog from '../../../components/ErrorCatalog.astro';
+
+## Where to look
+
+```mermaid
+flowchart TD
+  Q{"What is<br/>wrong?"}
+  Q -->|an rondo command fails| C["The message names the step:<br/><code>#lt;step#gt;: #lt;cause#gt;</code><br/>run again with --log-level debug"]
+  Q -->|an Enrollment is not Ready| E["kubectl -n rondo-system<br/>describe enrollment #lt;name#gt;"]
+  E --> S{"Stalled?"}
+  S -->|yes| S1["the message says what to do:<br/>target, role, 10 failures…"]
+  S -->|no| R{"Reconciling?"}
+  R -->|yes| J["kubectl logs job/#lt;job#gt;<br/>the Job is running"]
+  R -->|no| A{"Applied?"}
+  A -->|False| J2["status.lastAttempt.message<br/>kubectl logs job/#lt;job#gt;"]
+  A -->|True| H["status.health / healthMessage<br/>kubectl get pods on the target"]
+  Q -->|a Target is not Ready| T["kubectl describe target #lt;t#gt;<br/>rondo deploy downstreams #lt;t#gt;"]
+```
+
+```bash
+kubectl -n rondo-system get targets,enrollments -o wide
+kubectl -n rondo-system describe enrollment <name>       # conditions, lastAttempt, history
+kubectl -n rondo-system logs job/<job>                   # 24 h after the Job ends
+kubectl -n rondo-system logs deploy/rondo-controller      # reconciliation errors
+```
+
+The dashboard (`https://rondo.<base>`) shows the same, Job logs included.
+
+## Catalog
+
+<ErrorCatalog />
+
+## Recovery actions
+
+| Situation | Command |
+|---|---|
+| restart a `Stalled` Enrollment after 10 failures, without changing its spec | `kubectl -n rondo-system patch enrollment <name> --subresource=status --type=merge -p '{"status":{"consecutiveFailures":0}}'` |
+| apply a chart again, unchanged | `kubectl -n rondo-system patch enrollment <name> --subresource=status --type=merge -p '{"status":{"appliedValuesHash":""}}'` |
+| refresh a target's kubeconfig | `rondo deploy downstreams <target>` |
+| rewrite Targets, Secrets, DNS | `rondo deploy` |
+| see the commands the CLI runs | `--log-level debug`, or `--dry-run` to run nothing |

@@ -1,0 +1,64 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: rondo-synth
+    rondo.ouafeul.github.io/component-name: cluster-pki
+    rondo.ouafeul.github.io/component-type: PKIStack
+    rondo.ouafeul.github.io/synth-version: dev
+  name: selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: rondo-synth
+    rondo.ouafeul.github.io/component-name: cluster-pki
+    rondo.ouafeul.github.io/component-type: PKIStack
+    rondo.ouafeul.github.io/synth-version: dev
+  name: cluster-ca
+  namespace: cert-manager
+spec:
+  commonName: RONDO Cluster Internal CA
+  duration: 87600h
+  isCA: true
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned-bootstrap
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  secretName: cluster-ca-keypair
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: rondo-synth
+    rondo.ouafeul.github.io/component-name: cluster-pki
+    rondo.ouafeul.github.io/component-type: PKIStack
+    rondo.ouafeul.github.io/synth-version: dev
+  name: cluster-ca-issuer
+spec:
+  ca:
+    secretName: cluster-ca-keypair
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: rondo-synth
+    rondo.ouafeul.github.io/component-name: cluster-pki
+    rondo.ouafeul.github.io/component-type: PKIStack
+    rondo.ouafeul.github.io/synth-version: dev
+  name: rancher-tls
+  namespace: cattle-system
+spec:
+  dnsNames:
+  - rancher.acme.example.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: cluster-ca-issuer
+  secretName: tls-rancher-ingress

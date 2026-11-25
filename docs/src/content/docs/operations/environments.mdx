@@ -1,0 +1,64 @@
+---
+title: Environments
+description: Drive several sites from one workstation.
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+One workstation drives several sites, one **environment** each: its `rondo.yaml`, its local state, its tofu states, its vSphere folder, its kubectl context.
+
+```bash
+rondo init --env staging      # writes ~/.rondo/envs/staging/rondo.yaml (environmentName: staging)
+rondo env list                # * marks the selected environment; default is always listed
+rondo env select staging      # following commands + kubectl context rondo-staging
+rondo deploy --env prod       # once, without changing the selection
+rondo env select default      # back to ~/.rondo/rondo.yaml
+```
+
+<FileTree>
+- ~/.rondo/ ($RONDO_HOME)
+  - rondo.yaml default environment
+  - state/
+    - kubeconfig.yaml
+    - rondo.state.json Rancher token
+    - .tofurc
+    - certs/rancher-ca.pem
+    - tofu/ one working directory per rke2 cluster
+  - envs/
+    - staging/
+      - rondo.yaml
+      - state/ same content, 0700
+  - current-env selected environment, empty = default
+  - bin/ tofu, helm, helmfile, kubectl, yq, k9s, rondo
+  - helm-plugins/diff/
+  - cache/
+    - &lt;version&gt;/ IaC bundle
+    - components/&lt;name&gt;/&lt;version&gt;/ component trees
+</FileTree>
+
+| Per environment | Value |
+|---|---|
+| tofu states | `<tofuStateRepository>/<environmentName>/…` |
+| vSphere folder | `<vmFolder>/<environmentName>/…` |
+| kubectl context | `rondo` (default) or `rondo-<env>` |
+| cluster CA | `RONDO <env> CA` |
+
+## Which rondo.yaml?
+
+In order: `--config`; else `--env` (or the selected environment) → `$RONDO_HOME/envs/<env>/rondo.yaml`; else `./rondo.yaml`; else `$RONDO_HOME/rondo.yaml`. If the file's `environmentName` does not match the targeted environment, the command stops.
+
+`artifactory.caCertificateFile` accepts `~`; a relative path starts from the folder of `rondo.yaml`.
+
+## Bundle and channel
+
+Outside a clone of the repository, the CLI downloads its **IaC bundle** (tofu modules, `helmfile.yaml`, CRDs, platform tree, scripts) from the site's Artifactory into `~/.rondo/cache/<version>`, checked by SHA-256:
+
+| Priority | Source of the version |
+|---|---|
+| 1 | `--iac-version` |
+| 2 | `--iac-channel` |
+| 3 | `artifactory.rondoReleaseChannel` |
+| 4 | `edge-<branch>` for an edge CLI |
+| 5 | `stable` |
+
+Run from a clone (where `manifests/dependencies.yaml` exists), the CLI uses the clone's files.

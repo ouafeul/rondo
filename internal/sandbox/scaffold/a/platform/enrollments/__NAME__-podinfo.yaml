@@ -1,0 +1,7 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: __NAME__-podinfo
+spec:
+  component: __NAME__-podinfo
+  target: apps

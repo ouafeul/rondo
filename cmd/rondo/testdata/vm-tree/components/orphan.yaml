@@ -1,0 +1,9 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: orphan
+spec:
+  chart:
+    oci: oci://arti.local/rondo-helm-local/orphan
+    version: 1.0.0
+  namespace: orphan

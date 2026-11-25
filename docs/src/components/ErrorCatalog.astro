@@ -1,0 +1,81 @@
+---
+import { errors, type Where } from '../data/errors';
+
+const wheres: Where[] = ['CLI', 'Enrollment', 'Health', 'Target', 'Job'];
+const tone: Record<Where, string> = { CLI: 'info', Enrollment: 'err', Health: 'warn', Target: 'muted', Job: 'ok' };
+---
+
+<div class="not-content rondo-widget errs">
+  <header><span class="rondo-kicker">Search</span> A message, its cause, the fix</header>
+  <div class="bar">
+    <input type="search" placeholder="Paste an error message, or a word: role, kubeconfig, 401…" aria-label="Search a message" />
+    <div class="chips" role="group" aria-label="Filter by origin">
+      <button type="button" data-w="" aria-pressed="true">All <small>{errors.length}</small></button>
+      {wheres.map((w) => (
+        <button type="button" data-w={w} aria-pressed="false">{w} <small>{errors.filter((e) => e.where === w).length}</small></button>
+      ))}
+    </div>
+  </div>
+  <ul class="list">
+    {errors.map((e) => (
+      <li data-w={e.where} data-s={`${e.msg} ${e.cause} ${e.fix}`.toLowerCase()}>
+        <div class="msg"><span class="rondo-pill" data-tone={tone[e.where]}>{e.where}</span> <code>{e.msg}</code></div>
+        <div class="cf">
+          <p><strong>Cause</strong> {e.cause}</p>
+          <p><strong>Fix</strong> {e.fix}</p>
+        </div>
+      </li>
+    ))}
+  </ul>
+  <p class="empty" hidden>Nothing matches. Run with <code>--log-level debug</code>, or read <code>kubectl -n rondo-system describe enrollment &lt;name&gt;</code>.</p>
+</div>
+
+<style>
+  .bar { display: grid; gap: 0.6rem; margin-bottom: 0.75rem; }
+  .bar input { width: 100%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .chips small { color: var(--sl-color-gray-3); margin-left: 0.2rem; }
+  .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; max-height: 42rem; overflow: auto; }
+  .list li { margin: 0; padding: 0.6rem 0.8rem; border: 1px solid var(--rondo-border); border-radius: 0.6rem; background: var(--sl-color-black); }
+  .list li[hidden] { display: none; }
+  .msg { display: flex; gap: 0.5rem; align-items: baseline; }
+  .msg code { font-size: var(--sl-text-xs); background: none; border: none; padding: 0; color: var(--sl-color-white); word-break: break-word; }
+  .cf { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.4rem; font-size: var(--sl-text-sm); color: var(--sl-color-gray-2); }
+  @media (max-width: 40rem) { .cf { grid-template-columns: 1fr; } }
+  .cf p { margin: 0; }
+  .cf strong { display: block; font-size: var(--sl-text-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--sl-color-gray-3); }
+  .empty { font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+  mark { background: var(--sl-color-accent-low); color: inherit; }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.errs').forEach((root) => {
+    const input = root.querySelector<HTMLInputElement>('input')!;
+    const chips = [...root.querySelectorAll<HTMLButtonElement>('.chips button')];
+    const items = [...root.querySelectorAll<HTMLLIElement>('.list li')];
+    const empty = root.querySelector<HTMLElement>('.empty')!;
+    let where = '';
+    // words of the query, minus variable parts pasted from a real message
+    const words = () => input.value.toLowerCase().replace(/["'`<>()[\]]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
+    const apply = () => {
+      const ws = words();
+      let shown = 0;
+      for (const li of items) {
+        const s = li.dataset.s!;
+        const hits = ws.filter((w) => s.includes(w)).length;
+        const ok = (!where || li.dataset.w === where) && (ws.length === 0 || hits >= Math.max(1, Math.ceil(ws.length * 0.5)));
+        li.hidden = !ok;
+        if (ok) shown++;
+      }
+      empty.hidden = shown > 0;
+    };
+    input.addEventListener('input', apply);
+    chips.forEach((c) =>
+      c.addEventListener('click', () => {
+        where = c.dataset.w!;
+        chips.forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+        apply();
+      }),
+    );
+  });
+</script>

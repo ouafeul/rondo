@@ -1,0 +1,4 @@
+ INFO rondo-probe started  namespace=rondo-system version=edge-main-9c481a63
+ INFO targets loaded  targets=3
+ERROR Target kubeconfig unreadable  target=rke2-monitoring err=secrets "target-rke2-monitoring-kubeconfig" is forbidden: User "system:serviceaccount:rondo-system:rondo-probe" cannot get resource "secrets" in API group "" in the namespace "rondo-system"
+ERROR stopping  err=no Target to probe

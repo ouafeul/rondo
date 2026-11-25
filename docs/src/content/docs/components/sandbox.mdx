@@ -1,0 +1,564 @@
+---
+title: Test in the sandbox
+description: Run on the workstation what the rondo CLI runs on a site, and know in one command whether RONDO considers the component deployed.
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+`rondo-sandbox` runs on k3d clusters on the workstation what the `rondo` CLI runs on a site, with
+the same commands, and waits for RONDO's verdict on the component: all its Enrollments
+`Ready`, or the first one that fails, with its cause and its Job's log.
+
+```bash
+cd acme
+rondo-sandbox init                   # writes rondo-sandbox.yaml: the site, with rondo.yaml's keys
+rondo-sandbox deploy                 # the management cluster (k3d), RONDO, its vSphere Targets
+rondo-sandbox deploy downstreams     # one k3d cluster per downstream: rke2 Target, base layer
+rondo-sandbox component install      # publishes what CI would publish, installs, waits for the verdict
+```
+
+| On a site | In the sandbox |
+|---|---|
+| `rondo init`, `rondo.yaml` | `rondo-sandbox init`, `rondo-sandbox.yaml` (same `targets`, `secrets` keys) |
+| `rondo deploy` | `rondo-sandbox deploy` |
+| `rondo deploy downstreams [target…]` | `rondo-sandbox deploy downstreams [target…]` |
+| `rondo component install <name>` | `rondo-sandbox component install [directory]`: from the component's sources |
+| `rondo component uninstall <name>` | `rondo-sandbox component uninstall <name>` |
+| `rondo destroy downstreams [target…]`, `rondo destroy` | `rondo-sandbox destroy downstreams [target…]`, `rondo-sandbox destroy [--purge]` |
+| `rondo tui` | `rondo-sandbox tui`, read-only |
+
+`component install` exits with 0 or 1 and is run again after each fix: only what changed is
+republished and redeployed; a run without changes takes about thirty seconds. Several
+components install on the same sandbox, as on a site.
+
+All three archetypes: charts (A) on k3d clusters, machines (B and C) on containers that stand
+in for them (see [Machine components](#machine-components)).
+
+## Install
+
+`rondo-sandbox` is a separate package from `rondo`: it reads the API types, which the operators'
+workstation binary does not depend on. Each RONDO release ships it as an rpm and a deb on
+[GitHub Releases](https://github.com/ouafeul/rondo/releases):
+
+```bash
+sudo dnf install -y https://github.com/ouafeul/rondo/releases/download/v<version>/rondo-sandbox-<version>.x86_64.rpm
+```
+
+```bash
+curl -fsSLO https://github.com/ouafeul/rondo/releases/download/v<version>/rondo-sandbox_<version>_amd64.deb
+sudo apt install -y ./rondo-sandbox_<version>_amd64.deb
+```
+
+The package carries the binary and its bash, zsh and fish completion: commands and their
+options, the component directory for `component install`, the downstreams of
+`rondo-sandbox.yaml` for `deploy downstreams`, the installed components for
+`component uninstall`, their Enrollments for `logs`, the clusters' Targets and roles for
+`kubeconfig`.
+
+It needs Docker, `k3d` (5.x), `kubectl` and `helm`, which the package does not install, and
+Internet access: upstream charts, images (RONDO's own come from `ghcr.io/ouafeul`), generic
+files.
+
+### Which RONDO
+
+The package embeds the RONDO tree of its version: CRDs, base layer (`platform/`), RONDO charts
+(`apps/`), `dependencies.yaml`. It deploys the `rondo-controller` and `rondo-toolbox` images
+published for that version: the component is tested against the RONDO that sites of that
+version run.
+
+| | RONDO tree | RONDO images |
+|---|---|---|
+| default (`--rondo-version` = `rondo-sandbox`'s version) | the package's | those of the package's version, pulled from the registry |
+| `--rondo-version <version>` | the package's | those of another published version |
+| `--rondo-from <clone>` | that of an RONDO clone | built from that clone: to test a change to RONDO (`git` required) |
+
+`deploy` chooses the sandbox's RONDO; `deploy downstreams` and `component install` use the one
+it deployed. `RONDO_SRC_DIR` is the same as `--rondo-from`. `RONDO_SANDBOX_RONDO_REGISTRY`
+overrides the image registry, which the release build sets in the binary (`ghcr.io/ouafeul`).
+A binary built by hand has neither a published version nor a registry: it needs
+`--rondo-from`, and completion is loaded by hand.
+
+```bash
+go build -o ~/.local/bin/rondo-sandbox ./cmd/rondo-sandbox
+rondo-sandbox deploy --rondo-from ~/src/rondo
+source <(rondo-sandbox completion bash)
+```
+
+## Start a component
+
+`rondo-sandbox component new <directory>` writes, in a new or empty directory, a hello-world
+component named after it, which installs as is:
+
+```bash
+rondo-sandbox component new hello && cd hello
+rondo-sandbox deploy && rondo-sandbox deploy downstreams && rondo-sandbox component install
+curl http://localhost:8080          # the first-party chart's page; 8081 podinfo, 8082 the machine
+```
+
+<FileTree>
+- hello/
+  - platform/
+    - components/
+      - hello-web.yaml first-party chart: its image, a message from the Target, a site Secret
+      - hello-podinfo.yaml upstream chart, mirrored by the site
+      - hello-vm.yaml a machine: archive, config, secrets, install and verify phases
+    - enrollments/ one per Component: role `apps` (a downstream), `dmz` (a vSphere Target)
+  - apps/hello-web/ the chart, published by the component's CI
+  - build/hello-web/ its image, tagged with the chart's appVersion
+  - manifests/dependencies.yaml what the site mirrors: podinfo
+  - vm/payload/deploy/ the machine's phases
+  - rondo-sandbox.yaml the site, written as by `init`, then images, artifacts, ports
+  - README.md
+</FileTree>
+
+`--archetype a` writes only the charts, `--archetype b` only the machine. The name, in lowercase
+letters, digits and dashes (30 characters at most), prefixes the Components, the Secret, the
+namespace and the machines. A test runs the written component, for each archetype, through the
+sandbox's `check` (lint, Targets, chart and image sources): an RONDO change that would break it
+fails in CI.
+
+## What runs
+
+```
+Docker network rondo-sandbox (172.28.0.0/24)
+  artifactory.sandbox.test   nginx: /v2/ → zot, /artifactory/ → generic files
+  zot                        pushed charts and images; the rest pulled from the Internet on
+                             demand (docker.io, quay.io, registry.k8s.io, ghcr.io) and kept
+  k3d rondo-sbx               management (.100): rondo-controller, rondo-probe, dashboard;
+                             if it carries roles (targets.management.roles), the base layer
+  k3d rondo-sbx-<target>      a downstream (.101 to .127): its base layer, its workload
+  rondo-sbx-machine-<name>    a machine of a machine component (.10 to .99)
+  rondo-sandbox-ports         workstation ports to the components
+```
+
+| On a site | In the sandbox |
+|---|---|
+| Artifactory | zot + nginx, a single host: `artifactory.sandbox.test` |
+| `rondo deploy` (k3s on vSphere) | k3d `rondo-sbx`, Target `management` (`inCluster`); it also carries `targets.management.roles`, which a site does not |
+| `rondo deploy downstreams` (rke2) | k3d `rondo-sbx-<target>`, Target `<target>` (kubeconfig), one per `targets.downstreams` |
+| rke2 base layer | the same, on each downstream; on the management cluster only if it carries other roles |
+| management helmfile (metallb, cert-manager, Rancher) | nothing: the management cluster has no ingress, `rondo-sandbox dashboard` opens the dashboard through a port-forward |
+| the component's CI (chart publication, dependency mirroring, images) | charts of `apps/`, `helm_charts` and files of `dependencies.yaml`, images of `rondo-sandbox.yaml` |
+| `rondo component install <name>` | the same `ApplyTree`, on the component's tree |
+| published rondo-controller, rondo-toolbox | the same, copied from the registry into zot; built from the clone with `--rondo-from` |
+| rondo.yaml's vSphere Targets, their `vmIPs.*` | one Target per `targets.vsphere`, one IP per machine set at `component install` |
+| VM cloned from the template by `vm-apply` (`terraform/vm`) | container `rondo-sbx-machine-<name>` started by the sandbox; `vm-apply` runs a module with the same variables and outputs, without vSphere |
+| `vm-install` (RONDO playbook, SSH, `rpmRepos`, artifacts) | the same, on the containers |
+
+The engine (`internal/sandbox`) reuses the CLI's code (`internal/steps`) rather than
+rewriting it: the component is tested with the site's controller, Jobs, token resolution,
+`dependsOn`, `valuesFrom` and `health` rules.
+
+## The site: rondo-sandbox.yaml
+
+At the root of the component, `rondo-sandbox.yaml` describes the sandbox's site with rondo.yaml's
+keys, without what the workstation provides (Artifactory, vCenter, nodes, versions):
+
+```yaml
+targets:
+  # management:
+  #   roles: [monitoring]         # sandbox only: this role on the management cluster, one cluster less
+  downstreams:                    # one k3d cluster each
+    - name: obs
+      roles: [monitoring]
+      componentValues: {retention: 1d}
+  vsphere:                        # container machines
+    - name: dc1
+      roles: [dmz]
+      componentValues: {helloMessage: hello}
+secrets:
+  components:
+    acme: {grafanaAdminPassword: sandbox}
+```
+
+`rondo-sandbox init` writes it from the component's tree: one downstream per role its chart
+Enrollments target, one vSphere Target per role of its machine Enrollments (each named after
+its role), the `componentValues` each one reads (`CHANGEME`, to fill in) and the Secret keys
+(`sandbox`); `--force` rewrites `targets` and `secrets` of an existing file and keeps the rest.
+`-c` points to another file, for `deploy`, `deploy downstreams` and `check`; without a file,
+`deploy` deploys the management cluster alone.
+
+| Key | As on a site | Otherwise |
+|---|---|---|
+| `targets.downstreams[]` `{name, roles, componentValues}` | one rke2 Target per entry; `deploy downstreams` creates its cluster | `rke2` (nodes, CNI, ingress IP): k3d stands in for it |
+| `targets.vsphere[]` `{name, roles, componentValues}` | one vSphere Target per entry, set by `deploy` | vCenter, template, network: the sandbox fills them in; `vmIPs.*` too, one IP per machine |
+| `targets.management` | — | `roles`, `componentValues`: sandbox only |
+| `secrets.components` | the Secrets the components read (`valuesFrom`, `secretsFrom`) | a missing key is `sandbox` |
+
+A role carried by two Targets (management included), a name used twice, a downstream or a
+vSphere Target without a role are refused. The standard Target values (`ingressIP`,
+`imageRegistry`, `artifactoryCA`, `storageClass`) and `rondo-platform-values` are provided.
+
+As on a site, `deploy` sets the management and vSphere Targets and the Secrets, and
+`deploy downstreams` the rke2 Targets: changing a `componentValues` or a role means running
+again the command that sets its Target. `component install` resolves each Enrollment on these
+Targets, like the controller, and says what to do with one that finds none (a downstream
+declared but not deployed, a role no Target carries, a chart on a vSphere Target).
+
+A site's management cluster has no base-layer Enrollments: a component that targets
+`management` there with `dependsOn: traefik` would wait forever, and the sandbox shows it.
+When the management cluster carries other roles (`targets.management.roles`), it receives the
+base layer for their `dependsOn`, and the probe gets the right to read Secrets,
+`cert-manager.io` and `metallb.io` on that cluster (ClusterRole `rondo-sandbox-probe-read`): on
+a site, these objects live on downstreams it reads through their kubeconfig.
+
+Two releases with the same name and namespace cannot share a Target: `component install`
+refuses an Enrollment whose release is already delivered on its Target, by the same component,
+another installed component or RONDO's base layer, as the site would fail. ACME is the example:
+`fluent-bit` (role `monitoring`) and `fluent-bit-forward` (role `management`) both deliver
+`fluent-bit` in `logging`, and do not go on the same cluster. A cluster-scoped resource with
+the same name, which the analysis does not see, shows up as
+`cannot be imported into the current release`: give these roles to two downstreams.
+
+## What is checked
+
+| Stage | Fails on |
+|---|---|
+| validation | CRD schema, references, cyclic `dependsOn`, chart not declared in `dependencies.yaml` (`rondo component lint`); Enrollment without a Target, or on a Target of the other archetype; `${target.values.x}` its Target does not provide; release already delivered on its Target; Component or Enrollment of another installed component |
+| publication | chart not found upstream, Component pinning a version other than its chart in `apps/`, generic file or image not found |
+| verdict | failed `helm-apply` Job (values, template, `--atomic --wait`), `Degraded` health, `dependsOn` never satisfied, no verdict before `--timeout`; image of a pod or CronJob of the component that does not go through `${target.values.imageRegistry}` (unreachable in air-gap), or that nobody publishes |
+
+RONDO considers a CronJob healthy as soon as it is applied: its image is only pulled on its
+first run. The sandbox therefore asks each image of the component from its registry; an
+`rondo-sandbox.yaml` image that was not built (`--no-build`) is only a warning.
+
+Validation also shows the **site contract**: the roles, the Secrets (`secrets.components`) and
+the `componentValues` that a site's `rondo.yaml` must carry for this component.
+`rondo-sandbox.yaml` is its draft, and the sandbox fills in the Secrets (`sandbox` for each
+key): this contract is what goes into the component's install documentation.
+
+A wait that cannot end is reported, not endured:
+
+- an operator pod (`rondo-controller`, `rondo-probe`) in a restart loop stops the command, with
+  its last logs: an RONDO defect the component cannot fix;
+- an Enrollment that picked up another one's Job stops it too: its workload was never
+  applied on its Target;
+- a node under `DiskPressure`, `MemoryPressure` or `PIDPressure` stops it: its kubelet evicts
+  pods and schedules no more;
+- three minutes without change list the pods that are not running and their last event
+  (`ImagePullBackOff`, volume not found…).
+
+The verdict is given only once each Enrollment has **converged**: applied chart version and
+values fingerprint equal to what the controller wants. A `Ready` inherited from the previous
+install does not count, nor a failure from before the command.
+
+What the sandbox does not check:
+
+- air-gap mirroring: images come from the Internet, not only from `dependencies.yaml`;
+- the registry form: the sandbox serves images at the root of `artifactory.sandbox.test` on
+  every Target, while a site serves them as `<host>/<repository>` on the management cluster
+  and `<repository>.<host>` on downstreams;
+- that the component **works**: `Ready` says its objects are applied and healthy as the probe
+  sees them, not that logs arrive or that the dashboard responds; the workstation ports are
+  there to check that;
+- for machines, what a container is not (see [Machine components](#machine-components)), and
+  what depends on the site's hardware (storage, network, node size).
+
+The component's `apps/` charts are published as `<version>-sbx<fingerprint>`: a template
+changed without a version bump is redeployed anyway. An `rondo-sandbox.yaml` image keeps its
+tag: rebuilding it without an `appVersion` bump does not restart its pods.
+
+## What the component publishes
+
+The other keys of `rondo-sandbox.yaml` belong to the component: what its CI publishes, and what
+the workstation reaches. All optional.
+
+```yaml
+name: acme                       # default: the directory's name
+platform: platform                # default
+apps: apps                        # default
+dependencies: manifests/dependencies.yaml   # default
+images:                           # images the component's CI publishes itself
+  - name: acme/log-summarizer
+    context: build/log-summarizer
+    tagFromChart: apps/log-summarizer       # or tag: "1.2.3"
+ports:                            # workstation ports to the component
+  - hostPort: 3000
+    host: grafana.monitoring.${INGRESS_BASE_DOMAIN}
+  - hostPort: 5514
+    role: monitoring
+    port: 514
+    protocol: udp
+  - hostPort: 8443
+    machine: mft-gateway-1          # a machine of a machine component
+    port: 8443
+artifacts:                        # machine files the component's CI publishes
+  - path: components/mft/mft-3.2.0.tar.gz   # the Component's path
+    dir: deploy                     # a directory archived as tar.gz…
+  - path: components/mft/mft-agent.rpm
+    build: make rpm                 # …or a file, after a command
+    file: dist/mft-agent.rpm
+rpmRepos:                         # upstream of each RPM repository the site mirrors
+  rondo-rpms-local/el9/9.6/baseos: https://dl.rockylinux.org/vault/rocky/9.6/BaseOS/x86_64/os/
+```
+
+`component install ../other` reads that directory's `rondo-sandbox.yaml`: its component keys,
+and its `secrets.components`, which add to the site's. Its `targets` do not count: the site is
+the one `deploy` set up.
+
+## Workstation ports
+
+Each `ports` entry is published on `127.0.0.1` (`RONDO_SANDBOX_BIND`) by an nginx on the
+sandbox network, `rondo-sandbox-ports`, recreated when the list changes: neither `/etc/hosts`
+nor `kubectl port-forward`.
+
+| Entry | The workstation port leads to |
+|---|---|
+| `host: <name>.<role>.${INGRESS_BASE_DOMAIN}` | the ingress of the cluster that carries this role (or whose Target has this name), over HTTPS, under that name: a user's path on site. The port is read over HTTP; redirects to the ingress host and the forms' `Origin` are rewritten, so a Grafana login passes its CSRF check |
+| `role: <role or Target>`, `port`, `protocol` (`tcp` default, `udp`, `http`) | that port of its cluster's ingress IP: a `LoadBalancer` Service sharing it (syslog input, raw streams) |
+| `machine: <name>`, `port`, `protocol` | that port of a machine of a machine component |
+
+`role` and `machine` relay the port as is, over TCP or UDP: the sandbox does not know what it
+serves. `protocol: http` relays it over TCP like `tcp`, and `status` shows it as a
+`http://localhost:<port>` link rather than `tcp://`.
+
+With ACME:
+
+```bash
+xdg-open http://localhost:3000                                # Grafana, admin / sandbox
+curl 'http://localhost:9428/select/logsql/query' --data-urlencode 'query=_time:5m | stats count()'
+logger --server 127.0.0.1 --port 5514 --udp "hello ACME"     # arrives in VictoriaLogs
+```
+
+The final report lists the ports, and flags a `host` that no ingress of the component serves.
+A port already taken on the workstation, or by another installed component, stops
+`component install` before the install.
+
+## Machine components
+
+A `spec.vm` Component (archetypes B and C, see [Machine component](/components/machines/))
+follows a site's path, controller Jobs included; only vSphere and the VM are replaced.
+
+### What runs
+
+| Site step | In the sandbox |
+|---|---|
+| vSphere Target of `rondo.yaml`, machine IPs (`vmIPs.<component>.<group>`) | the `targets.vsphere` Target that carries the Enrollment's role; `component install` sets one IP per machine on it, from `.10` to `.99` of the sandbox network, kept from one install to the next |
+| `vm-apply`: `tofu apply` of `terraform/vm`, template clone | the same Job, the same `tofu`, the state on the sandbox's Artifactory; its module (`vm.tar.gz`) keeps the variables, outputs and inventory of `terraform/vm`, without vSphere: the machines are already there |
+| the VM, after cloud-init | an `rondo-sbx-machine-<name>` container, named and addressed like the VM (`<component>-<group>-<n>`), with `--cpus` and `--memory` from its size |
+| `vm-install`: RONDO's (or the component's) playbook, repositories, artifacts, configuration, secrets, phases | the same Job, the same playbook, over SSH |
+
+The machine is an RONDO image, `rondo-sandbox-machine`: Rocky Linux 9.6, pinned like a site's
+template (base image and packages from the frozen 9.6 repository), systemd as PID 1, sshd, the
+`rondo` account with RONDO's key and `sudo`, Artifactory's CA, the cloud-init completion marker
+the playbook waits for, and no Internet RPM repository enabled: only the component's, as on an
+air-gap site. It is pulled from the registry like the controller, or built from the clone with
+`--rondo-from`, by `deploy` as soon as `rondo-sandbox.yaml` declares a vSphere Target. It is not
+privileged: a private cgroup namespace and `CAP_SYS_ADMIN`, which systemd requires.
+
+### Example
+
+A component with one web machine (archetype B), whose installer installs `jq` from the site's
+BaseOS repository and starts a service:
+
+```yaml title="platform/components/hello-vm.yaml (excerpt)"
+spec:
+  vm:
+    template: ${target.values.vmTemplate}
+    sizing: {cpu: 1, memoryMb: 512, diskGb: 10}
+    groups:
+      - {name: web, replicas: 2}
+    rpmRepos:
+      - {name: baseos, repo: "${ARTIFACTORY_RPM_REPO}", path: el9/9.6/baseos,
+         gpgKey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9}
+    artifacts:
+      - {repo: "${ARTIFACTORY_GENERIC_REPO}", provenance: component,
+         path: components/hello-vm/1.0.0/hello.tar.gz, extract: true}
+    config:
+      MESSAGE: {value: "${target.values.helloMessage}"}
+    installer:
+      version: "1.0.0"
+      configFile: hello.conf
+      secretsFile: secrets.env
+      secretsFrom:
+        - {secretRef: {name: hello-vm}, keys: [TOKEN]}
+      phases:
+        - {name: install, script: deploy/install.sh}
+        - {name: verify, script: deploy/verify.sh}
+```
+
+```yaml title="rondo-sandbox.yaml"
+targets:
+  vsphere:
+    - name: dc1
+      roles: [dmz]                  # the role the hello-vm Enrollment targets
+      componentValues:
+        helloMessage: hello from the sandbox
+secrets:
+  components:
+    hello-vm: {TOKEN: s3cret}
+artifacts:
+  - path: components/hello-vm/1.0.0/hello.tar.gz
+    dir: payload                    # payload/deploy/install.sh, verify.sh
+rpmRepos:
+  rondo-rpms-local/el9/9.6/baseos: https://dl.rockylinux.org/vault/rocky/9.6/BaseOS/x86_64/os/
+ports:
+  - {hostPort: 8088, machine: hello-vm-web-1, port: 8080, protocol: http}
+```
+
+```bash
+rondo-sandbox deploy                       # the management cluster and Target dc1; no downstream
+rondo-sandbox component install            # ~1 min 30 the first time, ~20 s afterwards
+curl http://localhost:8088/               # hello-vm-web-1's service
+rondo-sandbox ssh hello-vm-web-2 -- systemctl status hello
+```
+
+`component install` shows the site contract: a vSphere Target with an EL9 `vmTemplate`, its
+roles, the value `vmIPs.hello-vm.web` (2 IPs), the Secrets and `componentValues` read.
+
+### What the component provides
+
+What the component's CI publishes, and what the site mirrors, come from `rondo-sandbox.yaml`:
+
+- `artifacts`: each `provenance: component` file of the Component's `artifacts`, and the
+  content of `spec.vm.ansible`, with what makes it: a directory (`dir`, archived as tar.gz,
+  modes kept) or a file (`file`, after the `build` command, run in the component's
+  directory). An `upstream` artifact comes from the `binaries` of `dependencies.yaml`;
+- `rpmRepos`: the upstream URL of each RPM repository, under the Component's `<repo>/<path>`
+  key (tokens resolved: `${ARTIFACTORY_RPM_REPO}` is `rondo-rpms-local`). The sandbox's
+  Artifactory relays it where the site mirrors it; `gpgKey` must be readable from the machine
+  (`file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9` is there);
+- `ports`: `machine: <name>` and `port` lead a workstation port to a machine; `protocol: http`
+  makes it an `http://` link in `status`.
+
+`check` refuses an artifact or a repository without a source, before any cluster.
+
+### Iterate
+
+A machine keeps what was installed on it from one `component install` to the next, like a VM,
+and RONDO only replays `vm-install` on a change of installer, configuration, artifact or secret
+(see [What reruns what](/components/machines/#what-reruns-what)). The sandbox sets the
+fingerprint of each artifact it builds (`digest`) in the applied Component, and the version of
+`spec.vm.ansible` gets `-sbx<fingerprint>`: a changed script replays the install on the next
+`component install`, like a new version published by CI.
+
+An added replica, though, is not installed, as on a site. `component install --fresh`
+recreates the component's machines blank and uninstalls it first: the first install, every
+time, in a few more seconds. `component uninstall` removes its machines, and their IPs from
+their vSphere Target.
+
+### Debug an install
+
+| Command | What it gives |
+|---|---|
+| `rondo-sandbox logs <enrollment>` | the last Job's log: `vm-apply` (inventory) or `vm-install` (Ansible output of each phase, stdout and stderr) |
+| `rondo-sandbox why <enrollment>` | the Enrollment that is not `Ready`, the last Job and the end of its log |
+| `rondo-sandbox pods <enrollment>` | its machines: container, systemd state, failed units |
+| `rondo-sandbox ssh <machine> [-- command]` | a root shell on the machine (`/opt/rondo/<component>`, `journalctl`, `systemctl`), or a command, whose exit code it returns |
+
+The verdict waits for each Enrollment to converge, as the controller sees it: machines
+provisioned and install of the desired version and configuration done. A Job that runs too
+long is named after three minutes without change.
+
+### Limits
+
+What a container is not: no kernel of its own (SELinux, modules, `sysctl` outside namespaces,
+reboot), no disks (`diskGb` is not applied), not the site's template (RHEL, hardening,
+packages). Neither `terraform/vm` nor vSphere run: RONDO's simulator covers them.
+
+## Commands
+
+```bash
+rondo-sandbox component new <directory> [--archetype a,b]   # a hello-world component
+rondo-sandbox init [directory] [--force]         # writes rondo-sandbox.yaml from the tree
+rondo-sandbox deploy [-c rondo-sandbox.yaml]      # the management cluster, RONDO, vSphere Targets, Secrets
+               [--rondo-version <version> | --rondo-from <clone>]
+rondo-sandbox deploy downstreams [target…]       # all those of rondo-sandbox.yaml by default
+rondo-sandbox component install [directory] [--fresh] [--no-build] [--timeout 30m] [--max-failures 2]
+rondo-sandbox component uninstall <name>
+rondo-sandbox status             # the Targets, then the components' Enrollments, URLs, machines and ports
+rondo-sandbox logs <enrollment>  # its last Job's log
+eval "$(rondo-sandbox kubeconfig)"             # KUBECONFIG of the management cluster
+eval "$(rondo-sandbox kubeconfig monitoring)"  # that of the cluster of this Target, or that carries this role
+rondo-sandbox destroy downstreams [target…]    # their base layer, their Target, their cluster
+rondo-sandbox destroy [--purge]  # everything; --purge also empties the image and chart cache
+rondo-sandbox version            # or --version, -v
+```
+
+`--fresh` uninstalls the component before installing it again: to test a first install, and
+the removal of each Enrollment. `destroy downstreams` warns when an installed component has
+Enrollments on a destroyed downstream: they stay failed until its `component uninstall`. The
+sandbox's CA is `~/.rondo-sandbox/pki/ca.pem`.
+
+## Debug
+
+Between two `component install` runs, without `kubectl` or a kubeconfig: each command finds by
+itself the cluster where the Enrollment runs, and completion offers those of the installed
+components.
+
+| Command | What it does |
+|---|---|
+| `rondo-sandbox check [directory]` | the `component install` checks, in seconds and without a sandbox, against the site of its `rondo-sandbox.yaml` (or `-c`) with all Targets deployed: tree, Target of each Enrollment, collisions, site contract, ports, source of each chart, images; also for the component's CI |
+| `rondo-sandbox why [enrollment]` | what blocks right now: operator in a loop, node under pressure, picked-up Job, Enrollments not `Ready` with their last Job's log, stopped pods; exits with 1 if something blocks |
+| `rondo-sandbox values <enrollment>` | the values RONDO applies: the Component's and the Enrollment's, `${target.*}` tokens resolved; `${secrets.*}` stay tokens, the Job resolves them |
+| `rondo-sandbox template <enrollment>` | the chart's manifests rendered with these values, by the toolbox's helm (the one that installs) |
+| `rondo-sandbox pods [enrollment]` | the pods of an Enrollment, or of all installed components: ready, state, restarts |
+| `rondo-sandbox tail <enrollment> [--since 10m] [--follow=false]` | their logs, all containers, prefixed by pod and container |
+| `rondo-sandbox dashboard [--port 8080] [--no-open]` | RONDO's dashboard on `localhost`, through a port-forward to the management cluster, opened in the browser; until Ctrl-C |
+| `rondo-sandbox tui` | `rondo tui` on the sandbox's management cluster, read-only: Components and Enrollments grouped by installed component (⏎ on its root: its charts, machines and Enrollments), Targets, Jobs and their logs; `tab` gives the view menu, ↑↓ changes view there; the mouse clicks and scrolls (`M` gives it back to the terminal). The header shows `READ-ONLY`; its commands (`deploy`, `destroy`, `component`) and the `rondo.yaml` editor, which act on a site, are greyed out and refused |
+| `rondo-sandbox ssh <machine> [-- command]` | a root shell on a machine of a machine component, or a command whose exit code it returns (`docker exec`); completion offers the machines of the installed components |
+| `rondo-sandbox restart <enrollment>` | restarts its Deployments, StatefulSets and DaemonSets, triggers its CronJobs, and first removes `rondo-sandbox.yaml`'s images from the node: rebuilt under the same tag, an image would not be pulled again |
+
+A pod created by an operator (a Prometheus) is not delivered by the release: `pods` and `tail`
+recognize it by its name, `restart` does not restart it.
+
+## Resources
+
+Measured with ACME (2 clusters), on a 12-core workstation:
+
+| | |
+|---|---|
+| management (k3s, RONDO, `fluent-bit-forward`) | 0.65 GB of RAM |
+| monitoring (k3s, base layer, ACME) | 2.5 GB |
+| zot + nginx | 0.06 GB |
+| one machine (container: systemd, sshd, a Python test service) | 0.06 GB, capped at its `memoryMb`; 460 MB image, once |
+| first `deploy` | download of RONDO's images, charts and images: once per version |
+| `deploy --rondo-from` on a new cluster | ~3 min, including rebuilding RONDO's images when the clone changed |
+| `deploy downstreams` (one downstream) | ~3 min, waiting for its base layer |
+| `component install` of ACME on new clusters | ~3 min waiting for the verdict, plus building its images (`log-summarizer`: ~2 min without cache) |
+| `component install` without changes | ~30 s |
+
+k3d nodes keep their images on Docker's disk: above 85 %, their kubelet goes into
+`DiskPressure` and evicts pods. `deploy`, `deploy downstreams` and `component install` refuse
+to start above 85 %, warn above 80 %, and keep no local copy of the images they push to zot.
+
+zot's cache survives `destroy`, and so does the RONDO tree extracted from the package
+(`~/.rondo-sandbox/rondo/`). The operator's tag is the RONDO version; with `--rondo-from`, the
+clone's commit (plus the fingerprint of what is not committed there): it only restarts if RONDO
+changed. k3s disables traefik, servicelb, local-storage and metrics-server: RONDO's base layer
+provides them, as on rke2.
+
+Variables: `RONDO_SRC_DIR`, `RONDO_SANDBOX_RONDO_REGISTRY`, `RONDO_SANDBOX_BIND` (`127.0.0.1`),
+`RONDO_SANDBOX_HOME` (`~/.rondo-sandbox`), `RONDO_SANDBOX_SUBNET` (a `/24`, `172.28.0.0/24`),
+`RONDO_SANDBOX_REGISTRY_PORT` (`5100`), `RONDO_SANDBOX_K3S_IMAGE` (k3d's default).
+
+## Ideas
+
+Options studied, not adopted.
+
+### Choosing the machine image
+
+All machines run on RONDO's image, `rondo-sandbox-machine` (Rocky Linux 9.6). A component could
+provide another one, closer to its site's template (RHEL, hardened image, packages already
+there), in `rondo-sandbox.yaml`:
+
+```yaml
+machines:
+  image: registry.example/rhel9-golden:9.6        # for all machines
+  templates:                                      # or by the Component's spec.vm.template
+    rhel9-hardened: registry.example/rhel9-hardened:2026.10
+```
+
+- the template the Component names (tokens resolved) wins, then `image`, then RONDO's image,
+  which is then not pulled if no machine uses it;
+- the image is not modified: the sandbox mounts its machine startup (account, key, CA,
+  cloud-init marker) and runs it as the entry point. The image only needs systemd as
+  `/sbin/init`, `sshd`, `sudo`, `python3`, `tar`, `curl`, `useradd`, `update-ca-trust` and
+  `dnf`, which `component install` would check before starting the machines;
+- changing a machine's image would recreate it blank, like a VM recloned from another
+  template, reinstalled only if the install changes or with `component install --fresh`.
+
+A prototype was run end to end with an AlmaLinux 9 image: install by RONDO's playbook,
+AlmaLinux RPM repository relayed, an image without `sshd` or `sudo` refused, machines recreated
+on image change then reinstalled by `--fresh`. What it would not bring: a kernel or an SELinux
+of their own, which a container alone does not give.

@@ -1,0 +1,27 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: rondo-synth
+    rondo.ouafeul.github.io/component-name: metallb-config
+    rondo.ouafeul.github.io/component-type: MetalLBConfig
+    rondo.ouafeul.github.io/synth-version: dev
+  name: default-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.0.0.50/32
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: rondo-synth
+    rondo.ouafeul.github.io/component-name: metallb-config
+    rondo.ouafeul.github.io/component-type: MetalLBConfig
+    rondo.ouafeul.github.io/synth-version: dev
+  name: default-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - default-pool

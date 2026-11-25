@@ -1,0 +1,79 @@
+---
+- name: "Effective installer settings"
+  ansible.builtin.set_fact:
+    _inst: "{{ rondo_installer_defaults | combine(rondo_installer) }}"
+
+- name: "Refuse an installer without phases"
+  ansible.builtin.fail:
+    msg: >-
+      rondo_installer.phases is empty: no entry point to run. The `vm-install`
+      verb fills it from `spec.vm.installer`; an empty contract here means the
+      verb and the role disagree (two bundle versions).
+  when: _inst.phases | length == 0
+
+- name: "Installer directory"
+  ansible.builtin.set_fact:
+    _inst_dir: "{{ (rondo_workdir ~ '/' ~ _inst.phases[0].script) | dirname }}"
+
+- name: "Render the configuration file"
+  ansible.builtin.template:
+    src: "{{ _inst.config_format }}-config.j2"
+    dest: "{{ _inst_dir }}/{{ _inst.config_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  become: true
+  when: _inst.config_file | length > 0
+
+- name: "Check that every entry point is present and executable"
+  ansible.builtin.file:
+    path: "{{ rondo_workdir }}/{{ _phase.script }}"
+    mode: "0750"
+    owner: root
+    group: root
+  become: true
+  loop: "{{ _inst.phases }}"
+  loop_control:
+    loop_var: _phase
+    label: "{{ _phase.name }}"
+
+- name: "Install the component"
+  block:
+    - name: "Write the secrets file (0600)"
+      ansible.builtin.template:
+        src: secrets.j2
+        dest: "{{ _inst_dir }}/{{ _inst.secrets_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+      become: true
+      when: _inst.secrets_file | length > 0
+
+    - name: "Run the installer sequence"
+      ansible.builtin.include_tasks: installer_phase.yml
+      loop: "{{ _inst.phases }}"
+      loop_control:
+        loop_var: _phase
+        label: "{{ _phase.name }}"
+
+  always:
+    - name: "Destroy the secrets file"
+      ansible.builtin.command:
+        argv: [shred, -u, -z, "{{ _inst_dir }}/{{ _inst.secrets_file }}"]
+        removes: "{{ _inst_dir }}/{{ _inst.secrets_file }}"
+      become: true
+      register: rondo_shred
+      changed_when: rondo_shred.rc == 0
+      failed_when: false
+      when: _inst.secrets_file | length > 0
+
+    - name: "Warn if the secrets could not be destroyed"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: {{ _inst_dir }}/{{ _inst.secrets_file }} could not be
+          destroyed ({{ rondo_shred.rc | default('?') }}). A password file is left
+          on {{ inventory_hostname }}; delete it by hand.
+      when:
+        - _inst.secrets_file | length > 0
+        - rondo_shred is defined
+        - rondo_shred.rc | default(0) != 0

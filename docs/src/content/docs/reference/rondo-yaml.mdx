@@ -1,0 +1,35 @@
+---
+title: rondo.yaml
+description: Every key of the site manifest, its rules and what it feeds.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import RondoYamlExplorer from '../../../components/RondoYamlExplorer.astro';
+
+`rondo init` writes this template. Decoding is **strict**: an unknown key is refused (`invalid manifest: …`).
+
+<RondoYamlExplorer />
+
+## Cross-key rules
+
+| Rule | Message |
+|---|---|
+| names unique across `targets.vsphere` and `targets.downstreams` | `targets: duplicate name "<n>"` |
+| name and role `management` reserved | `the name and role "management" are reserved for the management cluster` |
+| each `vsphereTarget` names an entry of `targets.vsphere` | `vsphereTarget "<ref>" names no vsphere target` |
+| one vCenter password per vSphere Target, no other | `secrets.vcenterPasswords.<n> is required` / `no vsphere target has this name` |
+| odd number of rke2 control planes | `must hold an odd number of nodes (etcd quorum)` |
+| exactly 3 `serverNodes` | |
+
+## What the CLI derives from it
+
+| Derived | Value |
+|---|---|
+| hosts | `rancher.<ingressBaseDomain>`, `rondo.<ingressBaseDomain>` |
+| tofu states | `<url>/<tofuStateRepository>/<environmentName>/{k3s, <target>, vm/<enrollment>}/terraform.tfstate` |
+| vSphere folders | `<vmFolder>/<env>/MANAGEMENT`, `<vmFolder>/<env>/<rke2 target>`, `<vmFolder>/<env>/<component>` |
+| registry (management) | `<Artifactory host>/<dockerRepository>` |
+| registry (rke2) | `rke2.registryHost`, else `<dockerRepository>.<Artifactory host>` |
+| internal CA | `RONDO <environmentName> CA` |
+
+<Aside type="tip">After a change: `rondo deploy` for the management cluster, the vSphere Targets, the secrets and the DNS; `rondo deploy downstreams <t>` for an rke2 cluster and its Target.</Aside>

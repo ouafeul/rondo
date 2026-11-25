@@ -1,0 +1,82 @@
+---
+- name: "Artifact destination directories"
+  ansible.builtin.file:
+    path: "{{ rondo_workdir }}/{{ item.dest | default('') }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop: "{{ rondo_artifacts }}"
+  loop_control:
+    label: "{{ item.dest | default('.') }}"
+  become: true
+
+- name: "Download the artifacts"
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ rondo_workdir }}/{{ item.dest | default('') }}/{{ item.url | basename }}"
+    url_username: "{{ rondo_artifactory_user }}"
+    url_password: "{{ rondo_artifactory_password }}"
+    force_basic_auth: true
+    checksum: "{{ item.digest | default(omit) }}"
+    owner: root
+    group: root
+    mode: "0640"
+    timeout: 300
+  loop: "{{ rondo_artifacts }}"
+  loop_control:
+    label: "{{ item.url | basename }}"
+  become: true
+  register: rondo_downloads
+  retries: 3
+  delay: 10
+  until: rondo_downloads is succeeded
+
+- name: "Warn about an artifact without a checksum"
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.url | basename }} is downloaded WITHOUT checksum verification
+      (no `digest` in component.yaml). Nothing guarantees it is the one CI
+      published.
+  loop: "{{ rondo_artifacts | rejectattr('digest', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.url | basename }}"
+
+# The marker avoids extracting an archive twice, but only knows it by name: a new archive with the
+# same name (another checksum, another version directory) would keep the old content. Once
+# downloaded again, it is extracted again.
+- name: "Forget the extraction of a re-downloaded archive"
+  ansible.builtin.file:
+    path: "{{ rondo_workdir }}/{{ item.item.dest | default('') }}/.rondo-extracted-{{ item.item.url | basename }}"
+    state: absent
+  loop: "{{ rondo_downloads.results | selectattr('changed') | selectattr('item.extract', 'defined') | selectattr('item.extract') | list }}"
+  loop_control:
+    label: "{{ item.item.url | basename }}"
+  become: true
+
+- name: "Extract the requested archives"
+  ansible.builtin.unarchive:
+    src: "{{ rondo_workdir }}/{{ item.dest | default('') }}/{{ item.url | basename }}"
+    dest: "{{ rondo_workdir }}/{{ item.dest | default('') }}"
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ rondo_workdir }}/{{ item.dest | default('') }}/.rondo-extracted-{{ item.url | basename }}"
+  loop: "{{ rondo_artifacts | selectattr('extract', 'defined') | selectattr('extract') | list }}"
+  loop_control:
+    label: "{{ item.url | basename }}"
+  become: true
+  register: rondo_extracted
+
+- name: "Mark the extracted archives"
+  ansible.builtin.file:
+    path: "{{ rondo_workdir }}/{{ item.dest | default('') }}/.rondo-extracted-{{ item.url | basename }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0640"
+  loop: "{{ rondo_artifacts | selectattr('extract', 'defined') | selectattr('extract') | list }}"
+  loop_control:
+    label: "{{ item.url | basename }}"
+  become: true
+  changed_when: false

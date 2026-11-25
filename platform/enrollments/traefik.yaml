@@ -1,0 +1,7 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Enrollment
+metadata:
+  name: traefik
+spec:
+  component: traefik
+  target: each-rke2-target

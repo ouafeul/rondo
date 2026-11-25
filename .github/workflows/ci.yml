@@ -1,0 +1,373 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: "1.26.x"
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  SETUP_ENVTEST_VERSION: v0.24.1
+  KUBECONFORM_VERSION: v0.6.7
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      manifests: ${{ steps.filter.outputs.manifests }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+      deps: ${{ steps.filter.outputs.deps }}
+      docs: ${{ steps.filter.outputs.docs }}
+      web: ${{ steps.filter.outputs.web }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # Pushes to main and manual runs check everything.
+          base: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
+          filters: |
+            go: &go
+              - '**/*.go'
+              - go.mod
+              - go.sum
+              - 'cmd/rondo-sandbox/rondo-sandbox.sh'
+              - 'scripts/ci/check-coverage.py'
+              - 'scripts/ci/envtest-version.sh'
+              - 'manifests/dependencies.yaml'
+            manifests:
+              - *go
+              - 'api/**'
+              - 'apps/**'
+              - 'platform/**'
+              - 'rondo.yaml.example'
+              - 'terraform/**'
+              - 'manifests/**'
+              - 'ansible/**'
+              - 'scripts/ci/**'
+            scripts:
+              - 'scripts/**'
+              - '.githooks/*'
+              - 'cmd/rondo-sandbox/rondo-sandbox.sh'
+              - 'build/**'
+              - 'ansible/**'
+              - '.ansible-lint'
+              - 'manifests/dependencies.yaml'
+              - '.github/workflows/**'
+            deps:
+              - 'manifests/**'
+              - helmfile.yaml
+              - 'platform/**'
+              - 'apps/**'
+              - 'internal/probe/**'
+              - 'scripts/ci/check-health-model.sh'
+              - 'scripts/ci/resolve-deps.py'
+              - 'scripts/ci/extract-helm-images.py'
+            docs:
+              - 'docs/**'
+              - CHANGELOG.md
+              - 'manifests/crds/**'
+              - 'platform/components/**'
+              - 'rondo.yaml.example'
+            web:
+              - 'web/**'
+              - 'internal/dashboard/**'
+            workflows:
+              - '.github/**'
+
+  go:
+    name: Go (vet, test, vulncheck, build)
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=readonly
+      RONDO_REQUIRE_ENVTEST: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: go vet
+        run: go vet ./...
+      - name: Set up envtest
+        run: |
+          go install "sigs.k8s.io/controller-runtime/tools/setup-envtest@${SETUP_ENVTEST_VERSION}"
+          k8s="$(scripts/ci/envtest-version.sh)"
+          test -n "$k8s" || { echo "FAILED: envtest version could not be determined" >&2; exit 1; }
+          assets="$("$(go env GOPATH)/bin/setup-envtest" use "$k8s" -p path)"
+          test -n "$assets" || { echo "FAILED: envtest binaries not installed" >&2; exit 1; }
+          echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"
+          echo "envtest: kube-apiserver $k8s at $assets"
+      - name: go test
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@v2.1.0
+          set -o pipefail
+          go test -v ./... -coverprofile=cover.out -covermode=set 2>&1 \
+            | tee test-output.log \
+            | "$(go env GOPATH)/bin/go-junit-report" -set-exit-code > go-junit.xml
+      - name: Coverage floors
+        run: python3 scripts/ci/check-coverage.py cover.out
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          "$(go env GOPATH)/bin/govulncheck" ./...
+      - name: Build binaries
+        run: |
+          ver="edge-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::8}"
+          ldflags="-s -w -X rondo/internal/version.Version=${ver} -X rondo/internal/version.Commit=${GITHUB_SHA::8}"
+          CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags" -o rondo-linux-amd64 ./cmd/rondo
+          CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags -X main.rondoRegistry=ghcr.io/${GITHUB_REPOSITORY_OWNER}" \
+            -o rondo-sandbox-linux-amd64 ./cmd/rondo-sandbox
+          ./rondo-linux-amd64 version
+          ./rondo-sandbox-linux-amd64 version
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: go-results
+          path: |
+            go-junit.xml
+            test-output.log
+            cover.out
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binaries-${{ github.sha }}
+          path: rondo*-linux-amd64
+          retention-days: 7
+
+  manifests:
+    name: Manifests, CRDs, charts, OpenTofu
+    needs: changes
+    if: needs.changes.outputs.manifests == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      RONDO_CFG: rondo.yaml.example
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - name: Tool versions from manifests/dependencies.yaml
+        id: versions
+        run: |
+          dep() { grep -A2 "name: $1\$" manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}'; }
+          echo "helm=$(dep helm)" >> "$GITHUB_OUTPUT"
+          echo "tofu=$(dep opentofu)" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ steps.versions.outputs.helm }}
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: ${{ steps.versions.outputs.tofu }}
+          tofu_wrapper: false
+      - name: Install kubeconform
+        run: |
+          go install "github.com/yannh/kubeconform/cmd/kubeconform@${KUBECONFORM_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Chart versions
+        run: scripts/ci/check-chart-versions.sh
+      - name: CRDs and deepcopy up to date
+        run: scripts/ci/gen-crds.sh --check
+      - name: CLI dependency guard
+        run: scripts/ci/check-rondo-deps.sh
+      - name: API, platform and construct tests
+        run: |
+          go install "sigs.k8s.io/controller-runtime/tools/setup-envtest@${SETUP_ENVTEST_VERSION}"
+          KUBEBUILDER_ASSETS="$("$(go env GOPATH)/bin/setup-envtest" use "$(scripts/ci/envtest-version.sh)" -p path)"
+          export KUBEBUILDER_ASSETS
+          go test ./api/... ./internal/platform/... ./internal/constructs
+      - name: Lint the platform tree
+        run: go run ./cmd/rondo component lint platform
+      - name: OpenTofu validate and fmt
+        run: |
+          for m in terraform/k3s terraform/rke2 terraform/vm; do
+            ( cd "$m" && tofu init -backend=false -input=false && tofu validate && tofu fmt -check -recursive )
+          done
+      - name: Chart schemas (downstream-bootstrap)
+        run: |
+          scripts/ci/check-chart-schemas.sh apps/downstream-bootstrap \
+            'Certificate:cert-manager.io/v1=1,ClusterIssuer:cert-manager.io/v1=2,IPAddressPool:metallb.io/v1beta1=1,L2Advertisement:metallb.io/v1beta1=1' \
+            --set ingressIP=10.0.0.50
+          scripts/ci/check-chart-schemas.sh apps/downstream-bootstrap \
+            'Certificate:cert-manager.io/v1=1,ClusterIssuer:cert-manager.io/v1=2,IPAddressPool:metallb.io/v1beta1=1,L2Advertisement:metallb.io/v1beta1=1,Namespace:v1=1,Secret:v1=1' \
+            --set ingressIP=10.0.0.50 --set-string artifactoryCA.pem=PROBE-CA-PEM
+
+  health-model:
+    name: Health model covers rendered kinds
+    needs: changes
+    if: needs.changes.outputs.deps == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Tool versions
+        id: versions
+        run: |
+          dep() { grep -A2 "name: $1\$" manifests/dependencies.yaml | awk -F'"' '/version:/{print $2; exit}'; }
+          echo "helm=$(dep helm)" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ steps.versions.outputs.helm }}
+      - name: Render charts and resolve dependencies
+        run: |
+          pip install --quiet pyyaml==6.0.2 requests==2.32.3
+          python3 scripts/ci/extract-helm-images.py --manifest manifests/dependencies.yaml --helmfile helmfile.yaml \
+            --platform platform --apps apps --update-manifest --emit-gvks rendered-gvks.txt
+          python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
+      - name: Rendered kinds are all modelled
+        run: scripts/ci/check-health-model.sh rendered-gvks.txt
+
+  ci-scripts:
+    name: CI scripts, shell, Ansible
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install linters
+        run: >-
+          pip install --quiet pytest==9.1.1 ruff==0.15.22 shellcheck-py==0.11.0.1 pyyaml==6.0.2
+          requests==2.32.3 jinja2==3.1.6 ansible-lint==26.9.0
+      - run: ruff check scripts/ci
+      - run: shellcheck scripts/ci/*.sh .githooks/pre-commit .githooks/pre-push cmd/rondo-sandbox/rondo-sandbox.sh install.sh
+      - run: ansible-lint ansible/
+      - run: python -m pytest scripts/ci/tests -q --junitxml=ci-scripts-junit.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ci-scripts-results
+          path: ci-scripts-junit.xml
+          retention-days: 7
+
+  docs:
+    name: Docs build
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Build
+        working-directory: docs
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+  web:
+    name: Dashboard build
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/dashboard/package-lock.json
+      - name: Lint, typecheck, build
+        working-directory: web/dashboard
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run build
+
+  workflows:
+    name: Workflow lint
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+  security:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Secrets (blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: secret
+          exit-code: "1"
+          skip-dirs: docs/node_modules,web/dashboard/node_modules
+      - name: Vulnerabilities and misconfigurations (report)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs.sarif
+          skip-dirs: docs/node_modules,web/dashboard/node_modules
+      - uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  # Single required check: path-filtered jobs that were skipped count as passed.
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [changes, go, manifests, health-model, ci-scripts, docs, web, workflows, security]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All jobs passed or were skipped
+        run: |
+          echo '${{ toJSON(needs) }}' | python3 -c '
+          import json, sys
+          needs = json.load(sys.stdin)
+          bad = {k: v["result"] for k, v in needs.items() if v["result"] not in ("success", "skipped")}
+          if bad:
+              print("Failed jobs:", bad)
+              sys.exit(1)
+          print("All", len(needs), "jobs passed or were skipped.")
+          '

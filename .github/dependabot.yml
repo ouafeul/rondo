@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      k8s:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: monthly
+    groups:
+      docs:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /web/dashboard
+    schedule:
+      interval: monthly
+    groups:
+      dashboard:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directories:
+      - /build/controller
+      - /build/toolbox
+      - /build/component-toolbox
+      - /build/sandbox-machine
+      - /build/ci-toolbox
+    schedule:
+      interval: weekly

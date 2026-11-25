@@ -1,0 +1,32 @@
+# Archetype A, upstream chart: podinfo, which the site mirrors to its Artifactory from
+# manifests/dependencies.yaml, along with its images.
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: __NAME__-podinfo
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/podinfo
+    version: 6.17.0                     # the one in manifests/dependencies.yaml
+  namespace: __NAME__
+  dependsOn:
+    - name: traefik
+  values:
+    image:
+      repository: ${target.values.imageRegistry}/stefanprodan/podinfo
+    ui:
+      message: "${target.values.helloMessage}"
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        cert-manager.io/cluster-issuer: cluster-ca-issuer
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: "true"
+      hosts:
+        - host: __NAME__-podinfo.apps.${INGRESS_BASE_DOMAIN}
+          paths:
+            - {path: /, pathType: Prefix}
+      tls:
+        - hosts: ["__NAME__-podinfo.apps.${INGRESS_BASE_DOMAIN}"]
+          secretName: __NAME__-podinfo-tls

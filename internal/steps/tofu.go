@@ -1,0 +1,229 @@
+package steps
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"rondo/internal/config"
+	"rondo/internal/log"
+	"rondo/internal/runner"
+)
+
+type TofuStage struct {
+	cfg    *config.Config
+	ws     Workspace
+	run    runner.CommandRunner
+	token  TokenSource
+	dryRun bool
+
+	// Confirm is asked before a plan that destroys resources is applied.
+	Confirm func(question string) error
+
+	cachedToken string
+	regEnv      map[string]string
+}
+
+func NewTofuStage(cfg *config.Config, ws Workspace, run runner.CommandRunner, token TokenSource, dryRun bool) *TofuStage {
+	return &TofuStage{cfg: cfg, ws: ws, run: run, token: token, dryRun: dryRun, regEnv: map[string]string{}}
+}
+
+func (t *TofuStage) tofuEnv(extra map[string]string) map[string]string {
+	env := make(map[string]string, len(t.regEnv)+len(extra))
+	for k, v := range t.regEnv {
+		env[k] = v
+	}
+	for k, v := range extra {
+		env[k] = v
+	}
+	return env
+}
+
+func (t *TofuStage) tofu(ctx context.Context, dir string, extra map[string]string, args ...string) error {
+	return t.run.Run(ctx, runner.Cmd{Name: t.ws.Tool("tofu"), Args: args, Dir: dir, Env: t.tofuEnv(extra)})
+}
+
+func (t *TofuStage) tofuOutput(ctx context.Context, dir string, extra map[string]string, args ...string) (string, error) {
+	return t.run.Output(ctx, runner.Cmd{Name: t.ws.Tool("tofu"), Args: args, Dir: dir, Env: t.tofuEnv(extra)})
+}
+
+func (t *TofuStage) ConfigureRegistry(ctx context.Context) error {
+	log.Step("OpenTofu registry setup")
+	host := t.cfg.ArtifactoryHost()
+	if !t.dryRun {
+		if t.cachedToken == "" {
+			tok, err := t.token.Token(ctx)
+			if err != nil {
+				return err
+			}
+			t.cachedToken = tok
+		}
+		suffix := strings.NewReplacer("-", "__", ".", "_").Replace(host)
+		t.regEnv["TF_TOKEN_"+suffix] = t.cachedToken
+	}
+	mirror := strings.TrimRight(t.cfg.Artifactory.URL, "/") + "/api/terraform/rondo-tofu-local/providers/"
+	tofurc := fmt.Sprintf("provider_installation {\n  network_mirror {\n    url = %q\n  }\n}\n", mirror)
+	if !t.dryRun {
+		if err := os.WriteFile(t.ws.TofuRC(), []byte(tofurc), 0o600); err != nil {
+			return err
+		}
+	}
+	t.regEnv["TF_CLI_CONFIG_FILE"] = t.ws.TofuRC()
+	t.regEnv["SSL_CERT_FILE"] = t.ws.CACert
+	t.regEnv["TF_HTTP_USERNAME"] = t.cfg.Artifactory.Username
+	t.regEnv["TF_HTTP_PASSWORD"] = t.cfg.Secrets.ArtifactoryPassword
+	log.Info("OpenTofu registry configured", "host", host)
+	return nil
+}
+
+func backendArgs(address string) []string {
+	return []string{
+		"-backend-config=address=" + address,
+		"-backend-config=update_method=PUT",
+	}
+}
+
+func (t *TofuStage) setCAVar() error {
+	if t.dryRun {
+		return nil
+	}
+	raw, err := t.ws.ReadCA()
+	if err != nil {
+		return fmt.Errorf("CA not found %s: %w", t.ws.CACert, err)
+	}
+	t.regEnv["TF_VAR_artifactory_ca_cert"] = string(raw)
+	return nil
+}
+
+func (t *TofuStage) ApplyManagement(ctx context.Context) error {
+	log.Step("k3s VM provisioning (tofu)")
+	if err := t.setCAVar(); err != nil {
+		return err
+	}
+	return t.planAndApply(ctx, t.ws.Stack("k3s"), nil, t.cfg.StateAddress("k3s"), "management")
+}
+
+func (t *TofuStage) DestroyManagement(ctx context.Context) error {
+	log.Step("destroying management (tofu destroy)")
+	if err := t.ConfigureRegistry(ctx); err != nil {
+		return err
+	}
+	if err := t.setCAVar(); err != nil {
+		return err
+	}
+	if err := t.destroy(ctx, t.ws.Stack("k3s"), nil, t.cfg.StateAddress("k3s")); err != nil {
+		return err
+	}
+	if !t.dryRun {
+		os.Remove(t.ws.Kubeconfig())
+	}
+	return nil
+}
+
+// ApplyRKE2 provisions an rke2 target through Rancher and returns its API endpoint and kubeconfig.
+func (t *TofuStage) ApplyRKE2(ctx context.Context, target *config.DownstreamTarget, rancherAccess, rancherSecret string) (
+	server, kubeconfig string, err error) {
+	log.Step("rke2 cluster (tofu)", "target", target.Name)
+	env, err := t.rke2Env(target, rancherAccess, rancherSecret)
+	if err != nil {
+		return "", "", err
+	}
+	dir := t.ws.Stack("rke2")
+	if err := t.planAndApply(ctx, dir, env, t.cfg.StateAddress(target.Name), target.Name); err != nil {
+		return "", "", err
+	}
+	if t.dryRun {
+		return "", "", nil
+	}
+	if kubeconfig, err = t.tofuOutput(ctx, dir, env, "output", "-raw", "kubeconfig"); err != nil {
+		return "", "", fmt.Errorf("kubeconfig of %s: %w", target.Name, err)
+	}
+	if server, err = t.tofuOutput(ctx, dir, env, "output", "-raw", "api_endpoint"); err != nil {
+		return "", "", fmt.Errorf("endpoint of %s: %w", target.Name, err)
+	}
+	return strings.TrimSpace(server), kubeconfig, nil
+}
+
+func (t *TofuStage) DestroyRKE2(ctx context.Context, target *config.DownstreamTarget, rancherAccess, rancherSecret string) error {
+	log.Step("destroying the rke2 cluster (tofu destroy)", "target", target.Name)
+	env, err := t.rke2Env(target, rancherAccess, rancherSecret)
+	if err != nil {
+		return err
+	}
+	return t.destroy(ctx, t.ws.Stack("rke2"), env, t.cfg.StateAddress(target.Name))
+}
+
+func (t *TofuStage) rke2Env(target *config.DownstreamTarget, rancherAccess, rancherSecret string) (map[string]string, error) {
+	env := map[string]string{
+		// One module directory, one state per target: each keeps its own .terraform.
+		"TF_DATA_DIR":               filepath.Join(t.ws.StateDir, "tofu", target.Name),
+		"TF_VAR_rancher_access_key": rancherAccess,
+		"TF_VAR_rancher_secret_key": rancherSecret,
+	}
+	for k, v := range t.cfg.RKE2Vars(target) {
+		env["TF_VAR_"+k] = v
+	}
+	if t.dryRun {
+		return env, nil
+	}
+	arti, err := t.ws.ReadCA()
+	if err != nil {
+		return nil, fmt.Errorf("Artifactory CA %s: %w", t.ws.CACert, err)
+	}
+	cluster, err := os.ReadFile(t.ws.RancherCA()) //nolint:gosec // workspace path
+	if err != nil {
+		return nil, fmt.Errorf("management cluster CA (%s), exported with the Rancher token: %w",
+			t.ws.RancherCA(), err)
+	}
+	env["TF_VAR_artifactory_ca_pem"] = string(arti)
+	env["TF_VAR_cluster_ca_pem"] = string(cluster)
+	env["TF_VAR_rancher_ca_pem"] = string(cluster)
+	return env, nil
+}
+
+func (t *TofuStage) init(ctx context.Context, dir string, env map[string]string, state string) error {
+	args := append([]string{"init", "-input=false", "-reconfigure"}, backendArgs(state)...)
+	return t.tofu(ctx, dir, env, args...)
+}
+
+// planAndApply asks for confirmation before applying a plan that destroys anything.
+func (t *TofuStage) planAndApply(ctx context.Context, dir string, env map[string]string, state, what string) error {
+	if err := t.init(ctx, dir, env, state); err != nil {
+		return err
+	}
+	plan := "tfplan-" + what
+	if err := t.tofu(ctx, dir, env, "plan", "-input=false", "-out="+plan); err != nil {
+		return err
+	}
+	if t.dryRun {
+		return nil
+	}
+	js, err := t.tofuOutput(ctx, dir, env, "show", "-json", plan)
+	if err != nil {
+		return fmt.Errorf("reading the plan (tofu show -json): %w", err)
+	}
+	res, err := planSummary(js)
+	if err != nil {
+		return err
+	}
+	if !res.Changed {
+		log.Info("infrastructure already up to date", "target", what)
+		return nil
+	}
+	if res.Destructive() && t.Confirm != nil {
+		if err := t.Confirm(fmt.Sprintf("The plan for %s DESTROYS %s. Apply",
+			what, strings.Join(res.Destroys, ", "))); err != nil {
+			return err
+		}
+	}
+	return t.tofu(ctx, dir, env, "apply", "-input=false", plan)
+}
+
+func (t *TofuStage) destroy(ctx context.Context, dir string, env map[string]string, state string) error {
+	if err := t.init(ctx, dir, env, state); err != nil {
+		return err
+	}
+	return t.tofu(ctx, dir, env, "destroy", "-input=false", "-auto-approve")
+}

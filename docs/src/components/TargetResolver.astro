@@ -1,0 +1,100 @@
+---
+// Mirrors Target.Answers, resolveTarget and AcceptsArchetype (api/v1alpha1, internal/controllers/enrollment.go).
+const targets = [
+  { name: 'management', kind: 'kubernetes', roles: 'management' },
+  { name: 'dc1', kind: 'vsphere', roles: '' },
+  { name: 'rke2-a', kind: 'kubernetes', roles: 'monitoring' },
+  { name: 'rke2-b', kind: 'kubernetes', roles: 'apps' },
+];
+---
+
+<div class="not-content rondo-widget resolver">
+  <header><span class="rondo-kicker">Simulator</span> Resolution of <code>spec.target</code></header>
+  <div class="cols">
+    <div>
+      <p class="lbl">Site Targets <small>(name, type, comma-separated roles)</small></p>
+      <ul class="targets">
+        {targets.map((t) => (
+          <li data-name={t.name} data-kind={t.kind}>
+            <code>{t.name}</code>
+            <span class="kind">{t.kind}</span>
+            <input value={t.roles} aria-label={`Roles of ${t.name}`} placeholder="no role" disabled={t.name === 'management'} />
+          </li>
+        ))}
+      </ul>
+    </div>
+    <div>
+      <p class="lbl">Enrollment</p>
+      <div class="enr">
+        <label>spec.target <input class="want" value="monitoring" /></label>
+        <label>
+          Component archetype
+          <select class="arch">
+            <option value="chart">chart (Helm)</option>
+            <option value="vm">vm (vSphere machines)</option>
+          </select>
+        </label>
+        <label>status.resolvedTarget <input class="prev" placeholder="(empty: first resolution)" /></label>
+      </div>
+      <div class="result" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.25rem; }
+  .lbl { margin: 0 0 0.5rem; font-weight: 600; font-size: var(--sl-text-sm); }
+  .lbl small { font-weight: 400; color: var(--sl-color-gray-3); }
+  .targets { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
+  .targets li { display: grid; grid-template-columns: 6rem 4.5rem 1fr; align-items: center; gap: 0.5rem; padding: 0.3rem 0.5rem; border-radius: 0.5rem; border: 1px solid transparent; margin: 0; }
+  .targets li.hit { border-color: var(--sl-color-accent); background: var(--sl-color-accent-low); }
+  .targets input { width: 100%; min-width: 0; font-size: var(--sl-text-xs); }
+  .kind { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); }
+  .enr { display: grid; gap: 0.5rem; }
+  .enr label { display: grid; gap: 0.2rem; font-size: var(--sl-text-xs); font-family: var(--sl-font-mono); color: var(--sl-color-gray-2); }
+  .enr label > :is(input, select) { min-width: 0; }
+  .result { margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 0.6rem; border-left: 4px solid var(--res, var(--rondo-muted)); background: var(--rondo-surface-2); font-size: var(--sl-text-sm); }
+  .result[data-tone='ok'] { --res: var(--rondo-ok); }
+  .result[data-tone='err'] { --res: var(--rondo-err); }
+  .result p { margin: 0.35rem 0 0; }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.resolver').forEach((root) => {
+    const rows = [...root.querySelectorAll<HTMLLIElement>('.targets li')];
+    const want = root.querySelector<HTMLInputElement>('.want')!;
+    const arch = root.querySelector<HTMLSelectElement>('.arch')!;
+    const prev = root.querySelector<HTMLInputElement>('.prev')!;
+    const out = root.querySelector<HTMLElement>('.result')!;
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+    const render = () => {
+      const w = want.value.trim();
+      const matches = rows.filter((r) => {
+        const roles = r.querySelector('input')!.value.split(',').map((s) => s.trim()).filter(Boolean);
+        return r.dataset.name === w || roles.includes(w);
+      });
+      rows.forEach((r) => r.classList.toggle('hit', matches.includes(r)));
+      const stalled = (title: string, why: string) => {
+        out.dataset.tone = 'err';
+        out.innerHTML = `<span class="rondo-pill" data-tone="err">Stalled</span> <strong>${title}</strong><p>${why}</p>`;
+      };
+      if (!w) return stalled('spec.target empty', 'The field is required (minLength 1).');
+      if (matches.length === 0)
+        return stalled(`no Target has the name or role "${esc(w)}"`, 'Add this role to a target in <code>rondo.yaml</code>, then <code>rondo deploy</code> or <code>rondo deploy downstreams</code>.');
+      if (matches.length > 1)
+        return stalled(`"${esc(w)}" matches several Targets (${matches.map((m) => m.dataset.name).join(', ')})`, 'An Enrollment targets a single target: remove the role from all the others.');
+      const t = matches[0];
+      const p = prev.value.trim();
+      if (p && p !== t.dataset.name)
+        return stalled(`"${esc(w)}" resolved to ${esc(p)} and now resolves to ${t.dataset.name}`, 'The resolved target never changes: delete the Enrollment (uninstall from the old target) then create it again.');
+      const ok = (t.dataset.kind === 'vsphere') === (arch.value === 'vm');
+      if (!ok)
+        return stalled(`target ${t.dataset.name} does not accept a component of archetype "${arch.value}"`, 'A Kubernetes Target receives charts, a vSphere Target machines.');
+      out.dataset.tone = 'ok';
+      out.innerHTML = `<span class="rondo-pill" data-tone="ok">Resolved</span> <strong>status.resolvedTarget = ${t.dataset.name}</strong><p>The controller then checks that the target is ready and that the <code>dependsOn</code> are <code>Ready</code> on <em>${t.dataset.name}</em>, then starts a Job.</p>`;
+    };
+    root.addEventListener('input', render);
+    render();
+  });
+</script>

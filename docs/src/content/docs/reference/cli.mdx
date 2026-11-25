@@ -1,0 +1,46 @@
+---
+title: rondo CLI
+description: Every command, its steps, its options.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import CommandExplorer from '../../../components/CommandExplorer.astro';
+import { globalFlags } from '../../../data/cli';
+
+<CommandExplorer />
+
+A failing step stops the command and is printed as `<step>: <cause>`. Running the same command again resumes: every step is idempotent.
+
+## Global options
+
+<table>
+  <thead><tr><th>Option</th><th>Default</th><th>Effect</th></tr></thead>
+  <tbody>
+    {globalFlags.map((f) => <tr><td><code>{f.name}</code></td><td><code>{f.def}</code></td><td>{f.help}</td></tr>)}
+  </tbody>
+</table>
+
+## Confirmations
+
+| Prompt | When |
+|---|---|
+| `The plan for <x> DESTROYS <resources>. Apply? (y/N)` | a tofu plan deletes or replaces a resource |
+| `Confirm destroying the management cluster` | `rondo destroy` |
+| `Confirm destroying <targets>` | `rondo destroy downstreams` |
+| `Uninstall <name> from all its Targets` | `rondo component uninstall` |
+
+Only `y` accepts; `--yes` and `--dry-run` skip them all.
+
+## Simulation mode
+
+`--dry-run` logs each mutating command (`DRY-RUN <cmd>`) without running it; `kubectl get` reads do run (5 s at most). No tofu plan is computed, no token issued, no state file written.
+
+<Aside type="caution">`rondo component install --dry-run` still downloads the component's archive; only the apply is simulated.</Aside>
+
+## Environment variables
+
+| Variable | Effect |
+|---|---|
+| `RONDO_HOME` | replaces `~/.rondo` |
+| `RONDO_CRDS_DIR` | default CRDs of `rondo component lint` |
+| `FORCE_COLOR` | colours even outside a terminal |

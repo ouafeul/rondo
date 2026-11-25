@@ -1,0 +1,21 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: web
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/web
+    published: true
+    version: 1.0.0
+  namespace: web
+  dependsOn:
+    - name: traefik
+  values:
+    image:
+      repository: ${target.values.imageRegistry}/acme/web
+    ingress:
+      host: web.monitoring.${INGRESS_BASE_DOMAIN}
+    password: ${secrets.password}
+  valuesFrom:
+    - secretRef: {name: acme}
+      keys: [password]

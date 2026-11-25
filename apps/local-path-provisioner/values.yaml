@@ -1,0 +1,26 @@
+# Upstream defaults on purpose: extract-helm-images.py inventories the mirror from them.
+image:
+  repository: docker.io/rancher/local-path-provisioner
+  tag: v0.0.31
+  pullPolicy: IfNotPresent
+
+helperImage:
+  repository: docker.io/library/busybox
+  tag: "1.37.0"
+
+storageClass:
+  name: local-path
+  default: true
+  reclaimPolicy: Delete
+  volumeBindingMode: WaitForFirstConsumer
+
+nodePath: /var/lib/rancher/local-path-provisioner
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+priorityClassName: system-cluster-critical

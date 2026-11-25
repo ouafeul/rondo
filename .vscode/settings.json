@@ -1,0 +1,72 @@
+{
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.formatOnSave": true,
+  "editor.trimAutoWhitespace": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+
+  "[shellscript]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+
+  "[yaml]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+
+  "[terraform]": {
+    "editor.defaultFormatter": "hashicorp.terraform",
+    "editor.formatOnSave": true
+  },
+
+  "files.associations": {
+    "*.tpl": "yaml",
+    "config.env*": "shellscript",
+    "helmfile.yaml": "helm"
+  },
+
+  "files.exclude": {
+    "**/.terraform": true,
+    "**/.local": true,
+    "**/*.tfstate*": true,
+    ".tofurc": true
+  },
+
+  "search.exclude": {
+    "**/.terraform": true,
+    "**/.local": true
+  },
+
+  "shellcheck.enable": true,
+  "shellcheck.executablePath": "shellcheck",
+
+  "cSpell.language": "en",
+  "cSpell.words": [
+    "Artifactory",
+    "helmfile",
+    "airgap",
+    "kubeconfig",
+    "etcd",
+    "skopeo",
+    "tofu",
+    "ACME",
+    "RONDO",
+    "metallb",
+    "ingress",
+    "traefik",
+    "hashicorp",
+    "terraform",
+    "rancher",
+    "rke",
+    "canal",
+    "calico",
+    "flannel"
+  ]
+}

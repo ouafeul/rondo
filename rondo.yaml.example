@@ -1,0 +1,64 @@
+environmentName: prod
+ingressBaseDomain: cluster.example.local
+
+artifactory:
+  url: https://artifactory.example.local/artifactory
+  username: svc-rondo
+  caCertificateFile: ./certs/artifactory-ca.pem
+  dockerRepository: rondo-docker-local
+  helmRepository: rondo-helm-local
+  genericRepository: rondo-generic-local
+  rpmRepository: ""
+  tofuStateRepository: rondo-tofu-state-local
+  rondoReleaseChannel: stable
+
+targets:
+  vsphere:
+    - name: dc1
+      vcenterAddress: vcenter.example.local
+      vcenterUsername: administrator@vsphere.local
+      allowUnverifiedTls: false
+      datacenter: DC1
+      computeCluster: Cluster1
+      datastore: datastore1
+      vmFolder: rondo
+      resourcePool: ""
+      vmTemplate: rhel-9-template-cloudinit
+      vmNetwork:
+        portGroup: VM Network
+        gatewayIp: 10.0.0.1
+        netmaskBits: 24
+        dnsServerIps: [10.0.0.2]
+        dnsSearchDomain: example.local
+  management:
+    vsphereTarget: dc1
+    k3sVersion: v1.31.4+k3s1
+    ingressLoadBalancerIp: 10.0.0.100
+    serverNodes:
+      - { hostname: k3s-server-1, ip: 10.0.0.11 }
+      - { hostname: k3s-server-2, ip: 10.0.0.12 }
+      - { hostname: k3s-server-3, ip: 10.0.0.13 }
+    serverNodeSize: { cpuCores: 4, memoryMb: 8192, diskGb: 50 }
+    nodeSshUsername: cloud-user
+    nodeSshPassword: CHANGEME
+  downstreams:
+    - name: rke2-a
+      roles: [monitoring]
+      componentValues: { storageClass: local-path }
+      rke2:
+        vsphereTarget: dc1
+        rke2Version: v1.34.5+rke2r1
+        cniPlugin: canal
+        ingressLoadBalancerIp: 10.0.0.50
+        controlPlaneNodeIps: [10.0.0.31, 10.0.0.32, 10.0.0.33]
+        controlPlaneNodeSize: { cpuCores: 4, memoryMb: 8192, diskGb: 100 }
+        workerNodeIps: [10.0.0.41, 10.0.0.42, 10.0.0.43]
+        workerNodeSize: { cpuCores: 12, memoryMb: 24576, diskGb: 100 }
+
+secrets:
+  artifactoryPassword: CHANGEME
+  rancherBootstrapPassword: CHANGEME
+  k3sClusterToken: CHANGEME
+  vcenterPasswords:
+    dc1: CHANGEME
+  components: {}

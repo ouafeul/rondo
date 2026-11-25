@@ -1,0 +1,7 @@
+image:
+  repository: __NAME__/web
+  tag: ""                               # default: appVersion
+message: hello
+token: ""
+ingress:
+  host: ""                              # no ingress without a host

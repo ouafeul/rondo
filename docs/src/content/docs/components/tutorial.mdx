@@ -1,0 +1,123 @@
+---
+title: Tutorial
+description: Write a chart component, validate it, try it on a site, then publish it.
+---
+
+import { Aside, FileTree, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+A `hello` component: one chart, installed on the target that carries the `apps` role, with a password provided by the site.
+
+<Steps>
+
+1. **The tree.** Nothing but Components and Enrollments:
+
+   <FileTree>
+   - hello/
+     - components/
+       - hello.yaml
+     - enrollments/
+       - hello.yaml
+   </FileTree>
+
+2. **The Component** says what to install, without knowing anything about the site:
+
+   ```yaml title="components/hello.yaml"
+   apiVersion: rondo.ouafeul.github.io/v1alpha1
+   kind: Component
+   metadata: {name: hello}
+   spec:
+     chart:
+       oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/hello   # ① site tokens
+       version: 1.2.0                                               # exact, never a range
+     namespace: hello
+     dependsOn: [{name: traefik}]                                   # awaited Ready on the same target
+     values:
+       image:
+         registry: ${target.values.imageRegistry}                   # ② Target value
+       ingress:
+         host: hello.apps.${INGRESS_BASE_DOMAIN}
+       auth:
+         password: ${secrets.helloPassword}                         # ③ read in the Job
+     valuesFrom:
+       - secretRef: {name: hello}
+         keys: [helloPassword]
+   ```
+
+3. **The Enrollment** says where, by role:
+
+   ```yaml title="enrollments/hello.yaml"
+   apiVersion: rondo.ouafeul.github.io/v1alpha1
+   kind: Enrollment
+   metadata: {name: hello}
+   spec:
+     component: hello
+     target: apps
+   ```
+
+4. **Validate** against the CRDs (unknown field, dangling reference, cycle, undeclared token):
+
+   ```bash
+   rondo component lint ./hello --crds <rondo clone>/manifests/crds
+   ```
+
+5. **Prepare the site.** In `rondo.yaml`, a cluster carries the role and the Secret exists:
+
+   ```yaml title="rondo.yaml"
+   targets:
+     downstreams:
+       - name: rke2-a
+         roles: [apps]
+         rke2: { ... }
+   secrets:
+     components:
+       hello: {helloPassword: change-me}
+   ```
+
+   ```bash
+   rondo deploy                        # writes the rondo-system/hello Secret, the DNS
+   rondo deploy downstreams rke2-a     # the target and its base layer (traefik…)
+   ```
+
+6. **Try it from the workstation**, without publishing:
+
+   ```bash
+   rondo component install hello --from ./hello
+   kubectl -n rondo-system get enrollments -w
+   ```
+
+   ```text
+   NAME    COMPONENT   TARGET   VERSION   HEALTH    READY   AGE
+   hello   hello       rke2-a                       False   2s
+   hello   hello       rke2-a                       False   15s   # helm-apply Job running
+   hello   hello       rke2-a   1.2.0     Healthy   True    1m
+   ```
+
+   The local tree is copied before token substitution: the directory is not modified.
+
+   Without a site, `rondo-sandbox` runs these same commands on k3d clusters on the workstation,
+   publishes what CI would publish and waits for RONDO's verdict: see [Test in the sandbox](/components/sandbox/).
+
+7. **Publish**, from the component's CI: see [Publish](/components/publish/). The site then installs with `rondo component install hello`.
+
+</Steps>
+
+<Aside type="tip" title="The chart must be on Artifactory">
+The OCI URL points to the site's helm repository: the chart and its images must be mirrored there. `rondo component lint --deps <dependencies.yaml>` checks it.
+</Aside>
+
+## Next
+
+`rondo-sandbox component new hello` writes a complete starter component, with charts, image, machine
+and `rondo-sandbox.yaml`: see [Start a component](/components/sandbox/#start-a-component).
+
+<Tabs>
+  <TabItem label="Update">
+    Publish a new version of the tree (chart or values changed), then `rondo component install hello`. What the new version no longer contains is deleted, uninstall included.
+  </TabItem>
+  <TabItem label="Two targets">
+    One Enrollment per target: `hello-a` (`target: apps`) and `hello-b` (`target: rke2-b`). Enrollment names are unique in `rondo-system`.
+  </TabItem>
+  <TabItem label="Remove">
+    `rondo component uninstall hello`: the Enrollment runs `helm uninstall` on the target, then disappears.
+  </TabItem>
+</Tabs>

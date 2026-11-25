@@ -1,0 +1,9 @@
+# What the site mirrors to its Artifactory for this component: upstream charts (helm_charts),
+# generic files (binaries), RPM repositories (rpm_packages). The charts of apps/ and the
+# `provenance: component` artifacts are not listed here: the component's CI publishes them.
+# `rondo component lint --deps` rejects a chart of the tree that is missing here.
+helm_charts:
+- name: podinfo
+  version: "6.17.0"
+  source_repo: "https://stefanprodan.github.io/podinfo"
+  target_repo: rondo-helm-local

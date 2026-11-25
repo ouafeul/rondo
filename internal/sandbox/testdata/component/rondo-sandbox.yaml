@@ -1,0 +1,27 @@
+targets:
+  downstreams:
+    - name: obs
+      roles: [monitoring]
+  vsphere:
+    - name: dc1
+      roles: [dmz]
+      componentValues:
+        helloMessage: hello
+secrets:
+  components:
+    acme: {password: s3cret}
+name: acme
+images:
+  - name: acme/web
+    context: build/web
+    tagFromChart: apps/web
+ports:
+  - hostPort: 8080
+    host: web.monitoring.${INGRESS_BASE_DOMAIN}
+  - hostPort: 5514
+    role: monitoring
+    port: 514
+    protocol: udp
+artifacts:
+  - path: components/vm/1.0.0/payload.tar.gz
+    dir: vm/payload

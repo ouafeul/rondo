@@ -1,0 +1,66 @@
+---
+title: Jobs
+description: The verbs, the anatomy of a Job, what each one reads and writes.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Every action on a target is an `rondo-toolbox exec <verb>` Job in `rondo-system`, started by the controller for an Enrollment.
+
+| Verb | Archetype | Started when | Does |
+|---|---|---|---|
+| `helm-apply` | chart | chart version or values hash changed | `helm upgrade --install`, inventory, health |
+| `helm-uninstall` | chart | Enrollment deleted | `helm uninstall --wait`; "not found" = success |
+| `vm-apply` | vm | infrastructure changed, inventory missing | `tofu apply` of `terraform/vm`, Secret `<enrollment>-machines` |
+| `vm-install` | vm | install version, config or secrets changed | `ansible-playbook` per group |
+| `vm-destroy` | vm | Enrollment deleted | `tofu destroy` |
+| `vm-plan` | vm | never by the controller | `tofu plan`, no effect |
+
+## Anatomy
+
+| | Value |
+|---|---|
+| name | `enrollment-<name>-<verb without dashes>-<10 hex>` (≤ 52 chars), e.g. `enrollment-grafana-helmapply-3f9c1a2b7d` |
+| owner | the Enrollment (ownerReference) |
+| labels | `app.kubernetes.io/managed-by=rondo-controller`, `rondo.ouafeul.github.io/{owner-kind, owner-name, verb, fingerprint}` |
+| attempts | `backoffLimit: 0`, `restartPolicy: Never` |
+| max duration | `activeDeadlineSeconds` = `policy.timeout` (10 min) |
+| retention | `ttlSecondsAfterFinished` 24 h (`RONDO_JOB_TTL`) |
+| identity | ServiceAccount `rondo-exec`, **cluster-admin** on the management cluster |
+| resources | 100m / 256 Mi requested, 2 CPU / 2 Gi at most |
+| security | non-root, seccomp RuntimeDefault, read-only root, no capabilities |
+| mounts | `/work` and `/tmp` (emptyDir), Artifactory CA in `/etc/rondo/ca` |
+| credentials | `envFrom` Secret `rondo-credentials` (`ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD`) |
+
+The target's kubeconfig, the `valuesFrom` Secrets, the vSphere credentials, the SSH key and `.tofurc` are **read through the API** during the Job, never mounted.
+
+<Tabs>
+  <TabItem label="helm-apply">
+    1. reads the Enrollment, the Component, the resolved Target;
+    2. remote target: writes the kubeconfig of `rondo-kubeconfig-<t>` to `/work/kubeconfig`; management: the Job's ServiceAccount;
+    3. `helm registry login` on the host of `chart.oci`;
+    4. values: merge, `${target.*}` tokens, then `${secrets.*}` from `valuesFrom` → `/work/values.json` (0600);
+    5. `helm upgrade --install … --create-namespace --wait --atomic --timeout <policy.timeout − 30 s>`;
+    6. `helm get manifest` → `status.inventory`, first `status.health` (a failure here does not fail the Job).
+  </TabItem>
+  <TabItem label="vm-apply / vm-destroy">
+    1. checks `spec.vm` and a vSphere Target; resolves `${target.*}`;
+    2. downloads the module `tofu-modules/vm/<version>/vm.tar.gz`;
+    3. variables: groups and IPs, template, settings of the ConfigMap `rondo-vsphere-<n>`, credentials of the Secret of the same name, public key `rondo-vm-ssh`;
+    4. HTTP backend `<tofuStateRepository>/<env>/vm/<enrollment>/terraform.tfstate`;
+    5. providers through the `network_mirror` of `rondo-tofurc` (401/403 → immediate failure);
+    6. `tofu apply -auto-approve` (or `destroy`); after apply, `tofu output -json` → Secret `<enrollment>-machines` (key `ansible_inventory`) and `status.machinesSecretRef`.
+  </TabItem>
+  <TabItem label="vm-install">
+    1. inventory from `<enrollment>-machines`, private key from `rondo-vm-ssh`;
+    2. Ansible content: `spec.vm.ansible`, else `ansible/rondo/<version>/rondo-ansible.tar.gz`;
+    3. secrets from `installer.secretsFrom`;
+    4. for each group with replicas: `ansible-playbook -i inventory --limit <group> -e @vars.json <playbook>`, user `rondo`.
+  </TabItem>
+</Tabs>
+
+## Lease
+
+One Lease `rondo-lock-enrollment-<name>` per Enrollment, held by the controller pod, lasting `policy.timeout + 2 min`, renewed every 15 s, released when the Job ends. Before starting a Job, the controller also looks for a live Job carrying the Enrollment's labels: never two Jobs at once.
+
+<Aside type="tip">A finished Job stays 24 h: `kubectl -n rondo-system logs job/<job>`. Beyond that, `status.history` keeps the result and cause of the last 5 attempts.</Aside>

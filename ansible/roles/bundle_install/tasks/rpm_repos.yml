@@ -1,0 +1,43 @@
+---
+- name: "Artifactory credentials for dnf"
+  ansible.builtin.yum_repository:
+    name: "{{ item.name }}"
+    description: "{{ item.description | default(item.name) }}"
+    baseurl: "{{ item.baseurl }}"
+    enabled: true
+    gpgcheck: "{{ item.gpgcheck | default(true) | bool }}"
+    gpgkey: "{{ item.gpgkey | default(omit) }}"
+    username: "{{ rondo_artifactory_user }}"
+    password: "{{ rondo_artifactory_password }}"
+    sslcacert: "{{ rondo_artifactory_ca_path }}"
+    module_hotfixes: "{{ item.module_hotfixes | default(false) | bool }}"
+    priority: "{{ item.priority | default(omit) }}"
+    file: "{{ item.name }}"
+    mode: "0600"
+  loop: "{{ rondo_rpm_repos }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+  no_log: true
+
+- name: "Refresh the dnf cache of the component repositories"
+  ansible.builtin.command:
+    argv: >-
+      {{ ['dnf', '-y', '--disableplugin=subscription-manager,product-id',
+          '--disablerepo=*']
+         + (rondo_rpm_repos | map(attribute='name') | map('regex_replace', '^', '--enablerepo=') | list)
+         + ['makecache'] }}
+  register: rondo_makecache
+  changed_when: false
+  become: true
+
+- name: "Diagnose a failed dnf cache"
+  ansible.builtin.fail:
+    msg: >-
+      `dnf makecache` failed on the component repositories
+      ({{ rondo_rpm_repos | map(attribute='name') | join(', ') }}).
+      Usual causes: the repository does not exist yet on the offline Artifactory
+      (has replication run?), the registry credentials are stale, or the CA is
+      not in the machine's trust store.
+      Output: {{ rondo_makecache.stderr | default(rondo_makecache.stdout) | truncate(800) }}
+  when: rondo_makecache.rc != 0

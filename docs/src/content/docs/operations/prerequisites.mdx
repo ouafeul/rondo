@@ -1,0 +1,80 @@
+---
+title: Prerequisites
+description: Workstation, network, vCenter, DNS, Artifactory and vSphere capacity, before the first rondo deploy.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import CapacityCalculator from '../../../components/CapacityCalculator.astro';
+
+## Workstation
+
+Linux x86_64 with, in the `PATH`:
+
+| Tool | Package | Required by | Why |
+|---|---|---|---|
+| `ssh-keygen` | `openssh-clients` | every command | key pair for access to component machines |
+| `bash` | `bash` | `rondo deploy` | runs `scripts/k3s-setup.sh` |
+| `ssh`, `scp` | `openssh-clients` | `rondo deploy` | forms the k3s cluster, fetches the kubeconfig |
+| `sshpass` | `sshpass` | `rondo deploy` | password SSH to fresh VMs; not in base RHEL: EPEL, or mirrored to Artifactory |
+
+The `rondo` RPM pulls `bash` and `openssh-clients`, and recommends `sshpass`. The rest (`tofu`, `helm`, `helmfile`, `kubectl`, `yq`, `k9s`, `helm-diff` plugin) is downloaded from Artifactory into `~/.rondo/bin` at the bundle's versions.
+
+<Aside type="caution">A tool already in `~/.rondo/bin` is not downloaded again, even if the bundle asks for another version: delete the binary to force the update.</Aside>
+
+## Network
+
+```mermaid
+flowchart LR
+  P["Workstation"] -- "HTTPS" --> A["Artifactory"]
+  P -- "HTTPS" --> V["vCenter"]
+  P -- "SSH 22, API 6443" --> M["Management VMs"]
+  P -- "HTTPS 443" --> R["rancher.#lt;base#gt; · rondo.#lt;base#gt;"]
+  M -- "HTTPS" --> A
+  M -- "HTTPS" --> V
+  M -- "API 6443, HTTPS" --> D["rke2 clusters"]
+  M -- "SSH 22" --> X["Component machines"]
+  D -- "HTTPS (images)" --> A
+  X -- "HTTPS (RPM, artifacts)" --> A
+```
+
+The management cluster's Jobs reach vCenter (component machines), Artifactory (charts, modules, tofu states) and the rke2 cluster APIs; the nodes pull their images from Artifactory.
+
+## vCenter
+
+- The `vmFolder` of each vSphere Target exists. RONDO creates `<env>/MANAGEMENT` under it, one folder per rke2 cluster and one per machine component.
+- The `vmTemplate` template has cloud-init. RONDO's cloud-init templates configure the **`ens32`** interface.
+- The vCenter account can clone, and create folders and VMs in the datacenter.
+
+## Site DNS
+
+| Name | To |
+|---|---|
+| `rancher.<base>`, `rondo.<base>` | `targets.management.ingressLoadBalancerIp` |
+| `*.<target>.<base>` and `*.<role>.<base>` | `rke2.ingressLoadBalancerIp` of each rke2 cluster |
+
+The management cluster already resolves these names internally (CoreDNS); workstations and the site's other systems do not.
+
+## Artifactory
+
+The site has no Internet access, so an Artifactory inside the site serves everything RONDO installs. It holds these repositories, named in `rondo.yaml`:
+
+| Repository | Content |
+|---|---|
+| `rondo-generic-local` | RONDO release files (CLI, IaC bundle, `stable.json`, vm module, Ansible content), tools, published component trees |
+| `rondo-docker-local` | images: RONDO's own and those extracted from every chart |
+| `rondo-helm-local` | Helm charts (OCI) |
+| `rondo-rpms-local` | RPMs: `rondo`, OS repositories for component machines (optional) |
+| `rondo-tofu-local` | OpenTofu providers (network mirror) |
+| `rondo-tofu-state-local` | tofu states (`tofuStateRepository`) |
+
+They are fed from a connected network: RONDO releases come from [GitHub Releases](https://github.com/ouafeul/rondo/releases), images from `ghcr.io/ouafeul`, RONDO charts from `oci://ghcr.io/ouafeul/charts`, and third-party dependencies from `manifests/dependencies.yaml`. See [Air-gap mirror](/contributing/release/#air-gap-mirror).
+
+The service account reads these repositories and writes to `tofuStateRepository`. Without `secrets.artifactoryMirrorToken`, each `rondo deploy` issues a token for the Jobs' providers: without expiry (`mirrorTokenLifetimeSeconds` empty), it needs an admin account.
+
+## Capacity
+
+`rondo.yaml.example` in numbers, to adapt: the management cluster always has 3 nodes; an rke2 cluster has an **odd** number of control planes.
+
+<CapacityCalculator />
+
+<Aside type="note">`serverNodeSize.diskGb` is not applied to the management cluster: its VMs keep the template's disk.</Aside>

@@ -1,0 +1,35 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: metallb
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/metallb
+    version: 0.14.9
+  namespace: metallb-system
+  values:
+    controller:
+      image:
+        repository: ${target.values.imageRegistry}/metallb/controller
+      priorityClassName: system-cluster-critical
+      resources:
+        limits:
+          cpu: 100m
+          memory: 128Mi
+        requests:
+          cpu: 25m
+          memory: 64Mi
+    speaker:
+      frr:
+        image:
+          repository: ${target.values.imageRegistry}/frrouting/frr
+      image:
+        repository: ${target.values.imageRegistry}/metallb/speaker
+      priorityClassName: system-cluster-critical
+      resources:
+        limits:
+          cpu: 100m
+          memory: 128Mi
+        requests:
+          cpu: 25m
+          memory: 64Mi

@@ -1,0 +1,145 @@
+{{ $helmRepo    := printf "%s/%s" (requiredEnv "REGISTRY_HOST") (env "ARTIFACTORY_HELM_REPO"    | default "rondo-helm-local") }}
+{{ $dockerRepo  := printf "%s/%s" (requiredEnv "REGISTRY_HOST") (env "ARTIFACTORY_DOCKER_REPO"  | default "rondo-docker-local") }}
+{{ $ingressIP   := requiredEnv "INGRESS_IP" }}
+
+helmDefaults:
+  wait: true
+  timeout: 600
+  createNamespace: true
+
+releases:
+  - name: metallb
+    namespace: metallb-system
+    chart: oci://{{ $helmRepo }}/metallb
+    version: {{ env "METALLB_VERSION" | default "0.14.9" }}
+    values:
+      - controller:
+          image:
+            repository: {{ $dockerRepo }}/metallb/controller
+          priorityClassName: system-cluster-critical
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+        speaker:
+          image:
+            repository: {{ $dockerRepo }}/metallb/speaker
+          priorityClassName: system-cluster-critical
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+          frr:
+            image:
+              repository: {{ $dockerRepo }}/frrouting/frr
+            resources:
+              requests: { cpu: 10m, memory: 32Mi }
+              limits: { cpu: 100m, memory: 64Mi }
+    hooks:
+      - events: ["postsync"]
+        showlogs: true
+        command: /bin/sh
+        args:
+          - -c
+          - kubectl apply -f "${PROJECT_DIR}/.rondo-bootstrap/metallb-config.yaml"
+
+  - name: cert-manager
+    namespace: cert-manager
+    chart: oci://{{ $helmRepo }}/cert-manager
+    version: {{ env "CERT_MANAGER_VERSION" | default "v1.16.2" }}
+    needs:
+      - metallb-system/metallb
+    values:
+      - installCRDs: true
+        global:
+          priorityClassName: system-cluster-critical
+        image:
+          repository: {{ $dockerRepo }}/jetstack/cert-manager-controller
+        resources:
+          requests: { cpu: 25m, memory: 64Mi }
+          limits: { cpu: 200m, memory: 256Mi }
+        webhook:
+          image:
+            repository: {{ $dockerRepo }}/jetstack/cert-manager-webhook
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+        cainjector:
+          image:
+            repository: {{ $dockerRepo }}/jetstack/cert-manager-cainjector
+          resources:
+            requests: { cpu: 25m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 256Mi }
+        startupapicheck:
+          image:
+            repository: {{ $dockerRepo }}/jetstack/cert-manager-startupapicheck
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+    hooks:
+      - events: ["postsync"]
+        showlogs: true
+        command: /bin/sh
+        args:
+          - -c
+          - |
+            set -e
+            kubectl -n cert-manager wait --for=condition=Available --timeout=180s \
+              deployment/cert-manager-webhook
+            kubectl create namespace cattle-system --dry-run=client -o yaml | kubectl apply -f -
+            kubectl apply -f "${PROJECT_DIR}/.rondo-bootstrap/cluster-pki.yaml"
+            kubectl -n cert-manager wait --for=condition=Ready --timeout=120s \
+              certificate/cluster-ca
+            kubectl -n cattle-system wait --for=condition=Ready --timeout=120s \
+              certificate/rancher-tls
+
+  - name: rancher
+    namespace: cattle-system
+    chart: oci://{{ $helmRepo }}/rancher
+    version: {{ env "RANCHER_VERSION" | default "2.14.0" }}
+    needs:
+      - metallb-system/metallb
+      - cert-manager/cert-manager
+    values:
+      - hostname: {{ requiredEnv "RANCHER_HOSTNAME" }}
+        replicas: 1
+        priorityClassName: system-cluster-critical
+        resources:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "1", memory: 2Gi }
+        bootstrapPassword: {{ env "RANCHER_BOOTSTRAP_PASSWORD" | default "admin" }}
+        image:
+          registry: {{ $dockerRepo }}
+          repository: rancher/rancher
+        systemDefaultRegistry: {{ $dockerRepo }}
+        useBundledSystemChart: true
+        ingress:
+          ingressClassName: traefik
+          tls:
+            source: secret
+            secretName: tls-rancher-ingress
+          extraAnnotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.tls: "true"
+        service:
+          type: ClusterIP
+        postDelete:
+          image:
+            registry: {{ $dockerRepo }}
+            repository: rancher/shell
+        preUpgrade:
+          image:
+            registry: {{ $dockerRepo }}
+            repository: rancher/shell
+        privateCA: true
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: /bin/sh
+        args:
+          - -c
+          - |
+            kubectl create namespace cattle-system --dry-run=client -o yaml | kubectl apply -f -
+            kubectl -n cert-manager get secret cluster-ca-keypair \
+              -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/rancher-cluster-ca.pem
+            kubectl -n cattle-system create secret generic tls-ca \
+              --from-file=cacerts.pem=/tmp/rancher-cluster-ca.pem \
+              --dry-run=client -o yaml | kubectl apply -f -

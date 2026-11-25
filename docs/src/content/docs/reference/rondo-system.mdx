@@ -1,0 +1,72 @@
+---
+title: rondo-system objects
+description: Every Secret, ConfigMap, Deployment, account and network rule RONDO creates, and who writes it.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs>
+  <TabItem label="Secrets">
+    | Name | Keys | Written by | Read by |
+    |---|---|---|---|
+    | `rondo-credentials` | `ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD` | `rondo deploy` | every Job |
+    | `rondo-tofurc` | `.tofurc`, `token` | `rondo deploy` | `vm-*` Jobs (providers) |
+    | `rondo-vm-ssh` | `ssh-privatekey`, `ssh-publickey` | `rondo deploy`, **once** | `vm-*` Jobs |
+    | `rondo-platform-values` | `artifactoryUser`, `artifactoryPassword`, `artifactoryAuthURL` | `rondo deploy` | components (`valuesFrom`) |
+    | `rondo-kubeconfig-<t>` | `kubeconfig` | `rondo deploy downstreams` | Target, Jobs, `rondo-probe` |
+    | `rondo-vsphere-<n>` | `vsphere_user`, `vsphere_password` | `rondo deploy` | vSphere Target, `vm-*` Jobs |
+    | `<secrets.components.x>` | those of `rondo.yaml` | `rondo deploy` | components (`valuesFrom`, `secretsFrom`) |
+    | `<enrollment>-machines` | `ansible_inventory`, tofu outputs | `vm-apply` Job | `vm-install` Job |
+  </TabItem>
+  <TabItem label="ConfigMaps">
+    | Name | Content | Written by |
+    |---|---|---|
+    | `artifactory-ca` | `ca.pem` | `rondo deploy` |
+    | `rondo-vsphere-<n>` | server, datacenter, cluster, datastore, network, folder, pool, gateway, DNS, CA | `rondo deploy` |
+    | `rondo-component-<tree>` | `version`, `objects` (one `Kind/Name` per line) | the CLI, for each applied tree: `rondo`, `base-<t>`, `<component>` |
+    | `kube-system/coredns-custom` | `rondo-ingress-wildcard.override` | `rondo deploy` |
+  </TabItem>
+  <TabItem label="Workloads">
+    | Deployment | Image | Resources (request → limit) | Probes |
+    |---|---|---|---|
+    | `rondo-controller` | `rondo-controller:<CLI version>` | 50m/192Mi → 500m/1Gi | `/healthz`, `/readyz` :8081 |
+    | `rondo-probe` | `rondo-toolbox:<CLI version>` (`probe`) | 25m/64Mi → 200m/256Mi | |
+    | `rondo-dashboard` | `rondo-toolbox:<CLI version>` (`dashboard`) | 10m/32Mi → 200m/128Mi | `/healthz` :8080 |
+
+    1 replica each, uid/gid 65532, read-only root. The controller does leader election (Lease `rondo-controller`) and caches nothing but `rondo-system`. Service `rondo-dashboard` :80 → 8080, Ingress `rondo.<base>` (Traefik, TLS by `cluster-ca-issuer`).
+  </TabItem>
+  <TabItem label="Permissions">
+    | Account | Scope | Permissions |
+    |---|---|---|
+    | `rondo-controller` | `rondo-system` | Targets, Components (read); Enrollments and statuses; Jobs (create, delete); Leases; Secrets and ConfigMaps (read); Events |
+    | `rondo-exec` (Jobs) | cluster | `cluster-admin` |
+    | `rondo-probe` | `rondo-system` + cluster | RONDO objects (read), `enrollments/status` (patch), Secrets (read); `view` + read on RBAC, CRDs, StorageClasses, webhooks… |
+    | `rondo-dashboard` | `rondo-system` | RONDO objects, Jobs, Deployments, Pods and logs (read); no Secret |
+
+    On a remote target, Jobs and the probe have the permissions of the identity in the Target's kubeconfig.
+  </TabItem>
+  <TabItem label="Network">
+    | NetworkPolicy | Effect |
+    |---|---|
+    | `rondo-default-deny-ingress` | no `rondo-system` pod accepts incoming connections… |
+    | `rondo-dashboard-from-ingress` | …except the dashboard, from `kube-system` (Traefik), on its `http` port |
+
+    No egress rule.
+  </TabItem>
+</Tabs>
+
+## Leases
+
+| Name | Role |
+|---|---|
+| `rondo-controller` | election of the active controller |
+| `rondo-lock-enrollment-<name>` | one Job at a time per Enrollment |
+
+## Outside rondo-system
+
+| Object | Where | Role |
+|---|---|---|
+| `tls-ca` | `cattle-system` | Rancher's CA |
+| `regcred` | `fleet-default` | registry of the rke2 nodes |
+| ClusterIssuers `selfsigned-bootstrap`, `cluster-ca-issuer` | cluster | internal PKI, CA `RONDO <env> CA` |
+| IPAddressPool `default-pool`, L2Advertisement `default-l2` | `metallb-system` | management ingress IP |

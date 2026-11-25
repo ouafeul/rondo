@@ -1,0 +1,28 @@
+# A component with a pod that downloads from Artifactory, credentials outside the URL: the
+# subject of TestArtifactoryDownloadInAChartIsAuthenticated.
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: guard
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/guard
+    published: true
+    version: 0.1.0
+  namespace: guard
+  values:
+    initContainer:
+      command:
+      - -ec
+      - |
+        curl -fsSL -u "$ARTIFACTORY_USER:$ARTIFACTORY_PASSWORD" -o /tmp/p.zip \
+          ${ARTIFACTORY_URL}/${ARTIFACTORY_GENERIC_REPO}/guard/plugin.zip
+    envRenderSecret:
+      ARTIFACTORY_PASSWORD: ${secrets.artifactoryPassword}
+      ARTIFACTORY_USER: ${secrets.artifactoryUser}
+  valuesFrom:
+  - keys:
+    - artifactoryPassword
+    - artifactoryUser
+    secretRef:
+      name: rondo-platform-values

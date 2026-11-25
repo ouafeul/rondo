@@ -1,0 +1,97 @@
+---
+// rondo.yaml.example annotated line by line: click a key to read its rules.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { keys } from '../data/rondoYaml';
+import { repoFile } from '../lib/url';
+
+const src = readFileSync(fileURLToPath(repoFile('rondo.yaml.example')), 'utf8');
+
+type Line = { text: string; path?: string };
+const stack: { indent: number; key: string; list: boolean }[] = [];
+const lines: Line[] = src.replace(/\n$/, '').split('\n').map((text) => {
+  const m = /^(\s*)(- )?([A-Za-z][\w]*):/.exec(text);
+  if (!m) return { text };
+  const indent = m[1].length + (m[2] ? 2 : 0);
+  while (stack.length && stack.at(-1)!.indent >= indent) stack.pop();
+  const parent = stack.at(-1);
+  if (m[2] && parent) parent.list = true;
+  const prefix = stack.map((s) => s.key + (s.list ? '[]' : '')).join('.');
+  const path = prefix ? `${prefix}.${m[3]}` : m[3];
+  stack.push({ indent, key: m[3], list: false });
+  return { text, path };
+});
+const rendered = lines;
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const html = (l: Line) => {
+  const t = esc(l.text);
+  if (!l.path) return t.replace(/(#.*)$/, '<span class="cm">$1</span>');
+  return t
+    .replace(/^(\s*(?:- )?)([A-Za-z]\w*)(:)(.*)$/, (_, a, k, c, rest) => `${a}<span class="k">${k}</span>${c}<span class="v">${rest}</span>`);
+};
+const documented = rendered.filter((l) => l.path && keys[l.path]);
+const first = documented[0]?.path;
+---
+
+<div class="not-content rondo-widget yx">
+  <header><span class="rondo-kicker">Click a key</span> <code>rondo.yaml.example</code>, annotated</header>
+  <div class="layout">
+    <pre class="code" role="list">{rendered.map((l) => (
+      l.path && keys[l.path]
+        ? <span role="listitem" class="ln doc" tabindex="0" data-path={l.path} set:html={html(l)} />
+        : <span class="ln" set:html={html(l)} />
+    ))}</pre>
+    <aside class="panel" aria-live="polite">
+      {documented.map((l) => {
+        const k = keys[l.path!];
+        return (
+          <article data-for={l.path} hidden={l.path !== first ? true : undefined}>
+            <p class="path"><code>{l.path}</code></p>
+            <p class="meta">
+              <span class="rondo-pill" data-tone={k.req ? 'warn' : 'muted'}>{k.req ? 'required' : 'optional'}</span>
+              <span class="type">{k.type}</span>
+            </p>
+            <p>{k.doc}</p>
+            {k.rule && <p class="rule"><strong>Rule</strong> {k.rule}</p>}
+            {k.used && <p class="used"><strong>Feeds</strong> <code>{k.used}</code></p>}
+          </article>
+        );
+      })}
+    </aside>
+  </div>
+</div>
+
+<style>
+  .layout { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(13rem, 1fr); gap: 1rem; align-items: start; }
+  @media (max-width: 55rem) { .layout { grid-template-columns: 1fr; } .panel { position: static !important; } }
+  .code { margin: 0; padding: 0.75rem 0; background: var(--sl-color-black); border: 1px solid var(--rondo-border); border-radius: 0.6rem; font-size: var(--sl-text-xs); line-height: 1.55; max-height: 40rem; overflow: auto; }
+  .ln { display: block; padding: 0 0.9rem; white-space: pre; min-height: 1.55em; }
+  .ln.doc { cursor: pointer; }
+  .ln.doc:is(:hover, :focus-visible) { background: var(--rondo-surface-2); outline: none; }
+  .ln.on { background: var(--sl-color-accent-low); box-shadow: inset 3px 0 var(--sl-color-accent); }
+  .ln :global(.k) { color: var(--sl-color-accent-high); font-weight: 600; }
+  .ln :global(.v) { color: var(--rondo-cyan); }
+  .ln :global(.cm) { color: var(--sl-color-gray-3); }
+  .panel { position: sticky; top: calc(var(--sl-nav-height) + 1rem); padding: 0.9rem 1rem; border-radius: 0.6rem; background: var(--rondo-surface-2); border-left: 4px solid var(--sl-color-accent); font-size: var(--sl-text-sm); }
+  .panel p { margin: 0 0 0.5rem; }
+  .path code { font-weight: 700; word-break: break-all; }
+  .meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .type { font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); color: var(--rondo-cyan); }
+  .rule strong, .used strong { display: block; font-size: var(--sl-text-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--sl-color-gray-3); }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.yx').forEach((root) => {
+    const lines = [...root.querySelectorAll<HTMLElement>('.ln.doc')];
+    const cards = [...root.querySelectorAll<HTMLElement>('.panel article')];
+    const select = (path: string) => {
+      lines.forEach((l) => l.classList.toggle('on', l.dataset.path === path));
+      cards.forEach((c) => (c.hidden = c.dataset.for !== path));
+    };
+    lines.forEach((l) => {
+      l.addEventListener('click', () => select(l.dataset.path!));
+      l.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), select(l.dataset.path!)));
+    });
+    if (lines[0]) select(lines[0].dataset.path!);
+  });
+</script>

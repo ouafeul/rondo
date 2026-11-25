@@ -1,0 +1,31 @@
+# Archetype B, a machine: RONDO creates it on the vSphere Target (in the sandbox, a container
+# stands in for it), drops on it the vm/payload archive the component's CI publishes, the
+# config file and the secrets file, then runs the phases.
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: __NAME__-vm
+spec:
+  vm:
+    template: ${target.values.vmTemplate}
+    sizing: {cpu: 1, memoryMb: 512, diskGb: 10}
+    groups:
+      - name: web
+        replicas: 1
+    artifacts:
+      - repo: ${ARTIFACTORY_GENERIC_REPO}
+        provenance: component           # published by the component's CI, under components/<Component>/
+        path: components/__NAME__-vm/0.1.0/payload.tar.gz
+        extract: true
+    config:
+      MESSAGE: {value: "${target.values.helloMessage}"}
+    installer:
+      version: "0.1.0"                  # another version replays the phases
+      configFile: app.conf              # next to the first phase
+      secretsFile: secrets.env          # same, deleted after the last one
+      secretsFrom:
+        - secretRef: {name: __NAME__}
+          keys: [TOKEN]
+      phases:
+        - {name: install, script: deploy/install.sh, timeout: 5m}
+        - {name: verify, script: deploy/verify.sh, timeout: 2m}

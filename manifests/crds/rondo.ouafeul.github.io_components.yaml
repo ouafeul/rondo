@@ -1,0 +1,563 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: components.rondo.ouafeul.github.io
+spec:
+  group: rondo.ouafeul.github.io
+  names:
+    kind: Component
+    listKind: ComponentList
+    plural: components
+    shortNames:
+    - comp
+    singular: component
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.chart.oci
+      name: Chart
+      priority: 1
+      type: string
+    - jsonPath: .spec.chart.version
+      name: Version
+      type: string
+    - jsonPath: .spec.vm.groups[*].name
+      name: VM
+      priority: 1
+      type: string
+    - jsonPath: .spec.namespace
+      name: Namespace
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Component says what to deploy. An Enrollment says where.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ComponentSpec is a deployable workload, placed on Targets
+              by an Enrollment.
+            properties:
+              chart:
+                description: ChartSource points at a Helm chart on the air-gap OCI
+                  registry.
+                properties:
+                  oci:
+                    description: full chart URL, name included
+                    pattern: ^oci://.+$
+                    type: string
+                  published:
+                    description: published by the component's own CI
+                    type: boolean
+                  version:
+                    description: exact, never a range
+                    pattern: ^v?[0-9]+\.[0-9]+\.[0-9]+([-+].*)?$
+                    type: string
+                required:
+                - oci
+                - version
+                type: object
+              dependsOn:
+                description: applied on a target only once these are healthy there
+                items:
+                  description: LocalObjectReference names an object in the same namespace.
+                  properties:
+                    name:
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              health:
+                description: health rules for shapes internal/probe does not model
+                items:
+                  description: HealthRule judges one object shape shipped by the component.
+                  properties:
+                    condition:
+                      description: empty => healthy once applied
+                      maxLength: 63
+                      type: string
+                    group:
+                      description: empty = core group
+                      maxLength: 253
+                      type: string
+                    kind:
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                  required:
+                  - kind
+                  type: object
+                maxItems: 32
+                type: array
+              namespace:
+                description: required for a chart component, ignored for a VM one
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              releaseName:
+                description: empty => the Component name
+                maxLength: 53
+                type: string
+              values:
+                description: may carry ${target.*} tokens, resolved per target
+                x-kubernetes-preserve-unknown-fields: true
+              valuesFrom:
+                description: for secret values that must not be committed
+                items:
+                  description: ValuesSource injects values from a ConfigMap or a Secret.
+                  properties:
+                    configMapRef:
+                      description: LocalObjectReference names an object in the same
+                        namespace.
+                      properties:
+                        name:
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    keys:
+                      description: empty is a refusal, not a wildcard
+                      items:
+                        type: string
+                      minItems: 1
+                      type: array
+                    secretRef:
+                      description: LocalObjectReference names an object in the same
+                        namespace.
+                      properties:
+                        name:
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - keys
+                  type: object
+                type: array
+              vm:
+                properties:
+                  ansible:
+                    description: a playbook shipped by the component
+                    properties:
+                      extraVars:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      path:
+                        minLength: 1
+                        type: string
+                      playbook:
+                        default: site.yml
+                        type: string
+                      repo:
+                        description: Repo and Path locate the content tarball on Artifactory
+                        minLength: 1
+                        type: string
+                      version:
+                        minLength: 1
+                        type: string
+                    required:
+                    - path
+                    - repo
+                    - version
+                    type: object
+                  artifacts:
+                    items:
+                      description: VMArtifact is an archive dropped on the machines
+                        before installation.
+                      properties:
+                        dest:
+                          description: relative to the component work directory
+                          type: string
+                        digest:
+                          description: checked on the machine
+                          pattern: ^sha256:[a-f0-9]{64}$
+                          type: string
+                        extract:
+                          default: false
+                          type: boolean
+                        path:
+                          minLength: 1
+                          type: string
+                        provenance:
+                          default: upstream
+                          description: ArtifactProvenance says who brings an artifact
+                            across the air gap.
+                          enum:
+                          - upstream
+                          - component
+                          type: string
+                        repo:
+                          minLength: 1
+                          type: string
+                      required:
+                      - path
+                      - repo
+                      type: object
+                    type: array
+                  config:
+                    additionalProperties:
+                      description: VMConfigValue is a string, bool, number or string
+                        list.
+                      properties:
+                        bool:
+                          description: Rendered unquoted.
+                          type: boolean
+                        list:
+                          items:
+                            maxLength: 1024
+                            type: string
+                          maxItems: 256
+                          type: array
+                        number:
+                          description: Rendered unquoted.
+                          format: int64
+                          type: integer
+                        value:
+                          maxLength: 4096
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of value, list, bool or number
+                        rule: '(has(self.value) ? 1 : 0) + (has(self.list) ? 1 : 0)
+                          + (has(self.bool) ? 1 : 0) + (has(self.number) ? 1 : 0)
+                          == 1'
+                    description: shared by all groups; secrets go in installer.secretsFrom
+                    maxProperties: 256
+                    type: object
+                  groups:
+                    description: one per role
+                    items:
+                      description: VMGroup is a set of machines sharing one role.
+                      properties:
+                        config:
+                          additionalProperties:
+                            description: VMConfigValue is a string, bool, number or
+                              string list.
+                            properties:
+                              bool:
+                                description: Rendered unquoted.
+                                type: boolean
+                              list:
+                                items:
+                                  maxLength: 1024
+                                  type: string
+                                maxItems: 256
+                                type: array
+                              number:
+                                description: Rendered unquoted.
+                                format: int64
+                                type: integer
+                              value:
+                                maxLength: 4096
+                                type: string
+                            type: object
+                            x-kubernetes-validations:
+                            - message: exactly one of value, list, bool or number
+                              rule: '(has(self.value) ? 1 : 0) + (has(self.list) ?
+                                1 : 0) + (has(self.bool) ? 1 : 0) + (has(self.number)
+                                ? 1 : 0) == 1'
+                          description: overrides spec.vm.config
+                          maxProperties: 256
+                          type: object
+                        ipsFromTargetValue:
+                          description: Target value holding this group's IPs (JSON
+                            list); empty => vmIPs.<component>.<group>
+                          type: string
+                        name:
+                          description: role, also the Ansible inventory group
+                          maxLength: 32
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                          type: string
+                        replicas:
+                          default: 1
+                          maximum: 32
+                          minimum: 0
+                          type: integer
+                        sizing:
+                          description: VMSizing is the sizing of one machine.
+                          properties:
+                            cpu:
+                              maximum: 64
+                              minimum: 1
+                              type: integer
+                            diskGb:
+                              minimum: 10
+                              type: integer
+                            memoryMb:
+                              minimum: 512
+                              type: integer
+                          required:
+                          - cpu
+                          - diskGb
+                          - memoryMb
+                          type: object
+                      required:
+                      - name
+                      - replicas
+                      type: object
+                    maxItems: 16
+                    minItems: 1
+                    type: array
+                  installer:
+                    description: VMInstaller runs the installer shipped by the component,
+                      as one script or phases.
+                    properties:
+                      args:
+                        description: verbatim; include the non-interactive flag
+                        items:
+                          maxLength: 1024
+                          type: string
+                        maxItems: 64
+                        type: array
+                      become:
+                        default: true
+                        description: sudo
+                        type: boolean
+                      configFile:
+                        description: rendered once next to the scripts, shared by
+                          all phases
+                        type: string
+                      configFlag:
+                        description: empty => the files are only dropped next to the
+                          scripts
+                        type: string
+                      configFormat:
+                        default: shell
+                        description: shape of that file
+                        enum:
+                        - shell
+                        - env
+                        - yaml
+                        - json
+                        type: string
+                      phases:
+                        description: ordered; a failing phase aborts the rest
+                        items:
+                          properties:
+                            args:
+                              items:
+                                maxLength: 1024
+                                type: string
+                              maxItems: 64
+                              type: array
+                            name:
+                              maxLength: 32
+                              pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                              type: string
+                            script:
+                              description: relative to the work directory
+                              minLength: 1
+                              type: string
+                            skipSteps:
+                              description: passed with the installer's skipFlag
+                              items:
+                                maxLength: 256
+                                type: string
+                              maxItems: 64
+                              type: array
+                            steps:
+                              description: passed with the installer's stepsFlag
+                              items:
+                                maxLength: 256
+                                type: string
+                              maxItems: 64
+                              type: array
+                            timeout:
+                              description: overrides the installer bound for this
+                                phase
+                              pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$
+                              type: string
+                          required:
+                          - name
+                          - script
+                          type: object
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      script:
+                        description: short form of a single phase
+                        minLength: 1
+                        type: string
+                      secretsFile:
+                        description: 0600, shredded after the last phase
+                        type: string
+                      secretsFlag:
+                        type: string
+                      secretsFrom:
+                        description: shared by all phases
+                        items:
+                          description: ValuesSource injects values from a ConfigMap
+                            or a Secret.
+                          properties:
+                            configMapRef:
+                              description: LocalObjectReference names an object in
+                                the same namespace.
+                              properties:
+                                name:
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            keys:
+                              description: empty is a refusal, not a wildcard
+                              items:
+                                type: string
+                              minItems: 1
+                              type: array
+                            secretRef:
+                              description: LocalObjectReference names an object in
+                                the same namespace.
+                              properties:
+                                name:
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                          required:
+                          - keys
+                          type: object
+                        type: array
+                      skipFlag:
+                        type: string
+                      skipSteps:
+                        description: --skip, short form
+                        items:
+                          maxLength: 256
+                          type: string
+                        maxItems: 64
+                        type: array
+                      steps:
+                        description: --steps, short form
+                        items:
+                          maxLength: 256
+                          type: string
+                        maxItems: 64
+                        type: array
+                      stepsFlag:
+                        description: defaults to --steps
+                        type: string
+                      timeout:
+                        description: bound of one phase, Go notation (45m); empty
+                          => derived from the Job budget
+                        pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$
+                        type: string
+                      version:
+                        description: install content version
+                        minLength: 1
+                        type: string
+                    required:
+                    - version
+                    type: object
+                    x-kubernetes-validations:
+                    - message: set either script (single entry point) or phases (sequence),
+                        never both
+                      rule: has(self.phases) != has(self.script)
+                    - message: args, steps and skipSteps belong to the phase when
+                        phases is set; leaving them here has no effect
+                      rule: '!has(self.phases) || (!has(self.args) && !has(self.steps)
+                        && !has(self.skipSteps))'
+                  rpmRepos:
+                    description: Artifactory YUM repos
+                    items:
+                      description: RPMRepo is an Artifactory YUM repo configured on
+                        the machines.
+                      properties:
+                        description:
+                          description: empty => Name
+                          type: string
+                        gpgCheck:
+                          default: true
+                          type: boolean
+                        gpgKey:
+                          description: required when GPGCheck
+                          type: string
+                        moduleHotfixes:
+                          default: false
+                          description: 'needed for flat-mirrored modular packages:
+                            mirroring drops modules.yaml'
+                          type: boolean
+                        name:
+                          description: repo id in /etc/yum.repos.d/<name>.repo
+                          pattern: ^[a-zA-Z0-9]([-_.a-zA-Z0-9]*[a-zA-Z0-9])?$
+                          type: string
+                        path:
+                          description: subpath in that repo, e.g. rhel9/9.6/baseos
+                          type: string
+                        priority:
+                          description: lower = preferred
+                          type: integer
+                        repo:
+                          description: Artifactory repo name
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      - repo
+                      type: object
+                    type: array
+                  sizing:
+                    description: default sizing, overridable per group
+                    properties:
+                      cpu:
+                        maximum: 64
+                        minimum: 1
+                        type: integer
+                      diskGb:
+                        minimum: 10
+                        type: integer
+                      memoryMb:
+                        minimum: 512
+                        type: integer
+                    required:
+                    - cpu
+                    - diskGb
+                    - memoryMb
+                    type: object
+                  template:
+                    description: vSphere template to clone; empty => ${target.values.vmTemplate}
+                    type: string
+                required:
+                - groups
+                type: object
+                x-kubernetes-validations:
+                - message: at least one group must have replicas > 0
+                  rule: self.groups.exists(g, g.replicas > 0)
+            type: object
+            x-kubernetes-validations:
+            - message: exactly one of chart (archetype A) or vm (archetypes B/C)
+              rule: has(self.chart) != has(self.vm)
+            - message: namespace required for a chart component
+              rule: '!has(self.chart) || has(self.__namespace__)'
+        type: object
+    served: true
+    storage: true
+    subresources: {}

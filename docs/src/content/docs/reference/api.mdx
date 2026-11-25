@@ -1,0 +1,28 @@
+---
+title: API
+description: Component, Target, Enrollment — every field, generated from the CRDs.
+tableOfContents:
+  maxHeadingLevel: 2
+---
+
+import CrdReference from '../../../components/CrdReference.astro';
+
+Group `rondo.ouafeul.github.io`, version `v1alpha1`, objects in `rondo-system`. Rules marked ⚖ are apiserver CEL validations: an object that violates them is refused at `apply`.
+
+## Component
+
+What to install: `spec.chart` **or** `spec.vm`. Guides: [chart](/components/chart/), [machines](/components/machines/).
+
+<CrdReference kind="Component" />
+
+## Target
+
+Where to install: `spec.kubernetes` **or** `spec.vsphere`. Written by the CLI from `rondo.yaml`; do not edit it by hand, `rondo deploy` rewrites it.
+
+<CrdReference kind="Target" />
+
+## Enrollment
+
+This Component on this Target. See the [lifecycle](/concepts/lifecycle/).
+
+<CrdReference kind="Enrollment" />

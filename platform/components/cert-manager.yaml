@@ -1,0 +1,31 @@
+apiVersion: rondo.ouafeul.github.io/v1alpha1
+kind: Component
+metadata:
+  name: cert-manager
+spec:
+  chart:
+    oci: oci://${REGISTRY_HOST}/${ARTIFACTORY_HELM_REPO}/cert-manager
+    version: v1.16.2
+  namespace: cert-manager
+  values:
+    cainjector:
+      image:
+        repository: ${target.values.imageRegistry}/jetstack/cert-manager-cainjector
+    global:
+      priorityClassName: system-cluster-critical
+    image:
+      repository: ${target.values.imageRegistry}/jetstack/cert-manager-controller
+    installCRDs: true
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 25m
+        memory: 64Mi
+    startupapicheck:
+      image:
+        repository: ${target.values.imageRegistry}/jetstack/cert-manager-startupapicheck
+    webhook:
+      image:
+        repository: ${target.values.imageRegistry}/jetstack/cert-manager-webhook

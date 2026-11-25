@@ -1,0 +1,76 @@
+---
+title: RONDO
+description: Air-gap deployment of components (Helm charts, vSphere machines) on targets, driven by a Kubernetes operator.
+template: splash
+hero:
+  tagline: Components (Helm charts or vSphere machines) installed on targets, without Internet access. Three objects, one CLI, one operator.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: First install
+      link: getting-started/first-install/
+      icon: right-arrow
+    - text: The model in 5 minutes
+      link: concepts/model/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+import ArchitectureMap from '../../components/ArchitectureMap.astro';
+
+<CardGrid>
+  <Card title="Component" icon="puzzle">
+    **What.** A Helm chart, or VMs cloned on vSphere and their installer.
+  </Card>
+  <Card title="Target" icon="laptop">
+    **Where.** A k3s/rke2 cluster, or a vSphere placement. Declared in `rondo.yaml`.
+  </Card>
+  <Card title="Enrollment" icon="rocket">
+    **This component on this target**, by name or by role. One Job per action.
+  </Card>
+  <Card title="Air-gap" icon="padlock">
+    Binaries, images, charts, providers and states: everything goes through the site's Artifactory.
+  </Card>
+</CardGrid>
+
+## The essentials
+
+<Tabs>
+  <TabItem label="Install a site">
+    ```bash
+    sudo dnf install -y rondo
+    rondo init                         # writes ~/.rondo/rondo.yaml, to fill in
+    rondo deploy                       # k3s management, Rancher, operator, Targets
+    rondo deploy downstreams           # one rke2 cluster per target, and its base layer
+    rondo component install acme       # a component, on the targets of its roles
+    ```
+  </TabItem>
+  <TabItem label="Monitor">
+    ```bash
+    kubectl -n rondo-system get targets,enrollments
+    kubectl -n rondo-system describe enrollment grafana
+    kubectl -n rondo-system logs job/<job>
+    # or https://rondo.<ingressBaseDomain>, read-only
+    ```
+  </TabItem>
+  <TabItem label="Remove">
+    ```bash
+    rondo component uninstall acme
+    rondo destroy downstreams
+    rondo destroy
+    ```
+  </TabItem>
+</Tabs>
+
+## Architecture at a glance
+
+<ArchitectureMap />
+
+## Where to start
+
+<CardGrid>
+  <LinkCard title="Operate a site" description="Prerequisites, environments, updates, troubleshooting." href="operations/prerequisites/" />
+  <LinkCard title="Write a component" description="A tree of Components and Enrollments, published to Artifactory." href="components/tutorial/" />
+  <LinkCard title="Understand the lifecycle" description="Resolution, Jobs, health, retries, uninstall." href="concepts/lifecycle/" />
+  <LinkCard title="Reference" description="CLI, rondo.yaml, API, Jobs, rondo-system objects." href="reference/cli/" />
+</CardGrid>
