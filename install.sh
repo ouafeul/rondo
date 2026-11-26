@@ -50,7 +50,7 @@ fi
 CURL_OPTS="$*"
 
 # shellcheck disable=SC2086 # CURL_OPTS is a word list on purpose
-dl() { curl $CURL_OPTS "$1"; }
+dl() { curl $CURL_OPTS "$@"; }
 
 VERSION="${RONDO_VERSION:-}"
 if [ -z "$VERSION" ]; then

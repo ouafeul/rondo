@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-11-26
+
+Second release candidate.
+
+### Fixed
+- `install.sh` writes the downloaded `rondo` binary to `~/.rondo/bin` and checks it against
+  `SHA256SUMS`; it printed the binary to the terminal and installed nothing.
+- Release package file names match the assets GitHub serves (`rondo-1.0.0.rc.2.x86_64.rpm`), so
+  `SHA256SUMS` and `scripts/mirror-release.sh` find them; the version inside the packages keeps
+  the `~` that sorts a release candidate before its final release.
+
 ## [1.0.0-rc.1] - 2026-11-26
 
 First release candidate. RONDO deploys components onto air-gapped infrastructure with three objects and three actions:
