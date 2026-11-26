@@ -48,7 +48,7 @@ export const errors: Entry[] = [
   { where: 'Target', msg: 'Secret "rondo-vsphere-<n>" not found in rondo-system (does `rondo deploy` project the vSphere credentials?)', cause: 'rondo deploy has not succeeded since the target was added.', fix: 'rondo deploy.' },
 
   // Job
-  { where: 'Job', msg: 'helm: timed out waiting for the condition / UPGRADE FAILED', cause: 'The chart does not become ready before policy.timeout − 30 s; --atomic rolled the release back.', fix: 'kubectl logs job/<job>, then the pods on the target; raise spec.policy.timeout if the install is slow.' },
+  { where: 'Job', msg: 'UPGRADE FAILED: … resource <Kind>/<ns>/<name> not ready. status: InProgress … context deadline exceeded', cause: 'The chart does not become ready before policy.timeout − 30 s; --rollback-on-failure rolled the release back (or uninstalled a first install).', fix: 'kubectl logs job/<job>, then the pods on the target; raise spec.policy.timeout if the install is slow.' },
   { where: 'Job', msg: 'network_mirror: 401/403 … Regenerate it with `rondo deploy`', cause: 'The tofu providers token (Secret rondo-tofurc) is invalid.', fix: 'rondo deploy, or set secrets.mirrorToken.' },
   { where: 'Job', msg: 'uninstall failed, the finalizer is released anyway, the helm release may remain', cause: "The helm-uninstall Job failed; the Enrollment disappears anyway (controller log).", fix: 'helm uninstall <release> -n <ns> by hand on the target.' },
 ];

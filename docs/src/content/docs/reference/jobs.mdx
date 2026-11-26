@@ -10,7 +10,7 @@ Every action on a target is an `rondo-toolbox exec <verb>` Job in `rondo-system`
 | Verb | Archetype | Started when | Does |
 |---|---|---|---|
 | `helm-apply` | chart | chart version or values hash changed | `helm upgrade --install`, inventory, health |
-| `helm-uninstall` | chart | Enrollment deleted | `helm uninstall --wait`; "not found" = success |
+| `helm-uninstall` | chart | Enrollment deleted | `helm uninstall --ignore-not-found --wait=watcher`: a release already gone is a success |
 | `vm-apply` | vm | infrastructure changed, inventory missing | `tofu apply` of `terraform/vm`, Secret `<enrollment>-machines` |
 | `vm-install` | vm | install version, config or secrets changed | `ansible-playbook` per group |
 | `vm-destroy` | vm | Enrollment deleted | `tofu destroy` |
@@ -40,7 +40,7 @@ The target's kubeconfig, the `valuesFrom` Secrets, the vSphere credentials, the 
     2. remote target: writes the kubeconfig of `rondo-kubeconfig-<t>` to `/work/kubeconfig`; management: the Job's ServiceAccount;
     3. `helm registry login` on the host of `chart.oci`;
     4. values: merge, `${target.*}` tokens, then `${secrets.*}` from `valuesFrom` → `/work/values.json` (0600);
-    5. `helm upgrade --install … --create-namespace --wait --atomic --timeout <policy.timeout − 30 s>`;
+    5. `helm upgrade --install … --server-side=true --force-conflicts --create-namespace --wait=watcher --rollback-on-failure --timeout <policy.timeout − 30 s>`;
     6. `helm get manifest` → `status.inventory`, first `status.health` (a failure here does not fail the Job).
   </TabItem>
   <TabItem label="vm-apply / vm-destroy">

@@ -243,21 +243,28 @@ func sortedKeys(m map[string]string) []string {
 	return out
 }
 
+// waitStrategy is Helm 4's kstatus-based wait: every resource of the release current (ready).
+const waitStrategy = "--wait=watcher"
+
+// upgradeArgs applies server-side, Helm being the field manager that wins: a field the chart
+// sets is the chart's, as the three-way merge of client-side apply made it, rather than a
+// conflict that fails the upgrade when another manager changed it on the target.
 func (rc *releaseContext) upgradeArgs(valuesPath string) []string {
 	p := rc.release.Spec.Policy
 	args := []string{
 		"upgrade", "--install", rc.releaseName, rc.component.Spec.Chart.OCI,
 		"--version", rc.component.Spec.Chart.Version,
 		"--namespace", rc.component.Spec.Namespace,
+		"--server-side=true", "--force-conflicts",
 	}
 	if p.CreateNamespaceEnabled() {
 		args = append(args, "--create-namespace")
 	}
 	if p.WaitEnabled() {
-		args = append(args, "--wait")
+		args = append(args, waitStrategy)
 	}
 	if p.AtomicEnabled() {
-		args = append(args, "--atomic")
+		args = append(args, "--rollback-on-failure")
 	}
 	args = append(args, "--timeout", rc.timeout())
 	if valuesPath != "" {
@@ -310,17 +317,13 @@ func HelmUninstall(ctx context.Context, rt *Runtime) error {
 		return err
 	}
 	logStep("uninstall helm", "release", rc.releaseName, "target", rc.target.Name)
-	err = rt.Run.Run(ctx, runner.Cmd{
+	// A release already gone is uninstalled: helm says so and exits 0.
+	if err := rt.Run.Run(ctx, runner.Cmd{
 		Name: "helm",
 		Args: []string{"uninstall", rc.releaseName, "--namespace", rc.component.Spec.Namespace,
-			"--wait", "--timeout", rc.timeout()},
+			"--ignore-not-found", waitStrategy, "--timeout", rc.timeout()},
 		Dir: rt.dir(), Env: rc.helmEnv(rt),
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			log.Info("helm release already gone, nothing to uninstall", "release", rc.releaseName)
-			return nil
-		}
+	}); err != nil {
 		return fmt.Errorf("helm uninstall: %w", err)
 	}
 	return nil

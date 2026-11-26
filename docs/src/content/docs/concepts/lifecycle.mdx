@@ -129,7 +129,7 @@ sequenceDiagram
   Note over E: finalizer rondo.ouafeul.github.io/enrollment-uninstall
   C->>C: an apply running? wait for it to end
   C->>J: helm-uninstall (or vm-destroy)
-  J->>T: helm uninstall --wait / tofu destroy
+  J->>T: helm uninstall --ignore-not-found --wait=watcher / tofu destroy
   J-->>C: done
   C->>E: removes the finalizer
   E-->>Op: the object disappears

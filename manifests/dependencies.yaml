@@ -49,11 +49,11 @@ binaries:
     sha256: "c1f0d6b34d8328f963d3b1ad10896fae30a6c6890596190ffef477dab991090f"
 
   - name: helm
-    version: "v3.22.1"
+    version: "v4.3.2"
     source_url: "https://get.helm.sh/helm-{version}-linux-amd64.tar.gz"
     kind: file
     path: "helm/{version}/helm-{version}-linux-amd64.tar.gz"
-    sha256: "896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea"
+    sha256: "d1c0278d46beab79582d7e50f5b3dc206944ba8e577cde618513fd07daa53983"
 
   - name: kubectl
     version: "v1.36.6"
@@ -83,7 +83,8 @@ binaries:
     path: "helmfile/{version}/helmfile_{version}_linux_amd64.tar.gz"
     sha256: "e10344a4e6121689265c8fbe8ce96977b4722a9f953db862014a08b99938c333"
 
-  # Its plugin.yaml (platformCommand/platformHooks) needs Helm >= 3.18.
+  # A legacy plugin.yaml (no apiVersion): Helm 4 loads it as a cli/v1 plugin. Extracted into the
+  # plugins directory by the CLI tool download, not `helm plugin install`, so no .prov is needed.
   - name: helm-diff
     version: "v3.15.15"
     source_url: "https://github.com/databus23/helm-diff/releases/download/{version}/helm-diff-linux-amd64.tgz"
