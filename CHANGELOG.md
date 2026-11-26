@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] - 2026-11-26
+
+Third release candidate: Helm 4, and an `artifactory` preset ready for a first air-gapped site.
+
 ### Changed
 - Helm 4.3.2 replaces Helm 3.22.1 on the workstation, in the toolbox images and in CI (helmfile
   1.8.5 and helm-diff 3.15.15 already support it). The `helm-apply` Job now runs `helm upgrade
