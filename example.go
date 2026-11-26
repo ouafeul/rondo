@@ -21,11 +21,13 @@ const artifactoryArtifacts = `artifacts:
     repositories:
       docker: rondo-docker-local
       helm: rondo-helm-local
+      # The files, and the OpenTofu providers as a static network mirror tree under providers/.
       generic: rondo-generic-local
       rpm: ""
-      tofu: rondo-tofu-local
       tofuState: rondo-tofu-state-local
+    # Lifetime of the minted provider mirror token; secrets.mirrorToken, when set, is used instead.
     mirrorTokenLifetimeSeconds: ""
+  # artifacts.tofu (providerMirror or providerOCI, state) overrides the providers and the states.
 `
 
 // ExampleConfigFor is the template with the artifacts section of preset: generic (or empty) or

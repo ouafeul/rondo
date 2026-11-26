@@ -110,24 +110,6 @@ func PostForm(ctx context.Context, d Doer, urlStr, user, password string, form u
 	return doJSON(d, req, out)
 }
 
-func PostFormRaw(ctx context.Context, d Doer, urlStr, user, password string, form url.Values) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, strings.NewReader(form.Encode()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(user, password)
-	resp, err := d.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d on %s", resp.StatusCode, urlStr)
-	}
-	return nil
-}
-
 type StatusError struct {
 	Code int
 	Body string

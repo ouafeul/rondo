@@ -76,7 +76,7 @@ func TestConfigureRegistryWritesTofuRCAndEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), "network_mirror") ||
-		!strings.Contains(string(raw), "https://arti.exa-mple.com/artifactory/api/terraform/rondo-tofu-local/providers/") {
+		!strings.Contains(string(raw), "https://arti.exa-mple.com/artifactory/rondo-generic-local/providers/") {
 		t.Errorf("unexpected .tofurc: %s", raw)
 	}
 	if st.regEnv["TF_TOKEN_arti_exa__mple_com"] != "tok123" {
@@ -192,7 +192,7 @@ func TestArtifactoryClientToken(t *testing.T) {
 			return
 		}
 		r.ParseForm()
-		if r.PostForm.Get("scope") != "member-of-groups:*" {
+		if r.PostForm.Get("scope") != "applied-permissions/user" {
 			t.Errorf("scope: %q", r.PostForm.Get("scope"))
 		}
 		json.NewEncoder(w).Encode(map[string]string{"access_token": "abc"})

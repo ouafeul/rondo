@@ -26,7 +26,9 @@ artifacts:
     state:
       http:
         url: https://files.example.local/tofu-state
-  # A JFrog Artifactory derives every endpoint from its URL, in place of oci, files, rpm and tofu:
+  # A JFrog Artifactory derives every endpoint from its URL, in place of oci, files and rpm; the
+  # providers come from <url>/<generic>/providers/ and the states from <url>/<tofuState>, unless
+  # tofu sets them (`rondo init --preset artifactory` writes this section):
   # preset: artifactory
   # artifactory:
   #   url: https://artifactory.example.local/artifactory
@@ -35,7 +37,6 @@ artifacts:
   #     helm: rondo-helm-local
   #     generic: rondo-generic-local
   #     rpm: ""
-  #     tofu: rondo-tofu-local
   #     tofuState: rondo-tofu-state-local
   #   mirrorTokenLifetimeSeconds: ""
 

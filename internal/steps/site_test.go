@@ -386,6 +386,28 @@ func TestApplyMirrorTokenOverrideIsNotPersisted(t *testing.T) {
 	}
 }
 
+// secrets.mirrorToken replacing a minted token: no minter is wired, and the minted token left in
+// the Secret is dropped from it without a revocation.
+func TestApplyMirrorTokenOverrideReplacesAMintedToken(t *testing.T) {
+	cfg := siteCfg()
+	cfg.Secrets.MirrorToken = "tok-manual"
+	p, got, fk := capture(t, cfg)
+	p.minter = nil
+	fk.Outputs[filepath.Join(p.ws.BinDir, "kubectl")+
+		" get secret rondo-tofurc -n rondo-system -o jsonpath={.data.token}"] = "dG9rLW9sZA=="
+
+	if err := p.ApplyMirrorToken(t.Context()); err != nil {
+		t.Fatalf("ApplyMirrorToken: %v", err)
+	}
+	sd := nested(t, got.find(t, "Secret", "rondo-tofurc"), "stringData")
+	if _, persisted := sd["token"]; persisted {
+		t.Error("the previous minted token is still kept in the Secret")
+	}
+	if !strings.Contains(sd[".tofurc"].(string), "tok-manual") {
+		t.Errorf(".tofurc = %v", sd[".tofurc"])
+	}
+}
+
 func TestApplyMirrorTokenRefusesWithoutMinter(t *testing.T) {
 	p, _, _ := capture(t, siteCfg())
 	p.minter = nil

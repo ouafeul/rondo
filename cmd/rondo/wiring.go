@@ -171,9 +171,10 @@ func newDeps(ctx context.Context, c *config.Config) (*deps, error) {
 }
 
 // mirrorTokens are the token OpenTofu presents to the provider mirror and the minter of the
-// Jobs' one: an Artifactory mints both, any other mirror takes secrets.mirrorToken, or none.
+// Jobs' one: an Artifactory mints both unless secrets.mirrorToken is set; that token, or none,
+// serves any other case, without minting nor revoking.
 func mirrorTokens(m config.Mirror, caCert string) (steps.TokenSource, steps.MirrorTokenMinter) {
-	if !m.IsArtifactory() {
+	if !m.MintsTokens() {
 		return steps.StaticToken(m.MirrorToken), nil
 	}
 	arti := &steps.ArtifactoryClient{

@@ -589,9 +589,20 @@ func TestMirrorTokensMintOnlyOnArtifactory(t *testing.T) {
 	if tok, err := tokens.Token(context.Background()); err != nil || tok != "tok" {
 		t.Errorf("token = %q, %v; want the declared one", tok, err)
 	}
-	_, minter = mirrorTokens(config.Mirror{Preset: config.PresetArtifactory, ArtifactoryURL: "https://a"}, "")
+	arti := config.Mirror{Preset: config.PresetArtifactory, ArtifactoryURL: "https://a",
+		Username: "u", Password: "p", ProviderMirrorURL: "https://a/artifactory/files/providers/"}
+	_, minter = mirrorTokens(arti, "")
 	if _, ok := minter.(*steps.ArtifactoryClient); !ok {
 		t.Errorf("minter %T on an Artifactory, want the Artifactory client", minter)
+	}
+	// secrets.mirrorToken set, an Artifactory neither mints nor revokes: the token is used as is.
+	arti.MirrorToken = "tok-manual"
+	tokens, minter = mirrorTokens(arti, "")
+	if minter != nil {
+		t.Errorf("minter %T on an Artifactory with secrets.mirrorToken", minter)
+	}
+	if tok, err := tokens.Token(context.Background()); err != nil || tok != "tok-manual" {
+		t.Errorf("token = %q, %v; want secrets.mirrorToken", tok, err)
 	}
 }
 
