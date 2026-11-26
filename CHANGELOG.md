@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request.
 
 ### Fixed
+- `scripts/mirror-release.sh` mirrors `SHA256SUMS` (so `install.sh` checks the binary) and logs in to the source registry with `RONDO_SOURCE_USER` / `RONDO_SOURCE_PASSWORD` when its packages are private.
 - `install.sh` checks the binary against its `rondo-linux-amd64.sha256` sidecar when the mirror has
   no `SHA256SUMS`, and warns when it verifies nothing.
 - The IaC bundle and component trees accept a `.sha256` holding a bare digest, as Artifactory
