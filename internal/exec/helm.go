@@ -317,17 +317,13 @@ func HelmUninstall(ctx context.Context, rt *Runtime) error {
 		return err
 	}
 	logStep("uninstall helm", "release", rc.releaseName, "target", rc.target.Name)
-	err = rt.Run.Run(ctx, runner.Cmd{
+	// A release already gone is uninstalled: helm says so and exits 0.
+	if err := rt.Run.Run(ctx, runner.Cmd{
 		Name: "helm",
 		Args: []string{"uninstall", rc.releaseName, "--namespace", rc.component.Spec.Namespace,
-			waitStrategy, "--timeout", rc.timeout()},
+			"--ignore-not-found", waitStrategy, "--timeout", rc.timeout()},
 		Dir: rt.dir(), Env: rc.helmEnv(rt),
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			log.Info("helm release already gone, nothing to uninstall", "release", rc.releaseName)
-			return nil
-		}
+	}); err != nil {
 		return fmt.Errorf("helm uninstall: %w", err)
 	}
 	return nil

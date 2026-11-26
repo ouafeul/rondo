@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `policy.atomic` under its Helm 4 name; `helm-uninstall` waits with `--wait=watcher`. The
   management charts (helmfile) get the same server-side apply defaults.
 
+### Fixed
+- The `helm-uninstall` Job succeeds when the release is already gone (`--ignore-not-found`); it
+  failed, helm's "not found" never reaching the error it was matched against.
+
 ## [1.0.0-rc.2] - 2026-11-26
 
 Second release candidate.

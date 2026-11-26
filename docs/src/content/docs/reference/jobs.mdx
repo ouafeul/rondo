@@ -10,7 +10,7 @@ Every action on a target is an `rondo-toolbox exec <verb>` Job in `rondo-system`
 | Verb | Archetype | Started when | Does |
 |---|---|---|---|
 | `helm-apply` | chart | chart version or values hash changed | `helm upgrade --install`, inventory, health |
-| `helm-uninstall` | chart | Enrollment deleted | `helm uninstall --wait=watcher`; "not found" = success |
+| `helm-uninstall` | chart | Enrollment deleted | `helm uninstall --ignore-not-found --wait=watcher`: a release already gone is a success |
 | `vm-apply` | vm | infrastructure changed, inventory missing | `tofu apply` of `terraform/vm`, Secret `<enrollment>-machines` |
 | `vm-install` | vm | install version, config or secrets changed | `ansible-playbook` per group |
 | `vm-destroy` | vm | Enrollment deleted | `tofu destroy` |

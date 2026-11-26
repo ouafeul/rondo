@@ -178,26 +178,24 @@ func TestHelmApplyWritesValuesFile(t *testing.T) {
 	}
 }
 
+// helm prints "release: not found" on its output, not in the error the runner returns
+// ("<cmd>: exit status 1"): only --ignore-not-found makes a missing release a success.
 func TestHelmUninstallIdempotent(t *testing.T) {
 	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())
-	cmd := "helm uninstall victoria-logs --namespace logging --wait=watcher --timeout 9m"
-	fk.Errs[cmd] = errNotFound{}
 	if err := HelmUninstall(t.Context(), rt); err != nil {
-		t.Fatalf("missing release treated as a failure: %v", err)
+		t.Fatalf("HelmUninstall: %v", err)
 	}
-}
-
-type errNotFound struct{}
-
-func (errNotFound) Error() string {
-	return `Error: uninstall: Release not loaded: x: release: not found`
+	got := findCall(t, fk.Calls, "uninstall").String()
+	if got != "helm uninstall victoria-logs --namespace logging --ignore-not-found --wait=watcher --timeout 9m" {
+		t.Errorf("uninstall = %s, want --ignore-not-found: a release already gone fails the Job", got)
+	}
 }
 
 func TestHelmUninstallPropagatesRealFailure(t *testing.T) {
 	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())
-	cmd := "helm uninstall victoria-logs --namespace logging --wait=watcher --timeout 9m"
+	cmd := "helm uninstall victoria-logs --namespace logging --ignore-not-found --wait=watcher --timeout 9m"
 	fk.Errs[cmd] = errTimeout{}
 	if err := HelmUninstall(t.Context(), rt); err == nil {
 		t.Fatal("real failure swallowed")
