@@ -84,18 +84,20 @@ jobs:
             exit 1
           fi
           export VERSION PKG_SUFFIX="" PKG_CONFLICTS="rondo-edge"
-          echo "package version: ${VERSION}"
+          # GitHub turns "~" into "." in asset names: file names use ".", the version inside keeps "~".
+          file_version="${VERSION//\~/.}"
+          echo "package version: ${VERSION} (files: ${file_version})"
           cp dist/rondo-linux-amd64 dist/rondo-sandbox-linux-amd64 .
           chmod +x rondo-sandbox-linux-amd64
           mkdir -p completions
           ./rondo-sandbox-linux-amd64 completion bash > completions/rondo-sandbox.bash
           ./rondo-sandbox-linux-amd64 completion zsh  > completions/_rondo-sandbox
           ./rondo-sandbox-linux-amd64 completion fish > completions/rondo-sandbox.fish
-          "$nfpm" package --config packaging/nfpm.yaml --packager rpm --target "dist/rondo-${VERSION}.x86_64.rpm"
+          "$nfpm" package --config packaging/nfpm.yaml --packager rpm --target "dist/rondo-${file_version}.x86_64.rpm"
           PKG_CONFLICTS=rondo-sandbox-edge "$nfpm" package --config packaging/nfpm-sandbox.yaml --packager rpm \
-            --target "dist/rondo-sandbox-${VERSION}.x86_64.rpm"
+            --target "dist/rondo-sandbox-${file_version}.x86_64.rpm"
           PKG_CONFLICTS=rondo-sandbox-edge "$nfpm" package --config packaging/nfpm-sandbox.yaml --packager deb \
-            --target "dist/rondo-sandbox_${VERSION}_amd64.deb"
+            --target "dist/rondo-sandbox_${file_version}_amd64.deb"
           rm -f rondo-linux-amd64 rondo-sandbox-linux-amd64
 
       - name: Checksums
