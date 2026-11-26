@@ -195,11 +195,12 @@ oras cp --from-oci-layout layout:2.9.3 registry.site.local/opentofu-providers/ha
 
 The providers and versions are the `tofu_providers` of `manifests/dependencies.yaml`.
 
-## Artifactory preset
+## Artifactory site
 
-A JFrog Artifactory derives every endpoint from one URL and repository names:
+A JFrog Artifactory can be the whole mirror (`preset: artifactory`): every endpoint derives from
+its URL and repository names.
 
-```yaml
+```yaml title="rondo.yaml (excerpt)"
 artifacts:
   preset: artifactory
   username: svc-rondo
@@ -209,24 +210,100 @@ artifacts:
     repositories:              # defaults shown
       docker: rondo-docker-local
       helm: rondo-helm-local
-      generic: rondo-generic-local
-      tofu: rondo-tofu-local          # a Terraform provider repository
+      generic: rondo-generic-local    # files, and the providers under providers/
       tofuState: rondo-tofu-state-local
       rpm: rondo-rpms-local           # optional
+    mirrorTokenLifetimeSeconds: "31536000"
+secrets:
+  mirrorPassword: …
+  # mirrorToken: …             # a token made by hand: RONDO neither mints nor revokes one
 ```
 
-The docker repository is also reached at its subdomain (`rondo-docker-local.artifactory.site.local`)
-by the rke2 nodes. When `secrets.mirrorToken` is empty, `rondo deploy` mints the providers' token
-with the service account (an admin account for a token without expiry).
+### Repositories
+
+| Repository | Type | Holds | Notes |
+|---|---|---|---|
+| `rondo-docker-local` | Docker, local | images: RONDO's, every chart's, the Rancher and rke2 system images | read at `<host>/rondo-docker-local/<image>` by the workstation and the Jobs, and at its subdomain `rondo-docker-local.<host>` by the rke2 nodes (their system registry): enable the subdomain Docker access method (reverse proxy), with a wildcard DNS record `*.<host>` and a certificate valid for `<host>` and `*.<host>` |
+| `rondo-helm-local` | Helm OCI, local | Helm charts, `oci://<host>/rondo-helm-local/<chart>` | |
+| `rondo-generic-local` | Generic, local | RONDO's release files, tools and k3s with their `.sha256`, component trees, and the OpenTofu providers as a static network mirror tree, `providers/registry.opentofu.org/<namespace>/<type>/…` | read with plain GETs; RONDO reads the providers at `<url>/rondo-generic-local/providers/` |
+| `rondo-tofu-state-local` | Generic, local; not a Terraform Backend repository, which speaks another protocol than OpenTofu's http backend | the OpenTofu states | written by the site only: keep it out of any replication, and back it up |
+| `rondo-rpms-local` (optional) | Generic, local | `rondo` packages, the OS repositories of component machines, with the `repodata/` the scripts build | an RPM repository would compute its own metadata instead |
+
+### Service account
+
+`artifacts.username` is an internal user (not an SSO account, without multi-factor
+authentication), e.g. `svc-rondo`, granted its permissions through a group:
+
+| Repositories | Permissions |
+|---|---|
+| docker, helm, generic, rpm | Read |
+| tofu-state | Read, Deploy/Cache, Delete/Overwrite (the http backend overwrites and deletes the states) |
+
+`rondo deploy` mints the provider mirror's tokens with this account through the JFrog Access API,
+`scope=applied-permissions/user`, so the token reads what the user (its groups included) reads;
+the platform must allow token creation with basic credentials. A token without expiry
+(`mirrorTokenLifetimeSeconds` empty) is only granted to an admin account: set a lifetime, and plan
+the rotation, which each `rondo deploy` does. Where token creation is not allowed, create a token
+with read access to `rondo-generic-local` and set it in `secrets.mirrorToken`; RONDO then uses it
+as is, and neither mints nor revokes one. See [Provider mirror token](/reference/rondo-yaml/#provider-mirror-token).
+
+The mirror scripts write with another account (`MIRROR_USER`), with Deploy/Cache and
+Delete/Overwrite on every repository.
+
+### Certificates
+
+`artifacts.caCertificateFile` is a PEM bundle of the CAs that sign Artifactory's certificate (and
+its wildcard), and vCenter's: the CLI and the Jobs trust it alone (`SSL_CERT_FILE`), for the mirror
+as for the vSphere API.
+
+### Fill it
+
+Artifactory in the site is filled from a connected network: either an Artifactory on that network
+replicates the same repositories into it (push replication, the state repository excepted), or a
+connected host that reaches the site's Artifactory runs the mirror scripts against it:
+
+```bash
+export MIRROR_USER=svc-mirror MIRROR_PASSWORD=… MIRROR_CA_CERT=./site-ca.pem
+export MIRROR_REGISTRY=artifactory.site.local/rondo-docker-local
+export MIRROR_CHARTS_OCI=artifactory.site.local/rondo-helm-local
+export MIRROR_FILES_URL=https://artifactory.site.local/artifactory/rondo-generic-local
+export MIRROR_RPM_URL=https://artifactory.site.local/artifactory/rondo-rpms-local   # optional
+
+# third-party dependencies of manifests/dependencies.yaml
+python3 scripts/ci/resolve-deps.py --manifest manifests/dependencies.yaml --output deps-resolved.json
+for t in binaries tofu_providers helm_charts; do
+  python3 scripts/ci/download-deps.py --deps deps-resolved.json --type "$t"
+done
+python3 scripts/ci/mirror-images.py --deps deps-resolved.json --section docker_images
+# the Rancher and rke2 system images, at the versions of manifests/dependencies.yaml
+python3 scripts/ci/mirror-images.py \
+  --list-url https://github.com/rancher/rancher/releases/download/<rancher version>/rancher-images.txt
+python3 scripts/ci/mirror-images.py \
+  --list-url https://github.com/rancher/rke2/releases/download/<rke2 version>/rke2-images.linux-amd64.txt
+python3 scripts/ci/mirror-rpms.py --deps deps-resolved.json --dest /tmp/rpms   # optional, on an EL9 host
+
+# RONDO itself
+scripts/mirror-release.sh --version v1.0.0 --channel stable \
+  --registry "$MIRROR_REGISTRY" --charts-oci "$MIRROR_CHARTS_OCI" \
+  --files-url "$MIRROR_FILES_URL" --rpm-url "$MIRROR_RPM_URL"
+```
+
+`download-deps.py --type tofu_providers` writes the providers under `<files-url>/providers`, which
+is where the preset reads them. The versions in paths keep their `+` (`k3s/v1.36.6+k3s1/k3s`): the
+scripts send it as `%2B`, the form the k3s machines request, and Artifactory stores the literal
+`+`. Artifactory answers `GET <file>.sha256` with the checksum it computed (a bare digest) when no
+sidecar was deployed; RONDO's readers take the first field of a `.sha256`, so either form checks.
 
 ## Fill the mirror
 
 Two copies, from a machine that reaches both the Internet and the mirror. The scripts take the
-roots of the generic preset; for Artifactory, give the URLs of its repositories.
+roots of the generic preset; for Artifactory, give the URLs of its repositories (see
+[Artifactory site](#fill-it)).
 
 | Script flag | Environment | `rondo.yaml` |
 |---|---|---|
 | `--registry` (`mirror-release.sh`), `--oci-registry` | `MIRROR_REGISTRY` | `<oci.registry>/<oci.repository>` |
+| `--charts-oci` (default `<registry>/charts`) | `MIRROR_CHARTS_OCI` | `<oci.registry>/<oci.chartsRepository>` |
 | `--files-url` | `MIRROR_FILES_URL` | `<files.url>/<files.repository>` |
 | `--rpm-url` | `MIRROR_RPM_URL` | `<rpm.url>/<rpm.repository>` |
 | `--provider-mirror` (default `<files-url>/providers`) | `MIRROR_PROVIDER_URL` | `tofu.providerMirror` |
