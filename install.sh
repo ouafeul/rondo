@@ -3,7 +3,8 @@
 #
 # Sources, in order:
 #   - RONDO_MIRROR_URL set: an air-gapped mirror serving <url>/rondo/<channel>.json and
-#     <url>/rondo/<version>/rondo-linux-amd64 (optional RONDO_MIRROR_USER / RONDO_MIRROR_PASSWORD,
+#     <url>/rondo/<version>/rondo-linux-amd64, checked against <url>/rondo/<version>/SHA256SUMS
+#     or its rondo-linux-amd64.sha256 sidecar (optional RONDO_MIRROR_USER / RONDO_MIRROR_PASSWORD,
 #     RONDO_MIRROR_CA_CERT as a PEM string);
 #   - otherwise GitHub Releases of ouafeul/rondo.
 # RONDO_VERSION pins a version (e.g. v1.0.0); otherwise RONDO_CHANNEL (default: stable) is resolved.
@@ -62,13 +63,27 @@ log "rondo version: $VERSION"
 
 log "downloading the rondo binary"
 dl "${BASE}/${VERSION}/rondo-linux-amd64" -o "${RONDO_HOME}/bin/rondo.tmp"
+# The expected digest: SHA256SUMS of the release, else the rondo-linux-amd64.sha256 sidecar that
+# the mirror scripts upload next to the binary (Artifactory answers it with the bare digest).
+want=""
 if dl "${BASE}/${VERSION}/SHA256SUMS" -o "${RONDO_HOME}/cache/SHA256SUMS" 2>/dev/null; then
-  want="$(awk '$2 == "rondo-linux-amd64" {print $1}' "${RONDO_HOME}/cache/SHA256SUMS")"
-  got="$(sha256sum "${RONDO_HOME}/bin/rondo.tmp" 2>/dev/null | awk '{print $1}')"
-  if [ -n "$want" ] && [ -n "$got" ] && [ "$want" != "$got" ]; then
-    rm -f "${RONDO_HOME}/bin/rondo.tmp"
-    die "checksum mismatch for rondo-linux-amd64 (want $want, got $got)"
-  fi
+  want="$(awk '$2 == "rondo-linux-amd64" || $2 == "*rondo-linux-amd64" {print tolower($1); exit}' "${RONDO_HOME}/cache/SHA256SUMS")"
+fi
+if [ -z "$want" ] && sidecar="$(dl "${BASE}/${VERSION}/rondo-linux-amd64.sha256" 2>/dev/null)"; then
+  want="$(printf '%s\n' "$sidecar" | awk 'NF {print tolower($1); exit}')"
+fi
+case "$want" in
+  *[!0-9a-f]*) want="" ;;
+esac
+[ "${#want}" -eq 64 ] || want=""
+got="$( { sha256sum "${RONDO_HOME}/bin/rondo.tmp" 2>/dev/null || shasum -a 256 "${RONDO_HOME}/bin/rondo.tmp" 2>/dev/null; } | awk '{print $1}')"
+if [ -z "$want" ]; then
+  warn "no SHA256SUMS nor rondo-linux-amd64.sha256 under ${BASE}/${VERSION}: checksum NOT verified."
+elif [ -z "$got" ]; then
+  warn "neither sha256sum nor shasum is installed: checksum NOT verified."
+elif [ "$want" != "$got" ]; then
+  rm -f "${RONDO_HOME}/bin/rondo.tmp"
+  die "checksum mismatch for rondo-linux-amd64 (want $want, got $got)"
 fi
 mv "${RONDO_HOME}/bin/rondo.tmp" "${RONDO_HOME}/bin/rondo"
 chmod +x "${RONDO_HOME}/bin/rondo"

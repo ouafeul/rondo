@@ -65,6 +65,25 @@ def test_http_store_uploads_with_a_sidecar_and_skips_the_second_time(mirror_comm
     assert store.put_checked("k3s/v1/k3s", f) is True
 
 
+def test_http_store_encodes_the_plus_of_a_version(mirror_common, file_server, tmp_path):
+    f = tmp_path / "k3s"
+    f.write_bytes(b"binary")
+    store = mirror_common.store_for(file_server["url"] + "/mirror")
+    assert store.put_checked("k3s/v1.36.6+k3s1/k3s", f) is True
+    # %2B, as the machines request it (Terraform's urlencode); a literal + may be read as a space.
+    assert file_server["puts"] == ["/mirror/k3s/v1.36.6%2Bk3s1/k3s", "/mirror/k3s/v1.36.6%2Bk3s1/k3s.sha256"]
+    assert store.put_checked("k3s/v1.36.6+k3s1/k3s", f) is False
+
+
+def test_a_bare_digest_sidecar_skips_the_upload(mirror_common, file_server, tmp_path):
+    f = tmp_path / "k3s"
+    f.write_bytes(b"binary")
+    # What Artifactory answers for <file>.sha256: the digest it computed, without a file name.
+    file_server["files"]["/k3s/v1/k3s.sha256"] = mirror_common.sha256_of(f).encode()
+    assert mirror_common.store_for(file_server["url"]).put_checked("k3s/v1/k3s", f) is False
+    assert file_server["puts"] == []
+
+
 def test_http_store_sends_the_mirror_credentials(mirror_common, file_server, tmp_path, monkeypatch):
     import base64
     file_server["auth"] = "Basic " + base64.b64encode(b"u:p").decode()

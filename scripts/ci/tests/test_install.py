@@ -52,10 +52,40 @@ def test_install_from_the_stable_channel_of_a_mirror(tmp_path, mirror):
     assert (tmp_path / "home" / ".local" / "bin" / "rondo").is_symlink()
 
 
-@pytest.mark.skipif(shutil.which("sha256sum") is None, reason="needs sha256sum")
+def has_sha256_tool():
+    return shutil.which("sha256sum") is not None or shutil.which("shasum") is not None
+
+
+@pytest.mark.skipif(not has_sha256_tool(), reason="needs sha256sum or shasum")
 def test_a_binary_that_does_not_match_sha256sums_is_refused(tmp_path, mirror):
     (mirror["release"] / "rondo-linux-amd64").write_bytes(FAKE_RONDO + b"# tampered\n")
     result = run_install(tmp_path, mirror["url"], RONDO_VERSION=VERSION)
     assert result.returncode != 0
     assert "checksum mismatch" in result.stderr
     assert not (tmp_path / "home" / ".rondo" / "bin" / "rondo").exists()
+
+
+@pytest.mark.skipif(not has_sha256_tool(), reason="needs sha256sum or shasum")
+@pytest.mark.parametrize("sidecar", [
+    pytest.param("{digest}  rondo-linux-amd64\n", id="sha256sum line"),
+    pytest.param("{digest}", id="bare digest, as Artifactory answers"),
+])
+def test_without_sha256sums_the_sidecar_is_checked(tmp_path, mirror, sidecar):
+    (mirror["release"] / "SHA256SUMS").unlink()
+    digest = hashlib.sha256(FAKE_RONDO).hexdigest()
+    (mirror["release"] / "rondo-linux-amd64.sha256").write_text(sidecar.format(digest=digest))
+    result = run_install(tmp_path, mirror["url"], RONDO_VERSION=VERSION)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "NOT verified" not in result.stderr
+
+    (mirror["release"] / "rondo-linux-amd64").write_bytes(FAKE_RONDO + b"# tampered\n")
+    result = run_install(tmp_path, mirror["url"], RONDO_VERSION=VERSION)
+    assert result.returncode != 0
+    assert "checksum mismatch" in result.stderr
+
+
+def test_an_unverified_binary_is_reported(tmp_path, mirror):
+    (mirror["release"] / "SHA256SUMS").unlink()
+    result = run_install(tmp_path, mirror["url"], RONDO_VERSION=VERSION)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "checksum NOT verified" in result.stderr

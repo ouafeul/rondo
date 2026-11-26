@@ -61,6 +61,10 @@ func ResolveComponent(ctx context.Context, client httpx.Doer, c *config.Config,
 		return "", "", fmt.Errorf("checksum %s.sha256: %w; does the component publish "+
 			"its checksum next to its archive?", archive, err)
 	}
+	wantHex, err := sha256Field(wantSum)
+	if err != nil {
+		return "", "", fmt.Errorf("checksum %s.sha256: %w", archive, err)
+	}
 	body, err := httpx.Get(ctx, client, user, pass, base+"/"+archive)
 	if err != nil {
 		return "", "", err
@@ -70,7 +74,7 @@ func ResolveComponent(ctx context.Context, client httpx.Doer, c *config.Config,
 	if err := os.RemoveAll(dir); err != nil {
 		return "", "", err
 	}
-	if err := extractVerified(body, firstField(wantSum), dir); err != nil {
+	if err := extractVerified(body, wantHex, dir); err != nil {
 		os.RemoveAll(dir)
 		return "", "", err
 	}
