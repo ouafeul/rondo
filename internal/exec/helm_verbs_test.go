@@ -97,16 +97,15 @@ func TestHelmApplyCommandLine(t *testing.T) {
 		"upgrade --install victoria-logs oci://arti.local/rondo-helm-local/victoria-logs-single",
 		"--version 0.11.7",
 		"--namespace logging",
+		"--server-side=true",
+		"--force-conflicts",
 		"--create-namespace",
-		"--wait",
-		"--atomic",
+		"--wait=watcher",
+		"--rollback-on-failure",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("argument %q missing from: %s", want, got)
 		}
-	}
-	if strings.Contains(got, "--server-side") {
-		t.Errorf("helm-apply passes --server-side: %s", got)
 	}
 	if !strings.Contains(got, "--timeout 9m30s") {
 		t.Errorf("timeout = %s, want 9m30s (10m - 30s margin)", got)
@@ -131,7 +130,7 @@ func TestHelmApplyDefaultsOff(t *testing.T) {
 		t.Fatalf("HelmApply: %v", err)
 	}
 	got := findCall(t, fk.Calls, "upgrade").String()
-	for _, unwanted := range []string{"--create-namespace", "--wait", "--atomic"} {
+	for _, unwanted := range []string{"--create-namespace", "--wait", "--rollback-on-failure"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("%s present despite an explicit false: %s", unwanted, got)
 		}
@@ -182,7 +181,7 @@ func TestHelmApplyWritesValuesFile(t *testing.T) {
 func TestHelmUninstallIdempotent(t *testing.T) {
 	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())
-	cmd := "helm uninstall victoria-logs --namespace logging --wait --timeout 9m"
+	cmd := "helm uninstall victoria-logs --namespace logging --wait=watcher --timeout 9m"
 	fk.Errs[cmd] = errNotFound{}
 	if err := HelmUninstall(t.Context(), rt); err != nil {
 		t.Fatalf("missing release treated as a failure: %v", err)
@@ -198,7 +197,7 @@ func (errNotFound) Error() string {
 func TestHelmUninstallPropagatesRealFailure(t *testing.T) {
 	rt, fk := newRuntime(t, "Enrollment", "victoria-logs-acme",
 		chartRelease(nil), chartComponent(nil), inClusterTarget())
-	cmd := "helm uninstall victoria-logs --namespace logging --wait --timeout 9m"
+	cmd := "helm uninstall victoria-logs --namespace logging --wait=watcher --timeout 9m"
 	fk.Errs[cmd] = errTimeout{}
 	if err := HelmUninstall(t.Context(), rt); err == nil {
 		t.Fatal("real failure swallowed")

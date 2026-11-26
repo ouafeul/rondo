@@ -41,7 +41,7 @@ func TestUpgradeArgsHonoursPolicy(t *testing.T) {
 	for _, want := range []string{
 		"upgrade --install kps oci://arti.local/rondo-helm-local/kube-prometheus-stack",
 		"--version 83.3.0", "--namespace monitoring",
-		"--create-namespace", "--wait", "--atomic", "--timeout",
+		"--create-namespace", "--wait=watcher", "--rollback-on-failure", "--timeout",
 	} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args = %q, want it to contain %q", args, want)
@@ -49,11 +49,25 @@ func TestUpgradeArgsHonoursPolicy(t *testing.T) {
 	}
 }
 
-func TestUpgradeArgsOmitsServerSideUnknownToHelm3(t *testing.T) {
+func TestUpgradeArgsUseNoFlagHelm4Deprecates(t *testing.T) {
+	args := testReleaseCtx(nil).upgradeArgs("")
+	for _, a := range args {
+		switch a {
+		case "--atomic", "--force", "--wait":
+			t.Errorf("args = %q: %s is deprecated in Helm 4 (--rollback-on-failure, "+
+				"--force-replace, --wait=<strategy>)", args, a)
+		}
+	}
+}
+
+func TestUpgradeArgsApplyServerSideAndWinConflicts(t *testing.T) {
 	args := strings.Join(testReleaseCtx(nil).upgradeArgs(""), " ")
-	if strings.Contains(args, "--server-side") {
-		t.Errorf("args = %q: helm 3 would answer `unknown flag: --server-side` and "+
-			"the Release would never apply", args)
+	// --force-conflicts is refused by Helm on a client-side apply, which "auto" picks for a
+	// release first installed client-side: both flags go together.
+	for _, want := range []string{"--server-side=true", "--force-conflicts"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args = %q, want it to contain %q", args, want)
+		}
 	}
 }
 
@@ -70,7 +84,7 @@ func TestUpgradeArgsRespectsDisabledFlags(t *testing.T) {
 		rc.release.Spec.Policy.CreateNamespace = v1alpha1.Bool(false)
 	})
 	args := strings.Join(rc.upgradeArgs(""), " ")
-	for _, forbidden := range []string{"--wait", "--atomic", "--create-namespace"} {
+	for _, forbidden := range []string{"--wait", "--rollback-on-failure", "--create-namespace"} {
 		if strings.Contains(args, forbidden) {
 			t.Errorf("%s present although the policy disables it: args = %q", forbidden, args)
 		}

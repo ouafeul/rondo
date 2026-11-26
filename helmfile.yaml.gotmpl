@@ -2,10 +2,14 @@
 {{ $dockerRepo  := printf "%s/%s" (requiredEnv "OCI_REGISTRY") (requiredEnv "IMAGES_REPOSITORY") }}
 {{ $ingressIP   := requiredEnv "INGRESS_IP" }}
 
+# Helm 4: --wait is the kstatus watcher; server-side apply with the chart winning field conflicts,
+# as the Components' helm-apply Jobs do.
 helmDefaults:
   wait: true
   timeout: 600
   createNamespace: true
+  serverSide: "true"
+  forceConflicts: true
 
 releases:
   - name: metallb

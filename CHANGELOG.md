@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Helm 4.3.2 replaces Helm 3.22.1 on the workstation, in the toolbox images and in CI (helmfile
+  1.8.5 and helm-diff 3.15.15 already support it). The `helm-apply` Job now runs `helm upgrade
+  --install … --server-side=true --force-conflicts --wait=watcher --rollback-on-failure`:
+  server-side apply where the chart wins field conflicts, kstatus-based waits, and the rollback of
+  `policy.atomic` under its Helm 4 name; `helm-uninstall` waits with `--wait=watcher`. The
+  management charts (helmfile) get the same server-side apply defaults.
+
 ## [1.0.0-rc.2] - 2026-11-26
 
 Second release candidate.

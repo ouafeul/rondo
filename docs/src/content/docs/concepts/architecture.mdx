@@ -28,7 +28,7 @@ sequenceDiagram
   K-->>C: Enrollment created
   C->>C: resolves the Target, waits for dependsOn
   C->>K: Lease + Job helm-apply
-  J->>T: helm upgrade --install --atomic --wait
+  J->>T: helm upgrade --install --rollback-on-failure --wait=watcher
   J->>K: inventory, health
   C->>K: Applied=True
   loop every 30 s

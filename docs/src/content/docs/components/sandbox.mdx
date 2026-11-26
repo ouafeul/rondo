@@ -217,7 +217,7 @@ the same name, which the analysis does not see, shows up as
 |---|---|
 | validation | CRD schema, references, cyclic `dependsOn`, chart not declared in `dependencies.yaml` (`rondo component lint`); Enrollment without a Target, or on a Target of the other archetype; `${target.values.x}` its Target does not provide; release already delivered on its Target; Component or Enrollment of another installed component |
 | publication | chart not found upstream, Component pinning a version other than its chart in `apps/`, generic file or image not found |
-| verdict | failed `helm-apply` Job (values, template, `--atomic --wait`), `Degraded` health, `dependsOn` never satisfied, no verdict before `--timeout`; image of a pod or CronJob of the component that does not go through `${target.values.imageRegistry}` (unreachable in air-gap), or that nobody publishes |
+| verdict | failed `helm-apply` Job (values, template, `--rollback-on-failure --wait=watcher`), `Degraded` health, `dependsOn` never satisfied, no verdict before `--timeout`; image of a pod or CronJob of the component that does not go through `${target.values.imageRegistry}` (unreachable in air-gap), or that nobody publishes |
 
 RONDO considers a CronJob healthy as soon as it is applied: its image is only pulled on its
 first run. The sandbox therefore asks each image of the component from its registry; an

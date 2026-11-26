@@ -56,8 +56,8 @@ spec:
   valuesFrom: []                # added to the Component's
   policy:
     timeout: 15m                # default 10m: limit of the Job and of helm
-    atomic: true                # default true: rollback on failure
-    wait: true                  # default true: waits for resources to be ready
+    atomic: true                # default true: rollback on failure (--rollback-on-failure)
+    wait: true                  # default true: waits for resources to be ready (--wait=watcher)
     createNamespace: true       # default true
 ```
 
@@ -65,10 +65,23 @@ The Job runs:
 
 ```bash
 helm upgrade --install <release> <chart.oci> --version <v> --namespace <ns> \
-  --create-namespace --wait --atomic --timeout <policy.timeout − 30 s> -f /work/values.json
+  --server-side=true --force-conflicts --create-namespace --wait=watcher --rollback-on-failure \
+  --timeout <policy.timeout − 30 s> -f /work/values.json
 ```
 
 then reads `helm get manifest` to build the inventory (`status.inventory`) and a first health.
+
+The Job runs Helm 4:
+
+- `--wait=watcher` waits until every resource of the release is ready by its
+  [kstatus](https://github.com/kubernetes-sigs/cli-utils/blob/master/pkg/kstatus/README.md) status: rolled-out
+  Deployments, StatefulSets and DaemonSets, completed hooks, custom resources whose `Ready` condition is true.
+- `--rollback-on-failure` (`policy.atomic`) rolls a failed upgrade back to the last successful revision, and
+  uninstalls a failed first install; it waits even when `policy.wait` is `false`.
+- `--server-side=true` applies the manifests with Kubernetes server-side apply, field manager `helm`.
+  `--force-conflicts` makes a field the chart sets the chart's, even when another field manager changed it on
+  the target (a `kubectl edit`, a controller): the upgrade overwrites the change instead of failing on the
+  conflict. A field the chart does not set stays with whoever set it.
 
 <Aside type="note">`policy.skipDryRunOnMissingCRD` is accepted by the CRD but read by no code.</Aside>
 
