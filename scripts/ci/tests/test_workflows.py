@@ -211,3 +211,13 @@ def test_e2e_tools_are_those_of_dependencies():
         key = name.upper()
         assert f'{key}_VERSION="{binaries[name]["version"]}"' in script, name
         assert f'{key}_SHA256="{binaries[name]["sha256"]}"' in script, name
+
+
+def test_package_file_names_survive_github_asset_naming(workflows):
+    # GitHub rewrites "~" in asset names; SHA256SUMS must list the names the release serves.
+    script = step_named(workflows["release.yml"], "artifacts", "Packages (rpm, deb)")["run"]
+    targets = [line for line in script.splitlines() if "--target" in line]
+    assert targets, "no package target"
+    for line in targets:
+        assert "${VERSION}" not in line.split("--target", 1)[1], line
+        assert "${file_version}" in line, line
