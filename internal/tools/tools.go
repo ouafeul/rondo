@@ -31,7 +31,7 @@ func def(env map[string]string, key, fallback string) string {
 
 func toolset(env map[string]string) []tool {
 	tofu := def(env, "TOFU_VERSION", "1.13.10")
-	helm := def(env, "HELM_VERSION", "v3.22.1")
+	helm := def(env, "HELM_VERSION", "v4.3.2")
 	helmfile := def(env, "HELMFILE_VERSION", "1.8.5")
 	kubectl := def(env, "KUBECTL_VERSION", "v1.36.6")
 	k9s := def(env, "K9S_VERSION", "v0.51.0")
@@ -57,7 +57,9 @@ type Installer struct {
 	Digests map[string]string
 }
 
-// helm-diff's plugin.yaml (platformCommand/platformHooks) needs Helm 3.18 or later.
+// helm-diff ships a plugin.yaml without apiVersion, which Helm 4 loads as a legacy cli/v1 plugin
+// (platformCommand needs Helm 3.18 or later). Extracted into PluginDir rather than installed by
+// `helm plugin install`, it is not subject to Helm 4's plugin signature check.
 const helmDiffDefaultVersion = "v3.15.15"
 
 func helmDiffPath(version string) string {

@@ -6,7 +6,7 @@ RUN apt-get update -qq \
        skopeo curl git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ARG HELM_VERSION=3.22.1
+ARG HELM_VERSION=4.3.2
 RUN curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
       | tar xz -C /tmp \
     && mv /tmp/linux-amd64/helm /usr/local/bin/helm \
