@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,15 +68,22 @@ func TestWriteEntry_PathTraversal(t *testing.T) {
 	}
 }
 
-func TestFirstField(t *testing.T) {
-	cases := map[string]string{
-		"abc123  iac.tar.gz\n": "abc123",
-		"  def456 \n":          "def456",
-		"":                     "",
-	}
-	for in, want := range cases {
-		if got := firstField(in); got != want {
-			t.Errorf("firstField(%q) = %q, want %q", in, got, want)
+func TestSHA256Field(t *testing.T) {
+	const d = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	for in, want := range map[string]string{
+		d + "  iac.tar.gz\n":         d, // sha256sum line, the sidecar the mirror scripts write
+		d:                            d, // bare digest, what Artifactory answers for <file>.sha256
+		"  " + d + " \n":             d,
+		strings.ToUpper(d) + "\n":    d,
+		d + " *iac.tar.gz\r\n":       d,
+		"":                           "",
+		"deadbeef  iac.tar.gz\n":     "",
+		"<html>not found</html>":     "",
+		strings.Repeat("z", 64) + "": "",
+	} {
+		got, err := sha256Field(in)
+		if got != want || (err == nil) != (want != "") {
+			t.Errorf("sha256Field(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
 }

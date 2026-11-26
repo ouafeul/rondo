@@ -18,6 +18,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The `helm-uninstall` Job succeeds when the release is already gone (`--ignore-not-found`); it
   failed, helm's "not found" never reaching the error it was matched against.
+- `preset: artifactory` reads the OpenTofu providers from `<url>/<generic>/providers/`, the static
+  network mirror tree `download-deps.py` uploads, instead of `<url>/api/terraform/<tofu>/providers/`.
+  `artifactory.repositories.tofu` is refused with the way out: remove it, or set
+  `artifacts.tofu.providerMirror` to the Terraform repository's URL.
+- `preset: artifactory` takes `artifacts.tofu.providerMirror`, `providerOCI` and `state` as
+  overrides of the derived provider mirror and state backend.
+- With `preset: artifactory`, `secrets.mirrorToken` is used as is, for the CLI as for the Jobs:
+  RONDO neither mints nor revokes a token then.
+- Provider mirror tokens are minted and revoked through the JFrog Access API
+  (`POST /access/api/v1/tokens`, `scope=applied-permissions/user`; `DELETE /access/api/v1/tokens/me`)
+  instead of the deprecated `/artifactory/api/security/token`; a refusal says to set
+  `secrets.mirrorToken`.
+- The mirror scripts send the `+` of a version in an HTTP path as `%2B`, the form the k3s machines
+  request.
+- `scripts/mirror-release.sh` mirrors `SHA256SUMS` (so `install.sh` checks the binary) and logs in to the source registry with `RONDO_SOURCE_USER` / `RONDO_SOURCE_PASSWORD` when its packages are private.
+- `install.sh` checks the binary against its `rondo-linux-amd64.sha256` sidecar when the mirror has
+  no `SHA256SUMS`, and warns when it verifies nothing.
+- The IaC bundle and component trees accept a `.sha256` holding a bare digest, as Artifactory
+  answers it, and refuse one without a sha256.
+- The first-install guide gives the mirror path of `install.sh`, `<files>/rondo/<tag>/install.sh`,
+  with the credentials and CA flags.
 
 ## [1.0.0-rc.2] - 2026-11-26
 

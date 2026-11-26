@@ -19,8 +19,12 @@ const (
 	DefaultArtifactoryDocker    = "rondo-docker-local"
 	DefaultArtifactoryHelm      = "rondo-helm-local"
 	DefaultArtifactoryGeneric   = "rondo-generic-local"
-	DefaultArtifactoryTofu      = "rondo-tofu-local"
 	DefaultArtifactoryTofuState = "rondo-tofu-state-local"
+	// ArtifactoryProvidersSubpath is where the preset artifactory finds the OpenTofu providers
+	// when artifacts.tofu leaves them out: the static network mirror tree that
+	// scripts/ci/download-deps.py uploads under <files-url>/providers, here
+	// <url>/<repositories.generic>/providers/, read with plain GETs.
+	ArtifactoryProvidersSubpath = "providers"
 )
 
 // Mirror is the artifact mirror with every endpoint resolved, whatever the preset: what the rest
@@ -107,10 +111,16 @@ func (c *Config) Mirror() Mirror {
 		m.RPMBase, m.RPMRepo = root, repo(r.RPM)
 		// Artifactory serves a docker repository at its own subdomain as well.
 		m.RKE2SystemRegistry = m.ImagesRepo + "." + host
-		m.ProviderMirrorURL = root + "/api/terraform/" + or(r.Tofu, DefaultArtifactoryTofu) + "/providers/"
+		m.ProviderMirrorURL = root + "/" + m.FilesRepo + "/" + ArtifactoryProvidersSubpath + "/"
 		m.stateRoot = root + "/" + or(r.TofuState, DefaultArtifactoryTofuState)
 		m.ArtifactoryURL = root
 		m.MirrorTokenLifetimeSeconds = a.Artifactory.MirrorTokenLifetimeSeconds
+		// artifacts.tofu overrides what it sets: a provider mirror or a state backend elsewhere.
+		if strings.TrimSpace(a.Tofu.ProviderMirror) != "" || repo(a.Tofu.ProviderOCI) != "" {
+			m.ProviderMirrorURL = strings.TrimSpace(a.Tofu.ProviderMirror)
+			m.ProviderOCI = repo(a.Tofu.ProviderOCI)
+		}
+		m.resolveState(&a.Tofu.State, &c.Secrets)
 	} else {
 		m.FilesBase, m.FilesRepo = trimURL(a.Files.URL), or(a.Files.Repository, DefaultRepository)
 		m.OCIRegistry = strings.TrimRight(a.OCI.Registry, "/")
@@ -154,6 +164,13 @@ func (m *Mirror) resolveState(s *TofuState, secrets *Secrets) {
 
 // IsArtifactory is true for the preset artifactory, the only one RONDO mints tokens on.
 func (m Mirror) IsArtifactory() bool { return m.Preset == PresetArtifactory }
+
+// MintsTokens is true when RONDO mints the token of the provider mirror on the Artifactory: the
+// preset artifactory installing the providers from a network mirror, without secrets.mirrorToken
+// (used as is when set) and with the credentials to mint with.
+func (m Mirror) MintsTokens() bool {
+	return m.IsArtifactory() && m.MirrorToken == "" && m.ProviderMirrorURL != "" && !m.Anonymous()
+}
 
 // Anonymous is true when the mirror is read without credentials.
 func (m Mirror) Anonymous() bool { return m.Username == "" && m.Password == "" }
@@ -258,10 +275,10 @@ func (c *Config) validateArtifacts() error {
 		return fmt.Errorf("artifacts.rpm.url (%q) must be artifacts.files.url (%q) or empty: machines "+
 			"reach the RPM repositories under the root of the files", a.RPM.URL, a.Files.URL)
 	}
-	if err := c.validateProviders(); err != nil {
+	if err := c.validateProviders(true); err != nil {
 		return err
 	}
-	return c.validateState()
+	return c.validateState(true)
 }
 
 func (c *Config) validateArtifactory() error {
@@ -274,28 +291,43 @@ func (c *Config) validateArtifactory() error {
 		set bool
 	}{
 		{"oci", a.OCI != OCIEndpoint{}}, {"files", a.Files != FilesEndpoint{}},
-		{"rpm", a.RPM != RPMEndpoint{}}, {"tofu", a.Tofu != TofuEndpoints{}},
+		{"rpm", a.RPM != RPMEndpoint{}},
 	} {
 		if s.set {
 			return fmt.Errorf("artifacts.%s is not read with artifacts.preset: artifactory, "+
 				"whose endpoints derive from artifacts.artifactory.url", s.key)
 		}
 	}
-	if c.Secrets.MirrorStateAccessKey != "" || c.Secrets.MirrorStateSecretKey != "" {
-		return fmt.Errorf("secrets.mirrorStateAccessKey and mirrorStateSecretKey are only read " +
-			"with artifacts.tofu.state.s3")
+	r := &a.Artifactory.Repositories
+	if repo(r.Tofu) != "" {
+		return fmt.Errorf("artifacts.artifactory.repositories.tofu (%q) is not read: the providers "+
+			"come from the static network mirror tree under the generic repository, "+
+			"<url>/<repositories.generic>/providers/, where scripts/ci/download-deps.py uploads them; "+
+			"remove it, or set artifacts.tofu.providerMirror to install them from elsewhere, "+
+			"e.g. %s/api/terraform/%s/providers/ for an Artifactory Terraform repository",
+			r.Tofu, trimURL(a.Artifactory.URL), repo(r.Tofu))
 	}
-	return nil
+	if err := c.validateProviders(false); err != nil {
+		return err
+	}
+	s := &a.Tofu.State
+	if (s.HTTP != nil || s.S3 != nil) && repo(r.TofuState) != "" {
+		return fmt.Errorf("artifacts.tofu.state and artifacts.artifactory.repositories.tofuState " +
+			"are exclusive: the states go to one backend")
+	}
+	return c.validateState(false)
 }
 
-func (c *Config) validateProviders() error {
+// validateProviders checks artifacts.tofu.providerMirror and providerOCI: one of them is required
+// when the preset derives no provider mirror.
+func (c *Config) validateProviders(required bool) error {
 	t := &c.Artifacts.Tofu
 	mirror, oci := strings.TrimSpace(t.ProviderMirror) != "", repo(t.ProviderOCI) != ""
 	switch {
 	case mirror && oci:
 		return fmt.Errorf("artifacts.tofu.providerMirror and artifacts.tofu.providerOCI are " +
 			"exclusive: OpenTofu installs the providers from one mirror")
-	case !mirror && !oci:
+	case !mirror && !oci && required:
 		return fmt.Errorf("artifacts.tofu.providerMirror (a network mirror) or " +
 			"artifacts.tofu.providerOCI (an OCI mirror) is required with artifacts.preset: generic")
 	case oci:
@@ -312,16 +344,18 @@ func (c *Config) validateProviders() error {
 	return nil
 }
 
-func (c *Config) validateState() error {
+// validateState checks artifacts.tofu.state: one backend is required when the preset derives
+// none.
+func (c *Config) validateState(required bool) error {
 	s := &c.Artifacts.Tofu.State
 	sec := &c.Secrets
 	switch {
 	case s.HTTP != nil && s.S3 != nil:
 		return fmt.Errorf("artifacts.tofu.state.http and artifacts.tofu.state.s3 are exclusive")
-	case s.HTTP == nil && s.S3 == nil:
+	case s.HTTP == nil && s.S3 == nil && required:
 		return fmt.Errorf("artifacts.tofu.state.http or artifacts.tofu.state.s3 is required " +
 			"with artifacts.preset: generic")
-	case s.HTTP != nil:
+	case s.HTTP != nil || s.S3 == nil:
 		if sec.MirrorStateAccessKey != "" || sec.MirrorStateSecretKey != "" {
 			return fmt.Errorf("secrets.mirrorStateAccessKey and mirrorStateSecretKey are only " +
 				"read with artifacts.tofu.state.s3")

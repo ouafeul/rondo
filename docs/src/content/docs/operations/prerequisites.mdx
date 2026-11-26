@@ -59,7 +59,7 @@ The management cluster already resolves these names internally (CoreDNS); workst
 The site has no Internet access, so an artifact mirror inside the site serves everything RONDO installs, declared under `artifacts:` in `rondo.yaml`. Two presets:
 
 - **`generic`** (default): any OCI registry (Harbor, Zot, Nexus, a Distribution registry…) and any HTTP file server (nginx, an object store behind HTTPS…). Each endpoint is declared: `oci.registry`, `files.url`, `rpm`, `tofu.providerMirror` or `tofu.providerOCI`, `tofu.state.http` or `tofu.state.s3`.
-- **`artifactory`**: a JFrog Artifactory; every endpoint derives from `artifactory.url` and the repository names.
+- **`artifactory`**: a JFrog Artifactory; every endpoint derives from `artifactory.url` and the repository names, except the providers and the states that `tofu` may set elsewhere.
 
 [Artifact mirrors](/operations/artifact-mirrors/) gives worked configurations (Zot or Harbor with nginx, MinIO for the state, Artifactory), how to fill the mirror and how to check it.
 
@@ -71,8 +71,8 @@ Every repository is a path segment under its root, `<root>/<repository>/<path>`.
 | images: RONDO's own and those extracted from every chart | `<oci.registry>/<oci.repository>` | `rondo-docker-local` |
 | Helm charts (OCI) | `oci://<oci.registry>/<oci.chartsRepository>` | `rondo-helm-local` |
 | RPMs: `rondo`, OS repositories for component machines (optional) | `<rpm.url>/<rpm.repository>` | `artifactory.repositories.rpm` |
-| OpenTofu providers: a network mirror (a `tofu providers mirror` tree), or an OCI mirror (one repository per provider) | `tofu.providerMirror` or `tofu.providerOCI` | `rondo-tofu-local` |
-| tofu states (written) | `tofu.state.http.url` or the bucket of `tofu.state.s3` | `rondo-tofu-state-local` |
+| OpenTofu providers: a network mirror (a `tofu providers mirror` tree), or an OCI mirror (one repository per provider) | `tofu.providerMirror` or `tofu.providerOCI` | `rondo-generic-local/providers/`, or `tofu.providerMirror` / `tofu.providerOCI` |
+| tofu states (written) | `tofu.state.http.url` or the bucket of `tofu.state.s3` | `rondo-tofu-state-local` (a Generic repository), or `tofu.state` |
 
 They are fed from a connected network: RONDO releases come from [GitHub Releases](https://github.com/ouafeul/rondo/releases), images from `ghcr.io/ouafeul`, RONDO charts from `oci://ghcr.io/ouafeul/charts`, and third-party dependencies from `manifests/dependencies.yaml`. The copy scripts are not tied to Artifactory: they write to any OCI registry, any HTTP file server (or S3-compatible bucket) and any RPM repository server, given as `--oci-registry`, `--files-url` and `--rpm-url`; for Artifactory, pass the URLs of its repositories. See [Air-gap mirror](/contributing/release/#air-gap-mirror).
 
@@ -83,9 +83,9 @@ What each endpoint serves, and the products that fit:
 | OCI registry (`oci.registry`) | images, Helm charts, optionally OpenTofu providers (`tofu.providerOCI`); read by the CLI, the Jobs and the nodes | Harbor, Zot, CNCF Distribution (`registry:2`), Nexus docker, a GHCR-compatible registry |
 | HTTP file server (`files.url`, `rpm.url`) | RONDO files and tools (with their `<file>.sha256` when published), k3s binaries, dnf repositories, a `tofu providers mirror` tree (`tofu.providerMirror`); read only | nginx or Apache serving a directory, MinIO or S3 behind HTTPS, Nexus raw |
 | state backend (`tofu.state`) | OpenTofu states, written | `http`: any server that stores a PUT and serves it back (nginx WebDAV, Nexus raw, Artifactory generic); `s3`: MinIO, Ceph RGW, AWS S3 |
-| `preset: artifactory` | all of the above from one JFrog Artifactory | Artifactory (docker, helm, generic, terraform repositories) |
+| `preset: artifactory` | all of the above from one JFrog Artifactory | Artifactory (Docker, Helm OCI and Generic repositories; see [Artifactory site](/operations/artifact-mirrors/#artifactory-site)) |
 
-The service account (`artifacts.username`, `secrets.mirrorPassword`) reads every endpoint and writes the http tofu states; without one, the mirror is read anonymously (no registry login, no `regcred`, no basic auth). Without `artifacts.caCertificateFile`, the endpoints must present certificates the system trust store accepts. The Jobs' providers authenticate on a network mirror with `secrets.mirrorToken`, on an OCI mirror with the service account; when the token is empty, an Artifactory issues one on each `rondo deploy` (without expiry, `artifactory.mirrorTokenLifetimeSeconds` empty, it needs an admin account) and a generic mirror is read without a token.
+The service account (`artifacts.username`, `secrets.mirrorPassword`) reads every endpoint and writes the http tofu states; without one, the mirror is read anonymously (no registry login, no `regcred`, no basic auth). Without `artifacts.caCertificateFile`, the endpoints must present certificates the system trust store accepts. The Jobs' providers authenticate on a network mirror with `secrets.mirrorToken`, on an OCI mirror with the service account; when the token is empty, an Artifactory issues one on each `rondo deploy` through the JFrog Access API (without expiry, `artifactory.mirrorTokenLifetimeSeconds` empty, it needs an admin account) and a generic mirror is read without a token. Set `secrets.mirrorToken` on an Artifactory that does not let the service account create tokens: RONDO then neither mints nor revokes one ([Provider mirror token](/reference/rondo-yaml/#provider-mirror-token)).
 
 The nodes pull public images (`docker.io/rancher/…`, `registry.k8s.io/…`) through registry mirrors with rewrites: with `preset: generic`, `docker.io/rancher/x` is pulled as `<oci.registry>/<oci.repository>/rancher/x`, and the rke2 system images (`system-default-registry` is `oci.registry`) the same way.
 

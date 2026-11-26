@@ -12,7 +12,12 @@ One configuration drives every script, from flags or environment:
   CA bundle          MIRROR_CA_CERT       path of a PEM file
 
 Every uploaded file gets a `<file>.sha256` sidecar, written after the file; an upload is
-skipped when the sidecar already holds the digest of the local file.
+skipped when the sidecar already holds the digest of the local file (its first field: a server
+that computes the checksum itself, as Artifactory does, answers the bare digest).
+
+Over HTTP the path is percent-encoded: `+` (k3s and rke2 versions, v1.36.6+k3s1) goes as `%2B`,
+which every server decodes to the literal `+` it stores, the form the machines request
+(Terraform's urlencode) and that no server reads as a space.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -142,7 +148,7 @@ class HttpStore(Store):
             self.session.verify = ca_cert()
 
     def describe(self, rel: str) -> str:
-        return join_url(self.base, rel)
+        return join_url(self.base, quote(rel, safe="/"))
 
     def put(self, rel: str, local: str | Path) -> None:
         with open(local, "rb") as f:

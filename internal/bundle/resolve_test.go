@@ -201,6 +201,32 @@ func TestResolveChecksumMismatch(t *testing.T) {
 	}
 }
 
+// Artifactory answers GET <file>.sha256 with the bare digest it computed, without a file name.
+func TestResolveAcceptsABareDigest(t *testing.T) {
+	data, sum := makeTarGz(t, map[string]string{"helmfile.yaml": "releases: []\n"})
+	srv, c := bundleSrv(t, map[string][]byte{
+		"/v1.0.0/iac.tar.gz.sha256": []byte(sum),
+		"/v1.0.0/iac.tar.gz":        data,
+	})
+	defer srv.Close()
+	if _, err := Resolve(context.Background(), srv.Client(), c, t.TempDir(), "stable", "v1.0.0"); err != nil {
+		t.Fatalf("bare digest refused: %v", err)
+	}
+}
+
+func TestResolveRefusesAChecksumWithoutDigest(t *testing.T) {
+	data, _ := makeTarGz(t, map[string]string{"a.txt": "x"})
+	srv, c := bundleSrv(t, map[string][]byte{
+		"/v1.0.0/iac.tar.gz.sha256": []byte("<html>login</html>"),
+		"/v1.0.0/iac.tar.gz":        data,
+	})
+	defer srv.Close()
+	_, err := Resolve(context.Background(), srv.Client(), c, t.TempDir(), "stable", "v1.0.0")
+	if err == nil || !strings.Contains(err.Error(), "no sha256") {
+		t.Fatalf("error = %v, want a checksum without digest refused", err)
+	}
+}
+
 func TestResolveSha256Missing(t *testing.T) {
 	srv, c := bundleSrv(t, map[string][]byte{})
 	defer srv.Close()

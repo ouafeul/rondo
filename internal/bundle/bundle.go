@@ -81,6 +81,10 @@ func Resolve(ctx context.Context, client httpx.Doer, c *config.Config, cacheDir,
 	if err != nil {
 		return "", fmt.Errorf("checksum iac.tar.gz.sha256: %w", err)
 	}
+	wantHex, err := sha256Field(wantSum)
+	if err != nil {
+		return "", fmt.Errorf("checksum iac.tar.gz.sha256: %w", err)
+	}
 	body, err := httpx.Get(ctx, client, user, pass, base+"/"+ver+"/iac.tar.gz")
 	if err != nil {
 		return "", err
@@ -90,7 +94,7 @@ func Resolve(ctx context.Context, client httpx.Doer, c *config.Config, cacheDir,
 	if err := os.RemoveAll(dir); err != nil {
 		return "", err
 	}
-	if err := extractVerified(body, firstField(wantSum), dir); err != nil {
+	if err := extractVerified(body, wantHex, dir); err != nil {
 		os.RemoveAll(dir)
 		return "", err
 	}
@@ -172,10 +176,24 @@ func writeEntry(dir string, h *tar.Header, r io.Reader) error {
 	}
 }
 
-func firstField(s string) string {
+// sha256Field is the digest of a <file>.sha256: its first field, which is the whole of it when
+// the mirror computes the checksum itself (Artifactory answers a bare hex digest) and the digest
+// before the file name in a sha256sum line.
+func sha256Field(s string) (string, error) {
 	f := strings.Fields(s)
 	if len(f) == 0 {
-		return ""
+		return "", fmt.Errorf("empty checksum")
 	}
-	return f[0]
+	d := strings.ToLower(f[0])
+	if _, err := hex.DecodeString(d); err != nil || len(d) != sha256.Size*2 {
+		return "", fmt.Errorf("no sha256 in %q", truncate(s, 80))
+	}
+	return d, nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }

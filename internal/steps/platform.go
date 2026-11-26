@@ -178,9 +178,9 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 	prior := p.priorMirrorToken(ctx)
 	token := override
 	minted := false
-	// Only an Artifactory mints tokens; another mirror takes secrets.mirrorToken, or serves the
-	// providers without one.
-	if token == "" && m.IsArtifactory() {
+	// Only an Artifactory mints tokens, and not when secrets.mirrorToken is set; another mirror
+	// takes secrets.mirrorToken, or serves the providers without one.
+	if m.MintsTokens() {
 		if p.minter == nil {
 			return fmt.Errorf("no token minter and secrets.mirrorToken is empty")
 		}
@@ -200,11 +200,16 @@ func (p *PlatformStage) ApplyMirrorToken(ctx context.Context) error {
 		}
 		return fmt.Errorf("secret %s: %w", kobj.TofurcSecret, err)
 	}
-	// A token kept in the Secret was minted by an Artifactory: only one revokes it.
-	if prior != "" && prior != token && p.minter != nil && m.IsArtifactory() {
+	// A token kept in the Secret was minted by an Artifactory: only a minting run revokes it.
+	switch {
+	case prior == "" || prior == token:
+	case minted && p.minter != nil:
 		if err := p.minter.RevokeToken(ctx, prior); err != nil {
 			log.Warn("revoking the previous mirror token failed (non-blocking)", "err", err)
 		}
+	default:
+		log.Warn("the mirror token RONDO minted before is no longer used and is not revoked: " +
+			"revoke it in the JFrog Platform (Administration > User Management > Access Tokens)")
 	}
 	return nil
 }

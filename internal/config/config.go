@@ -106,7 +106,8 @@ type S3State struct {
 	UsePathStyle bool `json:"usePathStyle,omitempty"`
 }
 
-// ArtifactoryMirror is the preset artifactory: every endpoint derives from URL.
+// ArtifactoryMirror is the preset artifactory: every endpoint derives from URL, except the
+// OpenTofu providers and states, which artifacts.tofu may set elsewhere.
 type ArtifactoryMirror struct {
 	URL          string                  `json:"url,omitempty" validate:"omitempty,url"`
 	Repositories ArtifactoryRepositories `json:"repositories,omitempty"`
@@ -116,10 +117,12 @@ type ArtifactoryMirror struct {
 
 // ArtifactoryRepositories name the Artifactory repositories; Mirror fills in the defaults.
 type ArtifactoryRepositories struct {
-	Docker    string `json:"docker,omitempty"`
-	Helm      string `json:"helm,omitempty"`
-	Generic   string `json:"generic,omitempty"`
-	RPM       string `json:"rpm,omitempty"`
+	Docker  string `json:"docker,omitempty"`
+	Helm    string `json:"helm,omitempty"`
+	Generic string `json:"generic,omitempty"`
+	RPM     string `json:"rpm,omitempty"`
+	// Tofu is refused: the providers come from <url>/<generic>/providers/, or from
+	// artifacts.tofu.providerMirror. The key is kept so that the refusal says what to do.
 	Tofu      string `json:"tofu,omitempty"`
 	TofuState string `json:"tofuState,omitempty"`
 }

@@ -86,7 +86,8 @@ func checkResolved(t *testing.T, got, want map[string]string) {
 }
 
 // The values are those the manifest's artifactory section resolved to before the artifacts
-// section, so an Artifactory site keeps its URLs.
+// section, so an Artifactory site keeps its URLs; except the provider mirror, the static tree that
+// download-deps uploads under the generic repository (TestArtifactoryPresetReadsTheProviderTree).
 func TestArtifactoryPresetResolvesAsBefore(t *testing.T) {
 	for name, mutate := range map[string]func(string) string{
 		"as written": func(s string) string {
@@ -116,7 +117,7 @@ func TestArtifactoryPresetResolvesAsBefore(t *testing.T) {
 				"rpm.repo":           "rondo-rpms-local",
 				"rke2.registry":      "rondo-docker-local.artifactory.example.local",
 				"registry.rewrite":   "",
-				"tofu.mirror":        "https://artifactory.example.local/artifactory/api/terraform/rondo-tofu-local/providers/",
+				"tofu.mirror":        "https://artifactory.example.local/artifactory/rondo-generic-local/providers/",
 				"tofu.oci":           "",
 				"tofu.mirrorHost":    "artifactory.example.local",
 				"tofu.stateBackend":  "http",
@@ -159,7 +160,7 @@ func TestArtifactoryPresetDefaultsTheRepositories(t *testing.T) {
 		m.OCIRepository:     "artifactory.example.local/rondo-docker-local",
 		m.ChartsOCI:         "oci://artifactory.example.local/rondo-helm-local",
 		m.FilesRepoURL():    "https://artifactory.example.local/artifactory/rondo-generic-local",
-		m.ProviderMirrorURL: "https://artifactory.example.local/artifactory/api/terraform/rondo-tofu-local/providers/",
+		m.ProviderMirrorURL: "https://artifactory.example.local/artifactory/rondo-generic-local/providers/",
 		m.StateBaseURL():    "https://artifactory.example.local/artifactory/rondo-tofu-state-local/prod",
 	} {
 		if got != want {
@@ -173,18 +174,116 @@ func TestArtifactoryPresetDefaultsTheRepositories(t *testing.T) {
 
 func TestArtifactoryPresetTakesItsOwnRepositories(t *testing.T) {
 	c, err := loadArtifactory(t, func(s string) string {
-		return strings.NewReplacer("tofu: rondo-tofu-local", "tofu: site-tofu",
+		return strings.NewReplacer("generic: rondo-generic-local", "generic: site-files",
 			"tofuState: rondo-tofu-state-local", "tofuState: site-state").Replace(s)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := c.Mirror()
-	if want := "https://artifactory.example.local/artifactory/api/terraform/site-tofu/providers/"; m.ProviderMirrorURL != want {
+	if want := "https://artifactory.example.local/artifactory/site-files/providers/"; m.ProviderMirrorURL != want {
 		t.Errorf("provider mirror = %q, want %q", m.ProviderMirrorURL, want)
 	}
 	if want := "https://artifactory.example.local/artifactory/site-state/prod/k3s/terraform.tfstate"; m.StateURL("k3s") != want {
 		t.Errorf("state = %q, want %q", m.StateURL("k3s"), want)
+	}
+}
+
+// The provider mirror of the preset artifactory is where download-deps.py puts the providers
+// with --files-url <url>/<generic>: <files-url>/providers/registry.opentofu.org/<ns>/<type>/...,
+// a static tree read with plain GETs, which an Artifactory Terraform repository does not serve.
+func TestArtifactoryPresetReadsTheProviderTree(t *testing.T) {
+	c, err := loadArtifactory(t, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := c.Mirror()
+	if want := m.FilesRepoURL() + "/providers/"; m.ProviderMirrorURL != want {
+		t.Errorf("provider mirror = %q, want the tree under the files, %q", m.ProviderMirrorURL, want)
+	}
+	if strings.Contains(m.ProviderMirrorURL, "/api/terraform/") {
+		t.Errorf("provider mirror = %q: the Terraform repository API is only read when "+
+			"artifacts.tofu.providerMirror names it", m.ProviderMirrorURL)
+	}
+	if rc := m.TofuRC("tok"); !strings.Contains(rc, `url = "`+m.ProviderMirrorURL+`"`) ||
+		!strings.Contains(rc, `credentials "artifactory.example.local"`) {
+		t.Errorf(".tofurc does not read the tree with the token:\n%s", rc)
+	}
+}
+
+func TestArtifactoryPresetTakesTofuOverrides(t *testing.T) {
+	const api = "https://artifactory.example.local/artifactory/api/terraform/site-tofu/providers/"
+	for name, tc := range map[string]struct {
+		tofu  string
+		check func(t *testing.T, m Mirror)
+	}{
+		"Terraform repository": {"    providerMirror: " + api + "\n", func(t *testing.T, m Mirror) {
+			if m.ProviderMirrorURL != api || m.ProviderOCI != "" || !m.MintsTokens() {
+				t.Errorf("provider mirror = %q, OCI %q, mints %v", m.ProviderMirrorURL, m.ProviderOCI, m.MintsTokens())
+			}
+		}},
+		"OCI providers": {"    providerOCI: artifactory.example.local/rondo-providers\n", func(t *testing.T, m Mirror) {
+			if m.ProviderMirrorURL != "" || m.ProviderOCI != "artifactory.example.local/rondo-providers" {
+				t.Errorf("provider mirror = %q, OCI %q", m.ProviderMirrorURL, m.ProviderOCI)
+			}
+			if m.MintsTokens() {
+				t.Error("a token is minted for an OCI provider mirror, which takes the credentials")
+			}
+		}},
+		"http state": {"    state:\n      http:\n        url: https://state.example.local/tofu/\n", func(t *testing.T, m Mirror) {
+			if got, want := m.StateURL("k3s"), "https://state.example.local/tofu/prod/k3s/terraform.tfstate"; got != want {
+				t.Errorf("state = %q, want %q", got, want)
+			}
+		}},
+		"s3 state": {"    state:\n      s3:\n        bucket: states\n", func(t *testing.T, m Mirror) {
+			if m.StateBackend != "s3" || m.StateS3.Bucket != "states" || m.StateBaseURL() != "" ||
+				m.StateAccessKey != "svc-rondo" {
+				t.Errorf("s3 state not resolved: %+v", m)
+			}
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, err := loadArtifactory(t, func(s string) string {
+				if strings.Contains(tc.tofu, "state:") {
+					s = strings.Replace(s, "      tofuState: rondo-tofu-state-local\n", "", 1)
+				}
+				return strings.Replace(s, "  artifactory:\n", "  tofu:\n"+tc.tofu+"  artifactory:\n", 1)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.check(t, c.Mirror())
+		})
+	}
+}
+
+func TestMintsTokens(t *testing.T) {
+	arti := func(mutate func(*Config)) Mirror {
+		c := &Config{
+			Artifacts: Artifacts{Preset: PresetArtifactory, Username: "u",
+				Artifactory: ArtifactoryMirror{URL: "https://a.example.local/artifactory"}},
+			Secrets: Secrets{MirrorPassword: "p"},
+		}
+		if mutate != nil {
+			mutate(c)
+		}
+		return c.Mirror()
+	}
+	for name, tc := range map[string]struct {
+		m    Mirror
+		want bool
+	}{
+		"artifactory":            {arti(nil), true},
+		"artifactory with token": {arti(func(c *Config) { c.Secrets.MirrorToken = "t" }), false},
+		"artifactory anonymous": {arti(func(c *Config) {
+			c.Artifacts.Username, c.Secrets.MirrorPassword = "", ""
+		}), false},
+		"generic": {(&Config{Artifacts: Artifacts{Tofu: TofuEndpoints{
+			ProviderMirror: "https://f.example.local/p/"}}}).Mirror(), false},
+	} {
+		if got := tc.m.MintsTokens(); got != tc.want {
+			t.Errorf("%s: MintsTokens = %v, want %v", name, got, tc.want)
+		}
 	}
 }
 
@@ -366,9 +465,29 @@ func TestArtifactsValidationNamesTheKey(t *testing.T) {
 		"oci endpoint": {func(s string) string {
 			return strings.Replace(s, "  artifactory:\n", "  oci:\n    registry: r.example.local\n  artifactory:\n", 1)
 		}, "artifacts.oci is not read with artifacts.preset: artifactory"},
-		"tofu endpoint": {func(s string) string {
-			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    providerOCI: r.example.local/p\n  artifactory:\n", 1)
-		}, "artifacts.tofu is not read"},
+		"files endpoint": {func(s string) string {
+			return strings.Replace(s, "  artifactory:\n", "  files:\n    url: https://f.example.local\n  artifactory:\n", 1)
+		}, "artifacts.files is not read with artifacts.preset: artifactory"},
+		"Terraform repository": {func(s string) string {
+			return strings.Replace(s, "      tofuState:", "      tofu: rondo-tofu-local\n      tofuState:", 1)
+		}, "artifacts.tofu.providerMirror to install them from elsewhere, e.g. " +
+			"https://artifactory.example.local/artifactory/api/terraform/rondo-tofu-local/providers/"},
+		"two provider sources": {func(s string) string {
+			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    providerOCI: r.example.local/p\n"+
+				"    providerMirror: https://f.example.local/p/\n  artifactory:\n", 1)
+		}, "are exclusive"},
+		"OCI providers without a repository": {func(s string) string {
+			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    providerOCI: r.example.local\n  artifactory:\n", 1)
+		}, "must be <registry>/<repository>"},
+		"state and a state repository": {func(s string) string {
+			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    state:\n      http:\n"+
+				"        url: https://s.example.local\n  artifactory:\n", 1)
+		}, "artifacts.tofu.state and artifacts.artifactory.repositories.tofuState are exclusive"},
+		"two state backends": {func(s string) string {
+			s = strings.Replace(s, "      tofuState: rondo-tofu-state-local\n", "", 1)
+			return strings.Replace(s, "  artifactory:\n", "  tofu:\n    state:\n      s3: {bucket: b}\n"+
+				"      http: {url: https://s.example.local}\n  artifactory:\n", 1)
+		}, "are exclusive"},
 		"s3 state keys": {func(s string) string {
 			return strings.Replace(s, "  mirrorPassword: CHANGEME\n",
 				"  mirrorPassword: CHANGEME\n  mirrorStateAccessKey: a\n  mirrorStateSecretKey: b\n", 1)

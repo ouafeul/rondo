@@ -28,7 +28,9 @@ import RondoYamlExplorer from '../../../components/RondoYamlExplorer.astro';
 | `artifacts.username` and `secrets.mirrorPassword` both set, or both empty (anonymous mirror) | `artifacts.username and secrets.mirrorPassword go together…` |
 | `oci.registry` is `host[:port]` | `artifacts.oci.registry (…) must be host[:port], without a scheme or a path` |
 | `rpm.url` is empty or `files.url` | `artifacts.rpm.url (…) must be artifacts.files.url (…) or empty` |
-| `preset: artifactory` declares `artifactory.url` and nothing under `oci`, `files`, `rpm`, `tofu` | `artifacts.artifactory.url is required…` / `artifacts.<key> is not read with artifacts.preset: artifactory` |
+| `preset: artifactory` declares `artifactory.url` and nothing under `oci`, `files`, `rpm` | `artifacts.artifactory.url is required…` / `artifacts.<key> is not read with artifacts.preset: artifactory` |
+| `preset: artifactory` has no `artifactory.repositories.tofu`: the providers come from `<url>/<generic>/providers/`, or from `tofu.providerMirror` | `artifacts.artifactory.repositories.tofu (…) is not read…` |
+| `preset: artifactory` takes `tofu.state` or `artifactory.repositories.tofuState`, not both | `artifacts.tofu.state and artifacts.artifactory.repositories.tofuState are exclusive…` |
 | `preset: generic` has no `artifactory` block | `artifacts.artifactory is only read with artifacts.preset: artifactory` |
 
 ## Artifact mirror presets
@@ -42,14 +44,49 @@ Every repository is a path segment under its root, `<root>/<repository>/<path>`,
 | Helm charts | `oci://<oci.registry>/<oci.chartsRepository>/<chart>` | `oci://<host>/<helm>/<chart>` |
 | RONDO files | `<files.url>/<files.repository>/…` | `<url>/<generic>/…` |
 | RPM repositories | `<rpm.url>/<rpm.repository>/…` | `<url>/<rpm>/…` |
-| tofu providers | `<tofu.providerMirror>` (network mirror), or `<tofu.providerOCI>/<namespace>/<type>` (OCI mirror) | `<url>/api/terraform/<tofu>/providers/` |
-| tofu states | `<tofu.state.http.url>/<environmentName>/…`, or `s3://<bucket>/<keyPrefix>/<environmentName>/…` | `<url>/<tofuState>/<environmentName>/…` |
+| tofu providers | `<tofu.providerMirror>` (network mirror), or `<tofu.providerOCI>/<namespace>/<type>` (OCI mirror) | `<url>/<generic>/providers/` (the static network mirror tree `download-deps.py` uploads), or `tofu.providerMirror` / `tofu.providerOCI` when set |
+| tofu states | `<tofu.state.http.url>/<environmentName>/…`, or `s3://<bucket>/<keyPrefix>/<environmentName>/…` | `<url>/<tofuState>/<environmentName>/…`, or `tofu.state` when set |
 | rke2 system registry | `<oci.registry>`, image paths rewritten under `<oci.repository>` | `<docker>.<host>` |
 | public images on the nodes (`docker.io`, `registry.k8s.io`, `quay.io`, `ghcr.io`, `gcr.io`) | pulled as `<oci.registry>/<oci.repository>/<path>` | from their own registry |
-| provider mirror token | `secrets.mirrorToken`, else none | `secrets.mirrorToken`, else issued on each deploy |
+| provider mirror token | `secrets.mirrorToken`, else none | `secrets.mirrorToken` (used as is, never revoked), else issued on each deploy through the JFrog Access API |
 | credentials, CA | optional: anonymous, system trust store | as declared |
 
 `<host>` is the host of `artifactory.url`; `<docker>`, `<helm>`… are `artifactory.repositories.*`.
+
+With `preset: artifactory`, `artifacts.tofu` is optional and overrides what it sets: a provider
+mirror elsewhere (`providerMirror`, or `providerOCI`), a state backend elsewhere (`state.http` or
+`state.s3`, in place of `repositories.tofuState`). An Artifactory Terraform repository serves the
+network mirror protocol under its API; to install the providers from one instead of the static
+tree, name it:
+
+```yaml
+artifacts:
+  preset: artifactory
+  artifactory:
+    url: https://artifactory.example.local/artifactory
+  tofu:
+    providerMirror: https://artifactory.example.local/artifactory/api/terraform/<repository>/providers/
+```
+
+### Provider mirror token
+
+The `.tofurc` of the CLI and of the Jobs presents a Bearer token to a network mirror
+(`credentials "<host>"`). It is `secrets.mirrorToken` when set, whatever the preset: RONDO uses it
+as is and neither mints nor revokes it. Otherwise, with `preset: artifactory` and a network mirror,
+`rondo deploy` mints the tokens with `artifacts.username` and `secrets.mirrorPassword` through the
+JFrog Access API, at the platform root (`artifactory.url` without its `/artifactory` context):
+
+| Token | Request | Lifetime |
+|---|---|---|
+| the CLI's, for each deploy | `POST <platform>/access/api/v1/tokens`, `scope=applied-permissions/user` | 1 hour |
+| the Jobs', kept in the `rondo-tofurc` Secret | the same | `artifactory.mirrorTokenLifetimeSeconds`; empty: no expiry, which only an admin account gets |
+
+The next deploy mints a new Jobs' token and revokes the previous one with
+`DELETE <platform>/access/api/v1/tokens/me`, authenticated by that token. Minting with basic
+credentials needs an internal user without multi-factor authentication, on a platform that allows
+token creation with basic credentials; when the Access API refuses, `rondo deploy` stops and says
+so: create a token that reads the provider mirror (JFrog Platform UI, `jf access-token-create`) and
+set it in `secrets.mirrorToken`.
 
 ### OpenTofu providers in an OCI registry
 

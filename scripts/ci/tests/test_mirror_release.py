@@ -199,3 +199,16 @@ def test_dry_run_sends_charts_to_charts_oci(release):
     assert ("chart: oci://ghcr.io/ouafeul/charts/dashboard 0.2.0 -> "
             "oci://reg.site/helm-repo/dashboard") in lines
     assert any(line.startswith("image: ") and "-> reg.site/rondo/" in line for line in lines)
+
+
+def test_source_credentials_log_in_and_sha256sums_is_mirrored(release, monkeypatch):
+    monkeypatch.setenv("RONDO_SOURCE_USER", "bot")
+    monkeypatch.setenv("RONDO_SOURCE_PASSWORD", "s3cret-token")
+    release.run()
+    done = calls(release)
+    assert any(c.startswith("skopeo login") and c.endswith("ghcr.io") for c in done)
+    assert any(c.startswith("helm registry login") and c.endswith("ghcr.io") for c in done)
+    copies = [c for c in done if c.startswith("skopeo copy")]
+    assert copies and all("--src-authfile" in c for c in copies)
+    assert not any("s3cret-token" in c for c in done)
+    assert (release.site / "rondo" / "v1.2.3" / "SHA256SUMS").exists()

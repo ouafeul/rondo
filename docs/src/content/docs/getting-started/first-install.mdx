@@ -36,11 +36,16 @@ flowchart LR
      <TabItem label="From the site's mirror">
        ```bash
        sudo dnf install -y rondo      # from the site's RPM repository
-       # or, without RPM (<files>: the URL of RONDO's files on the mirror):
-       curl -fsSL <files>/rondo/install.sh | RONDO_MIRROR_URL=<files> sh
+       # or, without RPM. <files>: the URL of RONDO's files on the mirror
+       # (<files.url>/<files.repository>, or <artifactory.url>/<generic>); <tag>: e.g. v1.0.0.
+       curl -fsSL --cacert ./site-ca.pem -u svc-rondo \
+         -o install.sh <files>/rondo/<tag>/install.sh
+       RONDO_MIRROR_URL=<files> RONDO_VERSION=<tag> \
+         RONDO_MIRROR_USER=svc-rondo RONDO_MIRROR_PASSWORD='…' \
+         RONDO_MIRROR_CA_CERT="$(cat ./site-ca.pem)" sh install.sh
        ```
 
-       `install.sh` resolves the `stable` channel (`RONDO_MIRROR_URL`, `RONDO_CHANNEL`, `RONDO_VERSION` override it), puts the binary in `~/.rondo/bin` (linked from `~/.local/bin`) and runs `rondo init`.
+       `install.sh` sits with the release files, under `<files>/rondo/<tag>/`. It downloads `<files>/rondo/<tag>/rondo-linux-amd64` with the same credentials and CA (leave out `-u`, `RONDO_MIRROR_USER` and `RONDO_MIRROR_PASSWORD` for an anonymous mirror, `--cacert` and `RONDO_MIRROR_CA_CERT` for publicly trusted certificates), checks it against `SHA256SUMS` or its `rondo-linux-amd64.sha256` sidecar (it warns when the mirror serves neither), puts it in `~/.rondo/bin` (linked from `~/.local/bin`) and runs `rondo init`. Without `RONDO_VERSION`, it resolves the `stable` channel, `<files>/rondo/stable.json` (`RONDO_CHANNEL` names another).
      </TabItem>
    </Tabs>
 

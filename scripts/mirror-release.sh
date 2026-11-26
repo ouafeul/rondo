@@ -25,6 +25,8 @@
 # Environment: MIRROR_USER / MIRROR_PASSWORD, MIRROR_CA_CERT (PEM file); MIRROR_REGISTRY,
 # MIRROR_FILES_URL, MIRROR_RPM_URL stand for the flags; RONDO_REPO (default ouafeul/rondo) and
 # RONDO_SOURCE_REGISTRY (default ghcr.io/ouafeul) name the source.
+# RONDO_SOURCE_USER / RONDO_SOURCE_PASSWORD: an account on the source registry (e.g. a GitHub user
+#   and a token with read:packages) when its packages are not public.
 # --dry-run prints the plan ("PLAN ..." lines) and changes nothing; it still reads SHA256SUMS and
 # the apps/ charts of the tag.
 set -euo pipefail
@@ -106,6 +108,7 @@ if [ -n "${MIRROR_CA_CERT:-}" ]; then
 fi
 export HELM_REGISTRY_CONFIG="${work}/helm-registry.json"
 authfile="${work}/auth.json"
+src_authfile="${work}/src-auth.json"
 
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -209,6 +212,7 @@ done
 for entry in ${plan_files[@]+"${plan_files[@]}"}; do
   printf 'PLAN file: %s -> %s\n' "${entry%%|*}" "${entry#*|}"
 done
+printf 'PLAN file: SHA256SUMS -> %s\n' "${files_url}/rondo/${version}/SHA256SUMS"
 for entry in ${plan_rpm[@]+"${plan_rpm[@]}"}; do
   printf 'PLAN rpm: %s -> %s\n' "${entry%%|*}" "${entry#*|}"
 done
@@ -239,13 +243,24 @@ if [ -n "${MIRROR_USER:-}" ] && [ -n "${MIRROR_PASSWORD:-}" ]; then
   fi
 fi
 
+# The source registry: anonymous, or RONDO_SOURCE_USER / RONDO_SOURCE_PASSWORD.
+src_auth=()
+if [ -n "${RONDO_SOURCE_USER:-}" ] && [ -n "${RONDO_SOURCE_PASSWORD:-}" ]; then
+  log "logging in to ${SOURCE_REGISTRY%%/*}"
+  printf '%s' "${RONDO_SOURCE_PASSWORD}" | skopeo login --authfile "${src_authfile}" \
+    --username "${RONDO_SOURCE_USER}" --password-stdin "${SOURCE_REGISTRY%%/*}"
+  printf '%s' "${RONDO_SOURCE_PASSWORD}" | helm registry login \
+    --username "${RONDO_SOURCE_USER}" --password-stdin "${SOURCE_REGISTRY%%/*}"
+  src_auth=(--src-authfile "${src_authfile}")
+fi
+
 copy_tls=()
 [ -d "${work}/certs" ] && copy_tls=(--dest-cert-dir "${work}/certs")
 copy_auth=()
-[ -f "${authfile}" ] && copy_auth=(--authfile "${authfile}")
+[ -f "${authfile}" ] && copy_auth=(--dest-authfile "${authfile}")
 for image in "${IMAGES[@]}"; do
   log "image ${image}:${version}"
-  skopeo copy --all ${copy_tls[@]+"${copy_tls[@]}"} ${copy_auth[@]+"${copy_auth[@]}"} \
+  skopeo copy --all ${copy_tls[@]+"${copy_tls[@]}"} ${copy_auth[@]+"${copy_auth[@]}"} ${src_auth[@]+"${src_auth[@]}"} \
     "docker://${SOURCE_REGISTRY}/${image}:${version}" "docker://${registry}/${image}:${version}"
 done
 
@@ -276,6 +291,8 @@ done
 for entry in ${plan_files[@]+"${plan_files[@]}"}; do
   upload "${work}/assets/${entry%%|*}" "${entry#*|}"
 done
+# install.sh checks the binary against it.
+upload "${work}/SHA256SUMS" "${files_url}/rondo/${version}/SHA256SUMS"
 
 if [ "${#plan_rpm[@]}" -gt 0 ]; then
   for entry in "${plan_rpm[@]}"; do
