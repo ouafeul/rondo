@@ -7,40 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- The Secret `mirror-ca` (key `ca.crt`) always exists in the namespaces the downstream base layer lists, empty when the mirror's certificate is publicly trusted, so components can mount it unconditionally.
-- `--charts-oci` / `MIRROR_CHARTS_OCI` in the mirror scripts and `scripts/mirror-release.sh`: Helm charts can go to a repository other than `<oci-registry>/charts`.
-- Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset.
-- Artifact mirrors are vendor-neutral: `artifacts:` with a `generic` (any OCI registry + HTTP file server) or `artifactory` preset. With `generic`, Helm charts default to `<oci.repository>/charts`, where the mirror scripts push them.
-- **Vendor-neutral air-gap mirror.** The mirror scripts write to any OCI registry
-  (`--oci-registry`), any HTTP file server or S3-compatible bucket (`--files-url`), any RPM
-  repository server (`--rpm-url`), with `MIRROR_USER`, `MIRROR_PASSWORD` and `MIRROR_CA_CERT`.
-  `manifests/dependencies.yaml` entries carry a `kind` and a relative `path`. Uploads are
-  idempotent through `.sha256` sidecars, OpenTofu providers go to a static network mirror, RPM
-  `repodata/` is built with `createrepo_c`, registry checks follow the Bearer token challenge,
-  and `mirror.yml` scans the mirrored images and binaries with Trivy.
-- **`scripts/mirror-release.sh`**, shipped with each release, copies one release (images, charts,
-  assets, packages, release channel) into a site mirror; `--dry-run` prints the copy list.
-- Anonymous and publicly trusted mirrors: `artifacts.username`, `secrets.mirrorPassword` and `artifacts.caCertificateFile` are optional; without them RONDO skips registry logins, `regcred` and basic auth, and uses the system trust store.
-- OpenTofu providers from an OCI registry: `artifacts.tofu.providerOCI` (`oci_mirror`), as an alternative to the network mirror `artifacts.tofu.providerMirror`.
-- S3 state backend: `artifacts.tofu.state.s3` (MinIO, Ceph, AWS; lock file next to the state), or `artifacts.tofu.state.http`; keys in `secrets.mirrorStateAccessKey` and `secrets.mirrorStateSecretKey`.
-- Nodes pull public and rke2 system images through registry mirrors that rewrite them under `<oci.registry>/<oci.repository>`; k3s nodes check the file server by downloading k3s.
-- Component contract uses neutral names: site tokens `${OCI_REGISTRY}`, `${IMAGES_REPOSITORY}`, `${CHARTS_REPOSITORY}`, `${CHARTS_OCI}` (a chart is `${CHARTS_OCI}/<chart>`), `${FILES_URL}`, `${FILES_REPOSITORY}`, `${RPM_REPOSITORY}`; Target value `mirrorCA`; `rondo-platform-values` keys `mirrorUser`, `mirrorPassword`, `mirrorAuthURL`; ConfigMap `mirror-ca`; Job environment `MIRROR_USER`, `MIRROR_PASSWORD`, `MIRROR_FILES_URL`; Ansible variables `rondo_mirror_*`.
-- **End-to-end workflow** `e2e.yml` (weekly, by hand, and on pull requests labelled `e2e`): the sandbox, with RONDO built from the sources, installs the test component (charts, images, a machine) through a generic mirror; `scripts/ci/e2e-sandbox.sh` runs the same scenario on a workstation.
-- The sandbox's machine Jobs install `terraform/vm`'s providers from an OpenTofu OCI provider mirror on its registry (`artifacts.tofu.providerOCI`, versions of `dependencies.yaml`), render the machines' cloud-init with them, and keep their state on its http backend.
-- Documentation: [Artifact mirrors](https://ouafeul.github.io/rondo/operations/artifact-mirrors/), what a site mirror serves, generic (Zot or Harbor with nginx, MinIO for the state) and artifactory configurations, how to fill and check it.
+## [1.0.0-rc.1] - 2026-11-26
 
-### Fixed
-- `rondo-sandbox` runs on macOS and ARM workstations: the disk check is skipped without GNU `df`, `component install` runs under bash 3.2, a machine gets at most Docker's CPUs, the registry and machine images follow the workstation's architecture.
-
-### Security
-- Platform on supported releases: Rancher 2.15.3 on k3s 1.36.6, rke2 1.36.5 clusters, cert-manager 1.21.3, MetalLB 0.16.2 (layer 2, no FRR images), Traefik 3.7.20 (chart 42.4.3), local-path-provisioner 0.0.37; tools OpenTofu 1.13.10, kubectl 1.36.6, Helm 3.22.1, helmfile 1.8.5 (`helmfile.yaml.gotmpl`), helm-diff 3.15.15, k9s 0.51.0, yq 4.54.3, ansible-core 2.22.0; providers rancher2 15.3.0, vsphere 2.18.0, cloudinit 2.4.1; images on Go 1.27.4, Debian 13, distroless Debian 13, Python 3.14 and Rocky Linux 9.9, OS packages upgraded at build. HIGH and CRITICAL findings drop across the mirrored images and binaries.
-- The local-path-provisioner chart runs non-root with a read-only root filesystem, no privilege escalation, all capabilities dropped and the RuntimeDefault seccomp profile.
-- Workstation tools are verified against the sha256 pinned in `manifests/dependencies.yaml` and the `<file>.sha256` served by the mirror; a mismatch is refused.
-
-## [1.0.0-rc.1] - First release candidate
-
-RONDO deploys components onto air-gapped infrastructure with three objects and three actions:
+First release candidate. RONDO deploys components onto air-gapped infrastructure with three objects and three actions:
 declare a site, install a component, enroll it on a target.
 
 ### Added
@@ -49,7 +18,7 @@ declare a site, install a component, enroll it on a target.
 - **Three CRDs.** `Component` (what to deploy), `Target` (where: `kubernetes` or `vsphere`,
   with `roles`) and `Enrollment` (one component on one target, selected by name or role).
   Deleting an Enrollment uninstalls its workload.
-- **Site manifest `rondo.yaml`**: `artifactory`, `targets` (`targets.vsphere[]`,
+- **Site manifest `rondo.yaml`**: `artifacts` (the site mirror), `targets` (`targets.vsphere[]`,
   `targets.management`, `targets.downstreams[]`) and `secrets` (including
   `secrets.k3sClusterToken` and `secrets.vcenterPasswords`). Hostnames derive from
   `ingressBaseDomain`.
@@ -103,16 +72,16 @@ declare a site, install a component, enroll it on a target.
 - Several components share one sandbox; only what a real site would refuse is refused (an
   Enrollment without a Target, a release already delivered on its Target, a Component owned by
   another component).
-- A substitute Artifactory (zot + nginx) serves charts and images, pulled from the Internet on
-  demand. RONDO itself comes from it: the binary embeds the tree of its version (CRDs, base
+- A stand-in mirror (zot + nginx, `artifacts.preset: generic`) serves charts, images, files, an
+  OpenTofu OCI provider mirror and the http state backend, pulled from the Internet on demand. RONDO itself comes from it: the binary embeds the tree of its version (CRDs, base
   layer, RONDO charts) and pulls the `rondo-controller` and `rondo-toolbox` images;
   `--rondo-version` uses the images of another version, `--rondo-from <clone>` builds RONDO from
   a local clone.
-- Machines run as unprivileged Rocky Linux 9.6 containers (`rondo-sandbox-machine` image) named
+- Machines run as Rocky Linux 9.9 containers (`rondo-sandbox-machine` image) named
   and addressed like the VMs of `terraform/vm`, with systemd, sshd, the `rondo` account and the
-  Artifactory CA. The controller and its Jobs run as on a real site: `vm-apply` runs a machine module
+  mirror CA. The controller and its Jobs run as on a real site: `vm-apply` runs a machine module
   with the same variables, outputs and inventory as `terraform/vm`, its tofu state on the
-  sandbox Artifactory; `vm-install` runs the RONDO playbook over SSH. A machine keeps its IP
+  sandbox mirror; `vm-install` runs the RONDO playbook over SSH. A machine keeps its IP
   across installs; `component install --fresh` recreates the component's machines from
   scratch.
 - `deploy`, `deploy downstreams` and `component install` refuse to run when Docker's disk is
@@ -120,6 +89,7 @@ declare a site, install a component, enroll it on a target.
   `DiskPressure`.
 - Bash, zsh and fish completion (`rondo-sandbox completion <shell>`): commands, flags,
   downstreams, components, installed Enrollments and cluster Targets.
+- Runs on Linux and macOS workstations, amd64 and arm64.
 - Documentation: [components/sandbox](docs/src/content/docs/components/sandbox.mdx).
 
 #### Terminal UI (`rondo tui`)
@@ -146,9 +116,53 @@ declare a site, install a component, enroll it on a target.
 - A read-only mode (`ReadOnly`) that refuses commands, forms and the `rondo.yaml` editor,
   says so in the header and greys out what it refuses.
 
-#### Packaging
-- `rondo-sandbox` is published as rpm (RPM repository) and deb (`rondo-deb-local`, `stable`
-  distribution) packages named `rondo-sandbox`, and `rondo-sandbox-edge` on the edge channel
-  (deb in the `edge` distribution, at the rpm version: `apt install
-  rondo-sandbox-edge=<version>`; see `packaging/nfpm-sandbox.yaml`), shell completion included.
-- The `rondo-sandbox-machine` image is published by CI alongside the controller images.
+#### Artifact mirrors
+- Vendor-neutral site mirror: `artifacts:` with a `generic` preset (any OCI registry and any HTTP
+  file server) or an `artifactory` preset that derives every endpoint from one URL. With
+  `generic`, Helm charts default to `<oci.repository>/charts`.
+- Anonymous and publicly trusted mirrors: `artifacts.username`, `secrets.mirrorPassword` and
+  `artifacts.caCertificateFile` are optional; without them RONDO skips registry logins,
+  `regcred` and basic auth, and uses the system trust store.
+- OpenTofu providers from an OCI registry (`artifacts.tofu.providerOCI`, `oci_mirror`) or a
+  network mirror (`artifacts.tofu.providerMirror`); state on an http backend
+  (`artifacts.tofu.state.http`) or S3-compatible storage (`artifacts.tofu.state.s3`, MinIO, Ceph,
+  AWS; lock file next to the state).
+- Nodes pull public and rke2 system images through registry mirrors that rewrite them under
+  `<oci.registry>/<oci.repository>`.
+- Component contract: site tokens `${OCI_REGISTRY}`, `${IMAGES_REPOSITORY}`,
+  `${CHARTS_REPOSITORY}`, `${CHARTS_OCI}` (a chart is `${CHARTS_OCI}/<chart>`), `${FILES_URL}`,
+  `${FILES_REPOSITORY}`, `${RPM_REPOSITORY}`; Target value `mirrorCA`; `rondo-platform-values`
+  keys `mirrorUser`, `mirrorPassword`, `mirrorAuthURL`; Job environment `MIRROR_*`; Ansible
+  variables `rondo_mirror_*`. The Secret `mirror-ca` (key `ca.crt`) always exists in the
+  namespaces the downstream base layer lists, empty for a publicly trusted mirror.
+- Mirror scripts (`scripts/ci`, `.github/workflows/mirror.yml`) fill any OCI registry
+  (`--oci-registry`, charts under `<registry>/charts` or `--charts-oci`), any HTTP file server or
+  S3 bucket (`--files-url`) and RPM server (`--rpm-url`, `repodata/` built with
+  `createrepo_c`); uploads are idempotent through `.sha256` sidecars; OpenTofu providers go to a
+  static network mirror; downloads are scanned with ClamAV and Trivy.
+- `scripts/mirror-release.sh`, shipped with each release, copies one release (images, charts,
+  files, packages, channel pointer) into a site mirror; `--dry-run` prints the copy list.
+- Documentation: [Artifact mirrors](https://ouafeul.github.io/rondo/operations/artifact-mirrors/).
+
+#### Packaging and distribution
+- GitHub Releases carry the `rondo` and `rondo-sandbox` binaries, `install.sh`,
+  `rondo.yaml.example`, the IaC bundle, the VM module and Ansible content, `rondo` and
+  `rondo-sandbox` rpm packages and the `rondo-sandbox` deb package (shell completion included),
+  `mirror-release.sh` and `SHA256SUMS`.
+- Images `ghcr.io/ouafeul/rondo-controller`, `rondo-toolbox`, `rondo-component-toolbox`,
+  `rondo-sandbox-machine`, with SBOM and provenance; first-party charts at
+  `oci://ghcr.io/ouafeul/charts`.
+- An end-to-end workflow runs the sandbox scenario (charts, images, a machine) through a generic
+  mirror every week and on demand.
+
+### Security
+- Platform on supported releases: Rancher 2.15.3 on k3s 1.36.6, rke2 1.36.5 clusters,
+  cert-manager 1.21.3, MetalLB 0.16.2 (layer 2, no FRR images), Traefik 3.7.20 (chart 42.4.3),
+  local-path-provisioner 0.0.37; tools OpenTofu 1.13.10, kubectl 1.36.6, Helm 3.22.1, helmfile
+  1.8.5, helm-diff 3.15.15, k9s 0.51.0, yq 4.54.3, ansible-core 2.22.0; providers rancher2
+  15.3.0, vsphere 2.18.0, cloudinit 2.4.1; images on Go 1.27.4, Debian 13, distroless Debian 13,
+  Python 3.14 and Rocky Linux 9.9, OS packages upgraded at build.
+- Workstation tools are verified against the sha256 pinned in `manifests/dependencies.yaml` and
+  the `<file>.sha256` served by the mirror; a mismatch is refused.
+- The local-path-provisioner chart runs non-root with a read-only root filesystem, no privilege
+  escalation, all capabilities dropped and the RuntimeDefault seccomp profile.
